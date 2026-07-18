@@ -1,3 +1,5 @@
+using Revestik.Api.Endpoints;
+using Revestik.Api.Services.Customers;
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Data;
 
@@ -14,6 +16,8 @@ builder.Services.AddDbContext<RevestikDbContext>(options =>
 {
     options.UseSqlServer(connectionString);
 });
+
+builder.Services.AddScoped<ICustomerService, CustomerService>();
 
 var app = builder.Build();
 
@@ -50,5 +54,9 @@ app.MapGet(
     })
     .WithName("GetHealth")
     .WithTags("System");
+
+
+app.MapCustomerEndpoints();
+
 
 app.Run();
