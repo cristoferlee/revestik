@@ -1,0 +1,25 @@
+﻿@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <header class="app-header">
+        <NavLink href="/" Match="NavLinkMatch.All" aria-label="Ir al Dashboard">
+            <img class="app-logo"
+                 src="assets/logo/revestik.svg"
+                 alt="Revestik" />
+        </NavLink>
+    </header>
+
+    <NavMenu />
+
+    <main class="app-content">
+        @Body
+    </main>
+
+    <footer class="app-footer">
+        <p>© @CurrentYear Revestik - Todos los derechos reservados</p>
+    </footer>
+</div>
+
+@code {
+    private int CurrentYear => DateTime.UtcNow.Year;
+}
