@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compras | Revestik</title>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+
+<body>
+
+
+<header class="main-header">
+    <div class="logo-container">
+        <img class="logo" src="../assets/logo/revestik.svg" alt="Logo Revestik">
+    </div>
+</header>
+
+<nav class="navbar">
+    <ul>
+        <li><a href="../index.html">Dashboard</a></li>
+        <li><a href="facturas.html">Facturas</a></li>
+        <li><a href="inventario.html">Inventario</a></li>
+        <li><a href="compras.html">Compras</a></li>
+        <li><a href="clientes.html">Clientes</a></li>
+        <li><a href="cotizaciones.html">Cotizaciones</a></li>
+        <li><a href="configuracion.html">Configuración</a></li>
+    </ul>
+</nav>
+
+<main class="dashboard">
+
+    <section class="page-header">
+        <h1>Compras</h1>
+        <p>Registra compras de productos, costos, proveedores y estados de pago.</p>
+    </section>
+
+    <section class="purchase-summary">
+        <div class="summary-card">
+            <span>Total compras</span>
+            <strong id="purchase-total-count">0</strong>
+        </div>
+
+        <div class="summary-card">
+            <span>Monto comprado</span>
+            <strong id="purchase-total-amount">0.00</strong>
+        </div>
+
+        <div class="summary-card warning">
+            <span>Pendiente de pago</span>
+            <strong id="purchase-pending-amount">0.00</strong>
+        </div>
+
+        <div class="summary-card">
+            <span>Productos comprados</span>
+            <strong id="purchase-total-units">0</strong>
+        </div>
+    </section>
+
+    <section class="purchase-card">
+
+        <div class="section-title">
+            <h2>Registrar compra</h2>
+            <p>Las compras luego podrán aumentar el inventario y alimentar reportes de costos.</p>
+        </div>
+
+        <form class="purchase-form" id="purchase-form">
+
+            <div class="form-grid">
+
+                <div class="form-group">
+                    <label for="purchase-number">N.º compra</label>
+                    <input type="text" id="purchase-number" placeholder="COMP-0001" readonly>
+                </div>
+
+                <div class="form-group">
+                    <label for="purchase-date">Fecha</label>
+                    <input type="date" id="purchase-date">
+                </div>
+
+                <div class="form-group">
+                    <label for="purchase-supplier">Proveedor</label>
+                    <input type="text" id="purchase-supplier" placeholder="Nombre del proveedor">
+                </div>
+
+                <div class="form-group">
+                    <label for="purchase-invoice">N.º factura</label>
+                    <input type="text" id="purchase-invoice" placeholder="Ej: FAC-001">
+                </div>
+
+                <div class="form-group">
+                    <label for="purchase-product-code">Cód. producto</label>
+                    <input type="text" id="purchase-product-code" placeholder="Ej: PORC-001">
+                </div>
+
+                <div class="form-group">
+                    <label for="purchase-cabys">Cód. CABYS</label>
+                    <input 
+                        type="text" 
+                        id="purchase-cabys" 
+                        placeholder="13 dígitos"
+                        inputmode="numeric"
+                        maxlength="13"
+                    >
+                </div>
+
+                <div class="form-group form-wide">
+                    <label for="purchase-product-name">Producto / descripción</label>
+                    <input type="text" id="purchase-product-name" placeholder="Ej: Porcelanato Carrara 60x120">
+                </div>
+
+                <div class="form-group">
+                    <label for="purchase-category">Categoría</label>
+                    <select id="purchase-category">
+                        <option value="Porcelanato">Porcelanato</option>
+                        <option value="Cerámica">Cerámica</option>
+                        <option value="Piso">Piso</option>
+                        <option value="Fachaleta">Fachaleta</option>
+                        <option value="Bondex">Bondex</option>
+                        <option value="Mallas">Mallas</option>
+                        <option value="Adhesivo">Adhesivo</option>
+                        <option value="Fragüa">Fragüa</option>
+                        <option value="Herramienta">Herramienta</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="purchase-unit">Unidad</label>
+                    <select id="purchase-unit">
+                        <option value="Unidad">Unidad</option>
+                        <option value="m²">m²</option>
+                        <option value="Caja">Caja</option>
+                        <option value="Saco">Saco</option>
+                        <option value="Bolsa">Bolsa</option>
+                        <option value="Galón">Galón</option>
+                        <option value="Metro">Metro</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="purchase-quantity">Cantidad</label>
+                    <input type="number" id="purchase-quantity" min="0" step="1">
+                </div>
+  
+                <div class="form-group">
+                    <label for="purchase-unit-cost">Costo compra</label>
+                    <input 
+                        type="number" 
+                        id="purchase-unit-cost" 
+                        min="0" 
+                        step="0.01" 
+                        placeholder="Costo en colones"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="purchase-sale-price">Precio venta</label>
+                    <input 
+                        type="number" 
+                        id="purchase-sale-price" 
+                        min="0" 
+                        step="0.01" 
+                        placeholder="Precio venta en colones"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="purchase-extra-cost">Costos adicionales</label>
+                    <input 
+                        type="number" 
+                        id="purchase-extra-cost" 
+                        min="0" 
+                        step="0.01" 
+                        placeholder="Flete, importación u otros"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="purchase-total">Total compra</label>
+                    <input 
+                        type="text" 
+                        id="purchase-total" 
+                        placeholder="Total compra"
+                        readonly
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="purchase-payment-status">Estado de pago</label>
+                    <select id="purchase-payment-status">
+                        <option value="Pendiente">Pendiente</option>
+                        <option value="Pagado">Pagado</option>
+                        <option value="Abonado">Abonado</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="purchase-inventory-action">Inventario</label>
+                    <select id="purchase-inventory-action">
+                        <option value="No aplicado">No aplicado</option>
+                        <option value="Aplicar a inventario">Aplicar a inventario</option>
+                    </select>
+                </div>
+
+                <div class="form-group form-wide">
+                    <label for="purchase-notes">Notas</label>
+                    <textarea id="purchase-notes" placeholder="Observaciones de la compra"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button class="secondary-btn" type="button" id="clear-purchase-btn">Limpiar</button>
+                    <button class="primary-btn" type="submit" id="save-purchase-btn">Guardar compra</button>
+               </div>
+
+            </div>
+
+        </form>
+
+    </section>
+
+    <section class="purchase-card">
+
+        <div class="purchase-toolbar">
+            <div>
+                <h2>Lista de compras</h2>
+                <p>Consulta compras registradas, proveedores, montos y estado de pago.</p>
+            </div>
+
+            <div class="search-box">
+                <input type="text" id="purchase-search" placeholder="Buscar por proveedor, factura o producto">
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="purchase-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>N.º compra</th>
+                        <th>Proveedor</th>
+                        <th>Factura</th>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Total</th>
+                        <th>Pago</th>
+                        <th>Inventario</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody id="purchase-table-body">
+                    <tr class="empty-row">
+                        <td colspan="10">No hay compras registradas</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </section>
+
+</main>
+
+<footer class="footer">
+    <p>© 2026 Revestik - Todos los derechos reservados</p>
+</footer>
+
+<script src="../js/app.js"></script>
+
+
+</body>
+
+</html>

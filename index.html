@@ -1,0 +1,123 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revestik Dashboard</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="css/styles.css">
+
+</head>
+
+<body>
+
+    <header class="header">
+        <img class="logo" src="assets/logo/revestik.svg" alt="Logo Revestik">
+    </header>
+
+<nav class="navbar">
+    <ul>
+        <li><a href="index.html">Dashboard</a></li>
+        <li><a href="pages/facturas.html">Facturas</a></li>
+        <li><a href="pages/inventario.html">Inventario</a></li>
+        <li><a href="pages/compras.html">Compras</a></li>
+        <li><a href="pages/clientes.html">Clientes</a></li>
+        <li><a href="pages/cotizaciones.html">Cotizaciones</a></li>
+        <li><a href="pages/configuracion.html">Configuración</a></li>
+    </ul>
+</nav>
+
+    <main class="dashboard">
+
+        <section class="summary-section">
+            <h2>Resumen General</h2>
+
+            <div class="kpi-grid">
+
+                <article class="kpi-card">
+                    <h3>Ventas del Mes</h3>
+                    <p>$12,345</p>
+                    <span class="positive">+19% respecto al mes anterior</span>
+                </article>
+
+                <article class="kpi-card">
+                    <h3>Gastos del Mes</h3>
+                    <p>$8,765</p>
+                    <span class="negative">-5% respecto al mes anterior</span>
+                </article>
+
+                <article class="kpi-card">
+                    <h3>Cuentas por Cobrar</h3>
+                    <p>$5,678</p>
+                    <span class="positive">+10% respecto al mes anterior</span>
+                </article>
+
+                <article class="kpi-card">
+                    <h3>Inventario Bajo</h3>
+                    <p>15 Productos</p>
+                    <span class="warning">Revisar stock disponible</span>
+                </article>
+
+            </div>
+        </section>
+
+        <section class="info-section">
+
+            <article class="panel">
+                <h2>Alertas</h2>
+
+                <div class="alert-item warning-alert">
+                    <strong>Stock bajo:</strong>
+                    <p>Porcelanato Beige tiene pocas unidades disponibles.</p>
+                </div>
+
+                <div class="alert-item danger-alert">
+                    <strong>Factura vencida:</strong>
+                    <p>Cliente XYZ tiene saldo pendiente.</p>
+                </div>
+
+                <div class="alert-item info-alert">
+                    <strong>Pago próximo:</strong>
+                    <p>Pago a proveedor vence mañana.</p>
+                </div>
+            </article>
+
+            <article class="panel">
+                <h2>Actividad Reciente</h2>
+
+                <div class="activity-item">
+                    <span>Hoy</span>
+                    <p>Nueva cotización creada.</p>
+                </div>
+
+                <div class="activity-item">
+                    <span>Hoy</span>
+                    <p>Cliente nuevo registrado.</p>
+                </div>
+
+                <div class="activity-item">
+                    <span>Ayer</span>
+                    <p>Factura marcada como pagada.</p>
+                </div>
+            </article>
+
+        </section>
+
+    </main>
+
+    <footer class="footer">
+        <p>© 2026 Revestik - Todos los derechos reservados</p>
+    </footer>
+
+    <script src="js/app.js"></script>
+</body>
+
+</html>
