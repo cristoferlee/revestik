@@ -3,9 +3,25 @@ using Revestik.Api.Services.Customers;
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Data;
 
+const string ClientCorsPolicy = "ClientCorsPolicy";
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+var allowedOrigins = builder.Configuration
+    .GetSection("AllowedOrigins")
+    .Get<string[]>() ?? [];
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(ClientCorsPolicy, policy =>
+    {
+        policy
+            .WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 
 var connectionString = builder.Configuration
     .GetConnectionString("RevestikDatabase")
@@ -27,6 +43,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors(ClientCorsPolicy);
 
 app.MapGet(
     "/api/health",
