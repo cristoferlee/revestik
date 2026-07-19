@@ -25,19 +25,26 @@
         </div>
     }
 
-    <section class="customer-card" aria-labelledby="customer-form-title">
+    <section class="customer-card"
+             aria-labelledby="customer-form-title">
         <h2 id="customer-form-title">@FormTitle</h2>
 
-        <EditForm Model="formModel" OnValidSubmit="SaveCustomerAsync">
+        <EditForm Model="formModel"
+                  OnValidSubmit="SaveCustomerAsync">
             <DataAnnotationsValidator />
             <ValidationSummary />
 
             <div class="form-grid">
                 <div class="form-group">
-                    <label for="customer-name">Nombre</label>
+                    <label for="customer-name">
+                        Nombre
+                    </label>
+
                     <InputText id="customer-name"
                                @bind-Value="formModel.Name" />
-                    <ValidationMessage For="@(() => formModel.Name)" />
+
+                    <ValidationMessage
+                        For="@(() => formModel.Name)" />
                 </div>
 
                 <div class="form-group">
@@ -47,13 +54,18 @@
 
                     <InputSelect id="customer-identification-type"
                                  @bind-Value="formModel.IdentificationType">
-                        <option value="">Cédula de identidad</option>
+                        <option value="">
+                            Cédula de identidad
+                        </option>
+
                         <option value="@IdentificationType.PhysicalPerson">
                             Cédula física
                         </option>
+
                         <option value="@IdentificationType.Dimex">
                             DIMEX
                         </option>
+
                         <option value="@IdentificationType.LegalEntity">
                             Cédula jurídica
                         </option>
@@ -63,16 +75,27 @@
                         For="@(() => formModel.IdentificationType)" />
                 </div>
 
-                <div class="form-group">
+                <div class="form-group form-wide">
                     <label for="customer-identification">
                         Cédula de identidad
                     </label>
 
-                    <InputText id="customer-identification"
-                               inputmode="numeric"
-                               maxlength="@IdentificationMaximumLength"
-                               placeholder="@IdentificationPlaceholder"
-                               @bind-Value="formModel.IdentificationNumber" />
+                    <div class="identification-input-row">
+                        <InputText id="customer-identification"
+                                   inputmode="numeric"
+                                   maxlength="@IdentificationMaximumLength"
+                                   placeholder="@IdentificationPlaceholder"
+                                   @bind-Value="formModel.IdentificationNumber" />
+
+                        <button type="button"
+                                class="secondary-button lookup-button"
+                                disabled="@(!CanLookupTaxpayer || isLookingUpTaxpayer)"
+                                @onclick="LookupTaxpayerAsync">
+                            @(isLookingUpTaxpayer
+                                ? "Consultando..."
+                                : "Consultar en Hacienda")
+                        </button>
+                    </div>
 
                     @if (!string.IsNullOrWhiteSpace(IdentificationRule))
                     {
@@ -81,38 +104,64 @@
                         </p>
                     }
 
+                    @if (!string.IsNullOrWhiteSpace(taxpayerLookupMessage))
+                    {
+                        <p class="@TaxpayerLookupMessageCssClass"
+                           role="@TaxpayerLookupMessageRole">
+                            @taxpayerLookupMessage
+                        </p>
+                    }
+
                     <ValidationMessage
                         For="@(() => formModel.IdentificationNumber)" />
                 </div>
 
                 <div class="form-group">
-                    <label for="customer-email">Correo electrónico</label>
+                    <label for="customer-email">
+                        Correo electrónico
+                    </label>
+
                     <InputText id="customer-email"
                                type="email"
                                @bind-Value="formModel.Email" />
-                    <ValidationMessage For="@(() => formModel.Email)" />
+
+                    <ValidationMessage
+                        For="@(() => formModel.Email)" />
                 </div>
 
                 <div class="form-group">
-                    <label for="customer-phone">Teléfono</label>
+                    <label for="customer-phone">
+                        Teléfono
+                    </label>
+
                     <InputText id="customer-phone"
                                type="tel"
                                @bind-Value="formModel.PhoneNumber" />
-                    <ValidationMessage For="@(() => formModel.PhoneNumber)" />
+
+                    <ValidationMessage
+                        For="@(() => formModel.PhoneNumber)" />
                 </div>
 
                 <div class="form-group form-wide">
-                    <label for="customer-address">Dirección</label>
+                    <label for="customer-address">
+                        Dirección
+                    </label>
+
                     <InputTextArea id="customer-address"
                                    rows="3"
                                    @bind-Value="formModel.Address" />
-                    <ValidationMessage For="@(() => formModel.Address)" />
+
+                    <ValidationMessage
+                        For="@(() => formModel.Address)" />
                 </div>
 
                 <div class="form-group checkbox-group">
                     <InputCheckbox id="customer-active"
                                    @bind-Value="formModel.IsActive" />
-                    <label for="customer-active">Cliente activo</label>
+
+                    <label for="customer-active">
+                        Cliente activo
+                    </label>
                 </div>
             </div>
 
@@ -130,16 +179,22 @@
                 <button type="submit"
                         class="primary-button"
                         disabled="@isSaving">
-                    @(isSaving ? "Guardando..." : SaveButtonText)
+                    @(isSaving
+                        ? "Guardando..."
+                        : SaveButtonText)
                 </button>
             </div>
         </EditForm>
     </section>
 
-    <section class="customer-card" aria-labelledby="customer-list-title">
+    <section class="customer-card"
+             aria-labelledby="customer-list-title">
         <div class="list-header">
             <div>
-                <h2 id="customer-list-title">Lista de clientes</h2>
+                <h2 id="customer-list-title">
+                    Lista de clientes
+                </h2>
+
                 <p>@CustomerCountText</p>
             </div>
 
@@ -151,7 +206,8 @@
                        aria-label="Buscar clientes"
                        @bind="searchTerm" />
 
-                <button type="submit" class="primary-button">
+                <button type="submit"
+                        class="primary-button">
                     Buscar
                 </button>
 
@@ -168,11 +224,15 @@
 
         @if (isLoading)
         {
-            <p class="empty-state">Cargando clientes...</p>
+            <p class="empty-state">
+                Cargando clientes...
+            </p>
         }
         else if (customers.Count == 0)
         {
-            <p class="empty-state">No se encontraron clientes.</p>
+            <p class="empty-state">
+                No se encontraron clientes.
+            </p>
         }
         else
         {
@@ -187,29 +247,40 @@
                             <th>Acciones</th>
                         </tr>
                     </thead>
+
                     <tbody>
                         @foreach (var customer in customers)
                         {
                             <tr>
-                                <td data-label="Nombre">@customer.Name</td>
+                                <td data-label="Nombre">
+                                    @customer.Name
+                                </td>
 
                                 <td data-label="Identificación">
                                     @(customer.IdentificationNumber ?? "—")
                                 </td>
 
                                 <td data-label="Contacto">
-                                    <span>@(customer.Email ?? "—")</span>
-                                    <small>@(customer.PhoneNumber ?? "—")</small>
+                                    <span>
+                                        @(customer.Email ?? "—")
+                                    </span>
+
+                                    <small>
+                                        @(customer.PhoneNumber ?? "—")
+                                    </small>
                                 </td>
 
                                 <td data-label="Estado">
                                     <span class="@GetStatusCssClass(customer)">
-                                        @(customer.IsActive ? "Activo" : "Inactivo")
+                                        @(customer.IsActive
+                                            ? "Activo"
+                                            : "Inactivo")
                                     </span>
                                 </td>
 
                                 <td data-label="Acciones">
-                                    @if (customerPendingDeactivationId == customer.Id)
+                                    @if (customerPendingDeactivationId ==
+                                         customer.Id)
                                     {
                                         <div class="action-buttons">
                                             <button type="button"

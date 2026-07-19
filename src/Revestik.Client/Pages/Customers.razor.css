@@ -333,3 +333,39 @@ td small {
     font-size: 0.82rem;
     line-height: 1.4;
 }
+
+.identification-input-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: start;
+}
+
+.lookup-button {
+    min-width: 174px;
+    white-space: nowrap;
+}
+
+.lookup-message {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.lookup-success {
+    color: #166534;
+}
+
+.lookup-error {
+    color: var(--color-danger);
+}
+
+@media (max-width: 600px) {
+    .identification-input-row {
+        grid-template-columns: 1fr;
+    }
+
+    .lookup-button {
+        width: 100%;
+    }
+}

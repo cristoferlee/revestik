@@ -2,6 +2,7 @@ using Revestik.Api.Endpoints;
 using Revestik.Api.Services.Customers;
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Data;
+using Revestik.Api.Integrations.Hacienda;
 
 const string ClientCorsPolicy = "ClientCorsPolicy";
 
@@ -34,6 +35,18 @@ builder.Services.AddDbContext<RevestikDbContext>(options =>
 });
 
 builder.Services.AddScoped<ICustomerService, CustomerService>();
+
+var haciendaBaseUrl = builder.Configuration["Hacienda:BaseUrl"]
+    ?? throw new InvalidOperationException(
+        "Hacienda base URL was not configured.");
+
+builder.Services.AddHttpClient<
+    IHaciendaTaxpayerClient,
+    HaciendaTaxpayerClient>(httpClient =>
+{
+    httpClient.BaseAddress = new Uri(haciendaBaseUrl);
+    httpClient.Timeout = TimeSpan.FromSeconds(10);
+});
 
 var app = builder.Build();
 
@@ -75,6 +88,8 @@ app.MapGet(
 
 
 app.MapCustomerEndpoints();
+
+app.MapTaxpayerEndpoints();
 
 
 app.Run();

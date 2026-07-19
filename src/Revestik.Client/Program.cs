@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Revestik.Client;
 using Revestik.Client.Services.Customers;
+using Revestik.Client.Services.Taxpayers;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -23,5 +24,9 @@ builder.Services.AddScoped(_ =>
 builder.Services.AddScoped<
     ICustomerApiService,
     CustomerApiService>();
+
+builder.Services.AddScoped<
+    ITaxpayerApiService,
+    TaxpayerApiService>();
 
 await builder.Build().RunAsync();
