@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Components;
 using Revestik.Client.Services.Customers;
+using Revestik.Client.Services.Locations;
 using Revestik.Client.Services.Taxpayers;
 using Revestik.Shared.Customers;
+using Revestik.Shared.Locations;
 using Revestik.Shared.Taxpayers;
 
 namespace Revestik.Client.Pages;
@@ -11,12 +13,16 @@ public partial class Customers : ComponentBase, IDisposable
     private readonly CancellationTokenSource cancellationTokenSource = new();
 
     private IReadOnlyList<CustomerResponse> customers = [];
+    private IReadOnlyList<LocationOptionResponse> provinces = [];
+    private IReadOnlyList<LocationOptionResponse> cantons = [];
+    private IReadOnlyList<LocationOptionResponse> districts = [];
     private CustomerUpsertRequest formModel = new();
 
     private string searchTerm = string.Empty;
     private string? errorMessage;
     private string? successMessage;
     private string? taxpayerLookupMessage;
+    private string? locationErrorMessage;
 
     private int? editingCustomerId;
     private int? customerPendingDeactivationId;
@@ -24,6 +30,7 @@ public partial class Customers : ComponentBase, IDisposable
     private bool isLoading;
     private bool isSaving;
     private bool isLookingUpTaxpayer;
+    private bool isLoadingLocations;
     private bool wasTaxpayerLookupSuccessful;
 
     [Inject]
@@ -31,6 +38,9 @@ public partial class Customers : ComponentBase, IDisposable
 
     [Inject]
     private ITaxpayerApiService TaxpayerApiService { get; set; } = default!;
+
+    [Inject]
+    private ILocationApiService LocationApiService { get; set; } = default!;
 
     private string FormTitle =>
         editingCustomerId.HasValue
@@ -106,9 +116,132 @@ public partial class Customers : ComponentBase, IDisposable
             ? "status"
             : "alert";
 
+    private bool CanSelectCanton =>
+        !isLoadingLocations &&
+        !string.IsNullOrWhiteSpace(formModel.ProvinceCode);
+
+    private bool CanSelectDistrict =>
+        !isLoadingLocations &&
+        !string.IsNullOrWhiteSpace(formModel.ProvinceCode) &&
+        !string.IsNullOrWhiteSpace(formModel.CantonCode);
+
+    private bool HasCompleteLocation =>
+        !string.IsNullOrWhiteSpace(formModel.ProvinceCode) &&
+        !string.IsNullOrWhiteSpace(formModel.CantonCode) &&
+        !string.IsNullOrWhiteSpace(formModel.DistrictCode) &&
+        !string.IsNullOrWhiteSpace(formModel.OtherSigns) &&
+        formModel.OtherSigns.Trim().Length is >= 5 and <= 160;
+
     protected override async Task OnInitializedAsync()
     {
-        await LoadCustomersAsync();
+        await Task.WhenAll(
+            LoadCustomersAsync(),
+            LoadProvincesAsync());
+    }
+
+    private async Task LoadProvincesAsync()
+    {
+        isLoadingLocations = true;
+        locationErrorMessage = null;
+
+        try
+        {
+            provinces = await LocationApiService.GetProvincesAsync(
+                cancellationTokenSource.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (HttpRequestException)
+        {
+            locationErrorMessage =
+                "No fue posible cargar las provincias. Inténtalo nuevamente.";
+        }
+        finally
+        {
+            isLoadingLocations = false;
+        }
+    }
+
+    private async Task OnProvinceChangedAsync(ChangeEventArgs eventArgs)
+    {
+        formModel.ProvinceCode =
+            eventArgs.Value?.ToString() ?? string.Empty;
+        formModel.CantonCode = string.Empty;
+        formModel.DistrictCode = string.Empty;
+        cantons = [];
+        districts = [];
+        locationErrorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(formModel.ProvinceCode))
+        {
+            return;
+        }
+
+        isLoadingLocations = true;
+
+        try
+        {
+            cantons = await LocationApiService.GetCantonsAsync(
+                formModel.ProvinceCode,
+                cancellationTokenSource.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (HttpRequestException)
+        {
+            locationErrorMessage =
+                "No fue posible cargar los cantones. Inténtalo nuevamente.";
+        }
+        finally
+        {
+            isLoadingLocations = false;
+        }
+    }
+
+    private async Task OnCantonChangedAsync(ChangeEventArgs eventArgs)
+    {
+        formModel.CantonCode =
+            eventArgs.Value?.ToString() ?? string.Empty;
+        formModel.DistrictCode = string.Empty;
+        districts = [];
+        locationErrorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(formModel.ProvinceCode) ||
+            string.IsNullOrWhiteSpace(formModel.CantonCode))
+        {
+            return;
+        }
+
+        isLoadingLocations = true;
+
+        try
+        {
+            districts = await LocationApiService.GetDistrictsAsync(
+                formModel.ProvinceCode,
+                formModel.CantonCode,
+                cancellationTokenSource.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (HttpRequestException)
+        {
+            locationErrorMessage =
+                "No fue posible cargar los distritos. Inténtalo nuevamente.";
+        }
+        finally
+        {
+            isLoadingLocations = false;
+        }
+    }
+
+    private void OnDistrictChanged(ChangeEventArgs eventArgs)
+    {
+        formModel.DistrictCode =
+            eventArgs.Value?.ToString() ?? string.Empty;
+        locationErrorMessage = null;
     }
 
     private async Task LoadCustomersAsync()
@@ -138,6 +271,13 @@ public partial class Customers : ComponentBase, IDisposable
 
     private async Task SaveCustomerAsync()
     {
+        if (!HasCompleteLocation)
+        {
+            errorMessage =
+                "Completa provincia, cantón, distrito y otras señas.";
+            return;
+        }
+
         isSaving = true;
         errorMessage = null;
         successMessage = null;
@@ -302,7 +442,7 @@ public partial class Customers : ComponentBase, IDisposable
         await LoadCustomersAsync();
     }
 
-    private void EditCustomer(CustomerResponse customer)
+    private async Task EditCustomerAsync(CustomerResponse customer)
     {
         editingCustomerId = customer.Id;
         customerPendingDeactivationId = null;
@@ -314,12 +454,53 @@ public partial class Customers : ComponentBase, IDisposable
         formModel = new CustomerUpsertRequest
         {
             Name = customer.Name,
+            IdentificationType = customer.IdentificationType,
             IdentificationNumber = customer.IdentificationNumber ?? string.Empty,
             Email = customer.Email ?? string.Empty,
             PhoneNumber = customer.PhoneNumber ?? string.Empty,
-            Address = customer.Address ?? string.Empty,
+            ProvinceCode = customer.ProvinceCode ?? string.Empty,
+            CantonCode = customer.CantonCode ?? string.Empty,
+            DistrictCode = customer.DistrictCode ?? string.Empty,
+            OtherSigns = customer.OtherSigns ?? string.Empty,
             IsActive = customer.IsActive
         };
+
+        cantons = [];
+        districts = [];
+
+        if (string.IsNullOrWhiteSpace(formModel.ProvinceCode))
+        {
+            return;
+        }
+
+        isLoadingLocations = true;
+
+        try
+        {
+            cantons = await LocationApiService.GetCantonsAsync(
+                formModel.ProvinceCode,
+                cancellationTokenSource.Token);
+
+            if (!string.IsNullOrWhiteSpace(formModel.CantonCode))
+            {
+                districts = await LocationApiService.GetDistrictsAsync(
+                    formModel.ProvinceCode,
+                    formModel.CantonCode,
+                    cancellationTokenSource.Token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (HttpRequestException)
+        {
+            locationErrorMessage =
+                "No fue posible restaurar la ubicación del cliente.";
+        }
+        finally
+        {
+            isLoadingLocations = false;
+        }
     }
 
     private void RequestDeactivation(int customerId)
@@ -376,7 +557,10 @@ public partial class Customers : ComponentBase, IDisposable
         editingCustomerId = null;
         customerPendingDeactivationId = null;
         formModel = new CustomerUpsertRequest();
+        cantons = [];
+        districts = [];
         taxpayerLookupMessage = null;
+        locationErrorMessage = null;
         wasTaxpayerLookupSuccessful = false;
 
         if (clearMessages)

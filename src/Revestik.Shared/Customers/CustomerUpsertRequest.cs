@@ -33,11 +33,30 @@ public sealed class CustomerUpsertRequest : IValidatableObject
         ErrorMessage = "El teléfono debe contener entre 8 y 20 caracteres.")]
     public string PhoneNumber { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "La dirección es obligatoria.")]
+    [Required(ErrorMessage = "La provincia es obligatoria.")]
+    [RegularExpression(
+        "^[1-7]$",
+        ErrorMessage = "El código de provincia no es válido.")]
+    public string ProvinceCode { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "El cantón es obligatorio.")]
+    [RegularExpression(
+        "^\\d{2}$",
+        ErrorMessage = "El código de cantón debe contener 2 dígitos.")]
+    public string CantonCode { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "El distrito es obligatorio.")]
+    [RegularExpression(
+        "^\\d{2}$",
+        ErrorMessage = "El código de distrito debe contener 2 dígitos.")]
+    public string DistrictCode { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Las otras señas son obligatorias.")]
     [StringLength(
-        500,
-        ErrorMessage = "La dirección no puede superar los 500 caracteres.")]
-    public string Address { get; set; } = string.Empty;
+        160,
+        MinimumLength = 5,
+        ErrorMessage = "Las otras señas deben contener entre 5 y 160 caracteres.")]
+    public string OtherSigns { get; set; } = string.Empty;
 
     public bool IsActive { get; set; } = true;
 

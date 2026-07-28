@@ -31,10 +31,14 @@ public sealed class CustomerService(
             .Select(customer => new CustomerResponse(
                 customer.Id,
                 customer.Name,
+                customer.IdentificationType,
                 customer.IdentificationNumber,
                 customer.Email,
                 customer.PhoneNumber,
-                customer.Address,
+                customer.ProvinceCode,
+                customer.CantonCode,
+                customer.DistrictCode,
+                customer.OtherSigns,
                 customer.IsActive,
                 customer.CreatedAtUtc,
                 customer.UpdatedAtUtc))
@@ -51,10 +55,14 @@ public sealed class CustomerService(
             .Select(customer => new CustomerResponse(
                 customer.Id,
                 customer.Name,
+                customer.IdentificationType,
                 customer.IdentificationNumber,
                 customer.Email,
                 customer.PhoneNumber,
-                customer.Address,
+                customer.ProvinceCode,
+                customer.CantonCode,
+                customer.DistrictCode,
+                customer.OtherSigns,
                 customer.IsActive,
                 customer.CreatedAtUtc,
                 customer.UpdatedAtUtc))
@@ -68,11 +76,15 @@ public sealed class CustomerService(
         var customer = new Customer
         {
             Name = NormalizeRequired(request.Name),
+            IdentificationType = request.IdentificationType,
             IdentificationNumber =
-                NormalizeOptional(request.IdentificationNumber),
-            Email = NormalizeOptional(request.Email),
-            PhoneNumber = NormalizeOptional(request.PhoneNumber),
-            Address = NormalizeOptional(request.Address),
+                NormalizeRequired(request.IdentificationNumber),
+            Email = NormalizeRequired(request.Email),
+            PhoneNumber = NormalizeRequired(request.PhoneNumber),
+            ProvinceCode = NormalizeRequired(request.ProvinceCode),
+            CantonCode = NormalizeRequired(request.CantonCode),
+            DistrictCode = NormalizeRequired(request.DistrictCode),
+            OtherSigns = NormalizeRequired(request.OtherSigns),
             IsActive = request.IsActive,
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -100,11 +112,15 @@ public sealed class CustomerService(
         }
 
         customer.Name = NormalizeRequired(request.Name);
+        customer.IdentificationType = request.IdentificationType;
         customer.IdentificationNumber =
-            NormalizeOptional(request.IdentificationNumber);
-        customer.Email = NormalizeOptional(request.Email);
-        customer.PhoneNumber = NormalizeOptional(request.PhoneNumber);
-        customer.Address = NormalizeOptional(request.Address);
+            NormalizeRequired(request.IdentificationNumber);
+        customer.Email = NormalizeRequired(request.Email);
+        customer.PhoneNumber = NormalizeRequired(request.PhoneNumber);
+        customer.ProvinceCode = NormalizeRequired(request.ProvinceCode);
+        customer.CantonCode = NormalizeRequired(request.CantonCode);
+        customer.DistrictCode = NormalizeRequired(request.DistrictCode);
+        customer.OtherSigns = NormalizeRequired(request.OtherSigns);
         customer.IsActive = request.IsActive;
         customer.UpdatedAtUtc = DateTime.UtcNow;
 
@@ -140,10 +156,14 @@ public sealed class CustomerService(
         return new CustomerResponse(
             customer.Id,
             customer.Name,
+            customer.IdentificationType,
             customer.IdentificationNumber,
             customer.Email,
             customer.PhoneNumber,
-            customer.Address,
+            customer.ProvinceCode,
+            customer.CantonCode,
+            customer.DistrictCode,
+            customer.OtherSigns,
             customer.IsActive,
             customer.CreatedAtUtc,
             customer.UpdatedAtUtc);
@@ -159,12 +179,5 @@ public sealed class CustomerService(
         }
 
         return value.Trim();
-    }
-
-    private static string? NormalizeOptional(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? null
-            : value.Trim();
     }
 }

@@ -17,17 +17,33 @@ public sealed class CustomerConfiguration
             .HasMaxLength(150)
             .IsRequired();
 
+        builder.Property(customer => customer.IdentificationType)
+            .HasConversion<string>()
+            .HasMaxLength(20);
+
         builder.Property(customer => customer.IdentificationNumber)
-            .HasMaxLength(50);
+            .HasMaxLength(12);
 
         builder.Property(customer => customer.Email)
             .HasMaxLength(254);
 
         builder.Property(customer => customer.PhoneNumber)
-            .HasMaxLength(25);
+            .HasMaxLength(20);
 
-        builder.Property(customer => customer.Address)
-            .HasMaxLength(500);
+        builder.Property(customer => customer.ProvinceCode)
+            .HasMaxLength(1)
+            .IsFixedLength();
+
+        builder.Property(customer => customer.CantonCode)
+            .HasMaxLength(2)
+            .IsFixedLength();
+
+        builder.Property(customer => customer.DistrictCode)
+            .HasMaxLength(2)
+            .IsFixedLength();
+
+        builder.Property(customer => customer.OtherSigns)
+            .HasMaxLength(160);
 
         builder.Property(customer => customer.IsActive)
             .HasDefaultValue(true);
