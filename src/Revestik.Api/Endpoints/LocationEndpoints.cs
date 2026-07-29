@@ -10,7 +10,8 @@ public static class LocationEndpoints
     {
         var group = endpoints
             .MapGroup("/api/locations")
-            .WithTags("Locations");
+            .WithTags("Locations")
+            .RequireAuthorization();
 
         group.MapGet(
                 "/provinces",

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Data;
 using Revestik.Api.Endpoints;
+using Revestik.Api.Extensions;
 using Revestik.Api.Integrations.Hacienda;
 using Revestik.Api.Integrations.Locations;
 using Revestik.Api.Services.Customers;
@@ -22,7 +23,8 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
@@ -35,6 +37,9 @@ builder.Services.AddDbContext<RevestikDbContext>(options =>
 {
     options.UseSqlServer(connectionString);
 });
+
+builder.Services.AddRevestikAuthentication(
+    builder.Configuration);
 
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 
@@ -77,6 +82,9 @@ app.UseHttpsRedirection();
 
 app.UseCors(ClientCorsPolicy);
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapGet(
         "/api/health",
         async (
@@ -103,10 +111,14 @@ app.MapGet(
             });
         })
     .WithName("GetHealth")
-    .WithTags("System");
+    .WithTags("System")
+    .AllowAnonymous();
 
 app.MapCustomerEndpoints();
 app.MapTaxpayerEndpoints();
 app.MapLocationEndpoints();
+app.MapAuthenticationEndpoints();
+
+await app.InitializeIdentityAsync();
 
 app.Run();

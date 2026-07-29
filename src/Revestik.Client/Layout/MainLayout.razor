@@ -2,14 +2,21 @@
 
 <div class="app-shell">
     <header class="app-header">
-        <NavLink href="/" Match="NavLinkMatch.All" aria-label="Ir al Dashboard">
+        <NavLink href="/"
+                 Match="NavLinkMatch.All"
+                 aria-label="Ir al Dashboard">
             <img class="app-logo"
                  src="assets/logo/revestik.svg"
                  alt="Revestik" />
         </NavLink>
     </header>
 
-    <NavMenu />
+    <AuthorizeView>
+        <Authorized>
+            <UserSessionMenu />
+            <NavMenu />
+        </Authorized>
+    </AuthorizeView>
 
     <main class="app-content">
         @Body
