@@ -126,6 +126,8 @@
             NormalizeReturnPath(ReturnPath));
     }
 
+// Only allow local application paths to prevent redirects to external destinations.
+
     private static string NormalizeReturnPath(string? returnPath)
     {
         if (string.IsNullOrWhiteSpace(returnPath) ||

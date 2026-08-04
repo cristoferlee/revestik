@@ -33,7 +33,7 @@ public sealed class AuthenticationService(
                 ?? throw new InvalidOperationException(
                     "The API base URL was not configured."),
             $"api/auth/login/google?returnPath={encodedReturnPath}");
-
+        // Google OAuth starts on the API, so the browser must perform a full navigation outside the Blazor router.
         navigationManager.NavigateTo(
             loginUri.AbsoluteUri,
             forceLoad: true);
@@ -46,7 +46,7 @@ public sealed class AuthenticationService(
             "api/auth/logout",
             new LogoutRequest(Confirm: true),
             cancellationToken);
-
+        //An unauthorized response means the session is already missing or expired, wich is a valid logout outcome.
         if (response.StatusCode != HttpStatusCode.Unauthorized)
         {
             response.EnsureSuccessStatusCode();
@@ -57,7 +57,7 @@ public sealed class AuthenticationService(
             "/login",
             forceLoad: false);
     }
-
+    // Only allow local application paths to prevent redirects to external destinations.
     private static string NormalizeReturnPath(string? returnPath)
     {
         if (string.IsNullOrWhiteSpace(returnPath) ||
