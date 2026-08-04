@@ -1,11 +1,17 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Models;
+using Revestik.Api.Models.Identity;
 
 namespace Revestik.Api.Data;
 
 public sealed class RevestikDbContext(
     DbContextOptions<RevestikDbContext> options)
-    : DbContext(options)
+    : IdentityDbContext<
+        ApplicationUser,
+        IdentityRole,
+        string>(options)
 {
     public DbSet<Customer> Customers => Set<Customer>();
 

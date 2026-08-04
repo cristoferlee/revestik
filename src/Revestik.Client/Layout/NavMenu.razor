@@ -45,11 +45,13 @@
             Cotizaciones
         </NavLink>
 
-        <NavLink class="navigation-link"
-                 href="/settings"
-                 @onclick="CloseNavigation">
-            Configuración
-        </NavLink>
+        <AuthorizeView Roles="Administrator">
+            <NavLink class="navigation-link"
+                     href="/settings"
+                     @onclick="CloseNavigation">
+                Configuración
+            </NavLink>
+        </AuthorizeView>
     </div>
 </nav>
 

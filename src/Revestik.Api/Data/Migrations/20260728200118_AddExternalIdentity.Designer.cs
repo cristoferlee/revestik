@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Revestik.Api.Data;
 
@@ -11,9 +12,11 @@ using Revestik.Api.Data;
 namespace Revestik.Api.Data.Migrations
 {
     [DbContext(typeof(RevestikDbContext))]
-    partial class RevestikDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260728200118_AddExternalIdentity")]
+    partial class AddExternalIdentity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

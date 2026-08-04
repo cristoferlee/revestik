@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Revestik.Api.Services.Customers;
 using Revestik.Shared.Customers;
+using Revestik.Api.Authorization;
 
 namespace Revestik.Api.Endpoints;
 
@@ -11,7 +12,8 @@ public static class CustomerEndpoints
     {
         var group = endpoints
             .MapGroup("/api/customers")
-            .WithTags("Customers");
+            .WithTags("Customers")
+            .RequireAuthorization(PolicyNames.ManageCustomers);
 
         group.MapGet(
             "/",

@@ -1,0 +1,52 @@
+@using Revestik.Client.Services.Authentication
+@inject IAuthenticationService AuthenticationService
+
+<AuthorizeView>
+    <Authorized Context="authenticationContext">
+        <div class="user-session">
+            <div class="user-details">
+                <span class="user-name">
+                    @authenticationContext.User.Identity?.Name
+                </span>
+                <span class="user-role">
+                    @GetPrimaryRole(authenticationContext.User)
+                </span>
+            </div>
+
+            <button type="button"
+                    class="logout-button"
+                    disabled="@isLoggingOut"
+                    @onclick="LogoutAsync">
+                @(isLoggingOut ? "Saliendo..." : "Cerrar sesión")
+            </button>
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private bool isLoggingOut;
+
+    private async Task LogoutAsync()
+    {
+        isLoggingOut = true;
+
+        try
+        {
+            await AuthenticationService.LogoutAsync();
+        }
+        finally
+        {
+            isLoggingOut = false;
+        }
+    }
+
+    private static string GetPrimaryRole(
+        System.Security.Claims.ClaimsPrincipal principal)
+    {
+        return principal.Claims
+            .FirstOrDefault(claim =>
+                claim.Type ==
+                System.Security.Claims.ClaimTypes.Role)
+            ?.Value ?? "Usuario";
+    }
+}

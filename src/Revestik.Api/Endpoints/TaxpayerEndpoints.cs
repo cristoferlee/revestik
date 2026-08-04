@@ -1,5 +1,6 @@
 using Revestik.Api.Integrations.Hacienda;
 using Revestik.Shared.Taxpayers;
+using Revestik.Api.Authorization;
 
 namespace Revestik.Api.Endpoints;
 
@@ -10,7 +11,8 @@ public static class TaxpayerEndpoints
     {
         var group = endpoints
             .MapGroup("/api/taxpayers")
-            .WithTags("Taxpayers");
+            .WithTags("Taxpayers")
+            .RequireAuthorization(PolicyNames.ManageCustomers);
 
         group.MapGet(
                 "/{identificationNumber}",
