@@ -1,0 +1,75 @@
+﻿<nav class="main-navigation" aria-label="Navegación principal">
+    <button class="navigation-toggle"
+            type="button"
+            aria-expanded="@isNavigationOpen"
+            aria-controls="primary-navigation"
+            @onclick="ToggleNavigation">
+        Menú
+    </button>
+
+    <div id="primary-navigation" class="@NavigationCssClass">
+        <NavLink class="navigation-link"
+                 href="/"
+                 Match="NavLinkMatch.All"
+                 @onclick="CloseNavigation">
+            Dashboard
+        </NavLink>
+
+        <NavLink class="navigation-link"
+                 href="/invoices"
+                 @onclick="CloseNavigation">
+            Facturas
+        </NavLink>
+
+        <NavLink class="navigation-link"
+                 href="/inventory"
+                 @onclick="CloseNavigation">
+            Inventario
+        </NavLink>
+
+        <NavLink class="navigation-link"
+                 href="/purchases"
+                 @onclick="CloseNavigation">
+            Compras
+        </NavLink>
+
+        <NavLink class="navigation-link"
+                 href="/customers"
+                 @onclick="CloseNavigation">
+            Clientes
+        </NavLink>
+
+        <NavLink class="navigation-link"
+                 href="/quotes"
+                 @onclick="CloseNavigation">
+            Cotizaciones
+        </NavLink>
+
+        <AuthorizeView Roles="Administrator">
+            <NavLink class="navigation-link"
+                     href="/settings"
+                     @onclick="CloseNavigation">
+                Configuración
+            </NavLink>
+        </AuthorizeView>
+    </div>
+</nav>
+
+@code {
+    private bool isNavigationOpen;
+
+    private string NavigationCssClass =>
+        isNavigationOpen
+            ? "navigation-links navigation-links-open"
+            : "navigation-links";
+
+    private void ToggleNavigation()
+    {
+        isNavigationOpen = !isNavigationOpen;
+    }
+
+    private void CloseNavigation()
+    {
+        isNavigationOpen = false;
+    }
+}

@@ -1,0 +1,60 @@
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Revestik.Client;
+using Revestik.Client.Services.Authentication;
+using Revestik.Client.Services.Customers;
+using Revestik.Client.Services.Locations;
+using Revestik.Client.Services.Taxpayers;
+
+var builder = WebAssemblyHostBuilder.CreateDefault(args);
+
+builder.RootComponents.Add<App>("#app");
+builder.RootComponents.Add<HeadOutlet>("head::after");
+
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"]
+    ?? throw new InvalidOperationException(
+        "The API base URL was not configured.");
+
+builder.Services.AddAuthorizationCore();
+
+builder.Services.AddScoped<CookieHandler>();
+
+builder.Services.AddScoped(serviceProvider =>
+{
+    var cookieHandler =
+        serviceProvider.GetRequiredService<CookieHandler>();
+
+    cookieHandler.InnerHandler = new HttpClientHandler();
+
+    return new HttpClient(cookieHandler)
+    {
+        BaseAddress = new Uri(apiBaseUrl)
+    };
+});
+
+builder.Services.AddScoped<
+    CookieAuthenticationStateProvider>();
+
+builder.Services.AddScoped<AuthenticationStateProvider>(
+    serviceProvider =>
+        serviceProvider.GetRequiredService<
+            CookieAuthenticationStateProvider>());
+
+builder.Services.AddScoped<
+    IAuthenticationService,
+    AuthenticationService>();
+
+builder.Services.AddScoped<
+    ICustomerApiService,
+    CustomerApiService>();
+
+builder.Services.AddScoped<
+    ITaxpayerApiService,
+    TaxpayerApiService>();
+
+builder.Services.AddScoped<
+    ILocationApiService,
+    LocationApiService>();
+
+await builder.Build().RunAsync();

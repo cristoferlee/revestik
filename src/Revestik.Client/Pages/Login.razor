@@ -1,0 +1,142 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@using Revestik.Client.Services.Authentication
+@using Revestik.Shared.Authentication
+@inject IAuthenticationService AuthenticationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>Iniciar sesión | Revestik</PageTitle>
+
+<section class="login-page">
+    <div class="login-card">
+        <header class="login-header">
+            <p class="login-eyebrow">Acceso seguro</p>
+            <h1>Iniciar sesión</h1>
+            <p>
+                Utiliza tu cuenta Google autorizada para acceder
+                a Revestik.
+            </p>
+        </header>
+
+        @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        {
+            <div class="login-message login-error" role="alert">
+                @ErrorMessage
+            </div>
+        }
+
+        @if (isLoading)
+        {
+            <p class="login-message" role="status">
+                Verificando disponibilidad...
+            </p>
+        }
+        else if (provider?.IsAvailable == true)
+        {
+            <button type="button"
+                    class="google-login-button"
+                    @onclick="LoginWithGoogle">
+                <span class="google-mark" aria-hidden="true">G</span>
+                Continuar con Google
+            </button>
+        }
+        else
+        {
+            <div class="login-message login-error" role="alert">
+                El inicio de sesión con Google no está disponible.
+            </div>
+        }
+
+        <p class="login-help">
+            Solo pueden ingresar usuarios previamente autorizados
+            por el administrador.
+        </p>
+    </div>
+</section>
+
+@code {
+    private AuthenticationProviderResponse? provider;
+    private bool isLoading = true;
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "returnPath")]
+    public string? ReturnPath { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? ErrorCode { get; set; }
+
+    private string? ErrorMessage =>
+        ErrorCode switch
+        {
+            "account_not_authorized" =>
+                "Esta cuenta Google no está autorizada para usar Revestik.",
+
+            "account_disabled" =>
+                "Tu acceso a Revestik está desactivado.",
+
+            "email_not_available" =>
+                "Google no proporcionó un correo válido.",
+
+            "external_login_failed" =>
+                "No fue posible completar el inicio de sesión con Google.",
+
+            "account_creation_failed" or
+            "role_assignment_failed" or
+            "login_link_failed" or
+            "account_update_failed" =>
+                "No fue posible preparar tu cuenta. Contacta al administrador.",
+
+            _ => null
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState =
+            await AuthenticationStateProvider
+                .GetAuthenticationStateAsync();
+
+        if (authenticationState.User.Identity?.IsAuthenticated == true)
+        {
+            NavigationManager.NavigateTo(
+                NormalizeReturnPath(ReturnPath));
+
+            return;
+        }
+
+        try
+        {
+            provider =
+                await AuthenticationService.GetProviderAsync();
+        }
+        catch (HttpRequestException)
+        {
+            provider = null;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void LoginWithGoogle()
+    {
+        AuthenticationService.LoginWithGoogle(
+            NormalizeReturnPath(ReturnPath));
+    }
+
+// Only allow local application paths to prevent redirects to external destinations.
+
+    private static string NormalizeReturnPath(string? returnPath)
+    {
+        if (string.IsNullOrWhiteSpace(returnPath) ||
+            !returnPath.StartsWith('/') ||
+            returnPath.StartsWith("//"))
+        {
+            return "/";
+        }
+
+        return returnPath;
+    }
+}
