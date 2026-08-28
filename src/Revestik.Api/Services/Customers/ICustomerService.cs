@@ -1,11 +1,12 @@
+using Revestik.Shared.Common;
 using Revestik.Shared.Customers;
 
 namespace Revestik.Api.Services.Customers;
 
 public interface ICustomerService
 {
-    Task<IReadOnlyList<CustomerResponse>> GetAllAsync(
-        string? search,
+    Task<PaginatedResponse<CustomerListItemResponse>> GetPageAsync(
+        CustomerListRequest request,
         CancellationToken cancellationToken);
 
     Task<CustomerResponse?> GetByIdAsync(

@@ -9,7 +9,11 @@ public sealed class CustomerConfiguration
 {
     public void Configure(EntityTypeBuilder<Customer> builder)
     {
-        builder.ToTable("Customers");
+        builder.ToTable(
+            "Customers",
+            tableBuilder => tableBuilder.HasCheckConstraint(
+                "CK_Customers_IdentificationType",
+                "[IdentificationType] IN ('PhysicalPerson', 'LegalEntity', 'Dimex')"));
 
         builder.HasKey(customer => customer.Id);
 
@@ -19,31 +23,39 @@ public sealed class CustomerConfiguration
 
         builder.Property(customer => customer.IdentificationType)
             .HasConversion<string>()
-            .HasMaxLength(20);
+            .HasMaxLength(20)
+            .IsRequired();
 
         builder.Property(customer => customer.IdentificationNumber)
-            .HasMaxLength(12);
+            .HasMaxLength(12)
+            .IsRequired();
 
         builder.Property(customer => customer.Email)
-            .HasMaxLength(254);
+            .HasMaxLength(254)
+            .IsRequired();
 
         builder.Property(customer => customer.PhoneNumber)
-            .HasMaxLength(20);
+            .HasMaxLength(20)
+            .IsRequired();
 
         builder.Property(customer => customer.ProvinceCode)
             .HasMaxLength(1)
-            .IsFixedLength();
+            .IsFixedLength()
+            .IsRequired();
 
         builder.Property(customer => customer.CantonCode)
             .HasMaxLength(2)
-            .IsFixedLength();
+            .IsFixedLength()
+            .IsRequired();
 
         builder.Property(customer => customer.DistrictCode)
             .HasMaxLength(2)
-            .IsFixedLength();
+            .IsFixedLength()
+            .IsRequired();
 
         builder.Property(customer => customer.OtherSigns)
-            .HasMaxLength(160);
+            .HasMaxLength(160)
+            .IsRequired();
 
         builder.Property(customer => customer.IsActive)
             .HasDefaultValue(true);
@@ -56,6 +68,8 @@ public sealed class CustomerConfiguration
 
         builder.HasIndex(customer => customer.Name);
 
-        builder.HasIndex(customer => customer.IdentificationNumber);
+        builder.HasIndex(customer => customer.IdentificationNumber)
+            .IsUnique()
+            .HasDatabaseName("UX_Customers_IdentificationNumber");
     }
 }

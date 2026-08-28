@@ -12,7 +12,7 @@ public partial class Customers : ComponentBase, IDisposable
 {
     private readonly CancellationTokenSource cancellationTokenSource = new();
 
-    private IReadOnlyList<CustomerResponse> customers = [];
+    private IReadOnlyList<CustomerListItemResponse> customers = [];
     private IReadOnlyList<LocationOptionResponse> provinces = [];
     private IReadOnlyList<LocationOptionResponse> cantons = [];
     private IReadOnlyList<LocationOptionResponse> districts = [];
@@ -23,6 +23,13 @@ public partial class Customers : ComponentBase, IDisposable
     private string? successMessage;
     private string? taxpayerLookupMessage;
     private string? locationErrorMessage;
+
+    private IdentificationType? identificationTypeFilter;
+
+    private int page = 1;
+    private int pageSize = 20;
+    private int totalCount;
+    private int totalPages;
 
     private int? editingCustomerId;
     private int? customerPendingDeactivationId;
@@ -53,9 +60,20 @@ public partial class Customers : ComponentBase, IDisposable
             : "Guardar cliente";
 
     private string CustomerCountText =>
-        customers.Count == 1
+        totalCount == 1
             ? "1 cliente"
-            : $"{customers.Count} clientes";
+            : $"{totalCount} clientes";
+
+    private string PageDisplayText =>
+        totalPages == 0
+            ? "Página 0 de 0"
+            : $"Página {page} de {totalPages}";
+
+    private bool CanGoToPreviousPage =>
+        !isLoading && page > 1;
+
+    private bool CanGoToNextPage =>
+        !isLoading && page < totalPages;
 
     private string IdentificationRule =>
         formModel.IdentificationType switch
@@ -251,9 +269,19 @@ public partial class Customers : ComponentBase, IDisposable
 
         try
         {
-            customers = await CustomerApiService.GetAllAsync(
-                searchTerm,
+            var result = await CustomerApiService.GetPageAsync(
+                new CustomerListRequest
+                {
+                    Search = searchTerm,
+                    IdentificationType = identificationTypeFilter,
+                    Page = page,
+                    PageSize = pageSize
+                },
                 cancellationTokenSource.Token);
+
+            customers = result.Items;
+            totalCount = result.TotalCount;
+            totalPages = result.TotalPages;
         }
         catch (OperationCanceledException)
         {
@@ -313,6 +341,11 @@ public partial class Customers : ComponentBase, IDisposable
         }
         catch (OperationCanceledException)
         {
+        }
+        catch (CustomerIdentificationConflictException)
+        {
+            errorMessage =
+                "Ya existe un cliente con la misma identificación.";
         }
         catch (HttpRequestException)
         {
@@ -432,51 +465,112 @@ public partial class Customers : ComponentBase, IDisposable
 
     private async Task SearchAsync()
     {
+        page = 1;
         customerPendingDeactivationId = null;
+
         await LoadCustomersAsync();
     }
 
     private async Task ClearSearchAsync()
     {
         searchTerm = string.Empty;
+        page = 1;
+
         await LoadCustomersAsync();
     }
 
-    private async Task EditCustomerAsync(CustomerResponse customer)
+    private async Task OnIdentificationTypeFilterChangedAsync(
+        ChangeEventArgs eventArgs)
     {
-        editingCustomerId = customer.Id;
+        var selectedValue = eventArgs.Value?.ToString();
+
+        identificationTypeFilter =
+            Enum.TryParse<IdentificationType>(
+                selectedValue,
+                ignoreCase: true,
+                out var parsedIdentificationType)
+                ? parsedIdentificationType
+                : null;
+
+        page = 1;
         customerPendingDeactivationId = null;
+
+        await LoadCustomersAsync();
+    }
+
+    private async Task GoToPreviousPageAsync()
+    {
+        if (!CanGoToPreviousPage)
+        {
+            return;
+        }
+
+        page--;
+        customerPendingDeactivationId = null;
+
+        await LoadCustomersAsync();
+    }
+
+    private async Task GoToNextPageAsync()
+    {
+        if (!CanGoToNextPage)
+        {
+            return;
+        }
+
+        page++;
+        customerPendingDeactivationId = null;
+
+        await LoadCustomersAsync();
+    }
+
+    private async Task EditCustomerAsync(
+        CustomerListItemResponse customerListItem)
+    {
         errorMessage = null;
         successMessage = null;
         taxpayerLookupMessage = null;
         wasTaxpayerLookupSuccessful = false;
 
-        formModel = new CustomerUpsertRequest
-        {
-            Name = customer.Name,
-            IdentificationType = customer.IdentificationType,
-            IdentificationNumber = customer.IdentificationNumber ?? string.Empty,
-            Email = customer.Email ?? string.Empty,
-            PhoneNumber = customer.PhoneNumber ?? string.Empty,
-            ProvinceCode = customer.ProvinceCode ?? string.Empty,
-            CantonCode = customer.CantonCode ?? string.Empty,
-            DistrictCode = customer.DistrictCode ?? string.Empty,
-            OtherSigns = customer.OtherSigns ?? string.Empty,
-            IsActive = customer.IsActive
-        };
-
-        cantons = [];
-        districts = [];
-
-        if (string.IsNullOrWhiteSpace(formModel.ProvinceCode))
-        {
-            return;
-        }
-
-        isLoadingLocations = true;
-
         try
         {
+            var customer = await CustomerApiService.GetByIdAsync(
+                customerListItem.Id,
+                cancellationTokenSource.Token);
+
+            if (customer is null)
+            {
+                errorMessage = "El cliente ya no existe.";
+                return;
+            }
+
+            editingCustomerId = customer.Id;
+            customerPendingDeactivationId = null;
+
+            formModel = new CustomerUpsertRequest
+            {
+                Name = customer.Name,
+                IdentificationType = customer.IdentificationType,
+                IdentificationNumber = customer.IdentificationNumber,
+                Email = customer.Email,
+                PhoneNumber = customer.PhoneNumber,
+                ProvinceCode = customer.ProvinceCode,
+                CantonCode = customer.CantonCode,
+                DistrictCode = customer.DistrictCode,
+                OtherSigns = customer.OtherSigns,
+                IsActive = customer.IsActive
+            };
+
+            cantons = [];
+            districts = [];
+
+            if (string.IsNullOrWhiteSpace(formModel.ProvinceCode))
+            {
+                return;
+            }
+
+            isLoadingLocations = true;
+
             cantons = await LocationApiService.GetCantonsAsync(
                 formModel.ProvinceCode,
                 cancellationTokenSource.Token);
@@ -494,8 +588,8 @@ public partial class Customers : ComponentBase, IDisposable
         }
         catch (HttpRequestException)
         {
-            locationErrorMessage =
-                "No fue posible restaurar la ubicación del cliente.";
+            errorMessage =
+                "No fue posible cargar la información del cliente.";
         }
         finally
         {
@@ -570,7 +664,8 @@ public partial class Customers : ComponentBase, IDisposable
         }
     }
 
-    private static string GetStatusCssClass(CustomerResponse customer)
+    private static string GetStatusCssClass(
+        CustomerListItemResponse customer)
     {
         return customer.IsActive
             ? "status-badge active-status"
