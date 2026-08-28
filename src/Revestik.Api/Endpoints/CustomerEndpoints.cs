@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
+using Revestik.Api.Authorization;
 using Revestik.Api.Services.Customers;
 using Revestik.Shared.Customers;
-using Revestik.Api.Authorization;
 
 namespace Revestik.Api.Endpoints;
 
@@ -18,12 +18,19 @@ public static class CustomerEndpoints
         group.MapGet(
             "/",
             async (
-                string? search,
+                [AsParameters] CustomerListRequest request,
                 ICustomerService customerService,
                 CancellationToken cancellationToken) =>
             {
-                var customers = await customerService.GetAllAsync(
-                    search,
+                var validationErrors = ValidateRequest(request);
+
+                if (validationErrors.Count > 0)
+                {
+                    return Results.ValidationProblem(validationErrors);
+                }
+
+                var customers = await customerService.GetPageAsync(
+                    request,
                     cancellationToken);
 
                 return Results.Ok(customers);
@@ -61,13 +68,24 @@ public static class CustomerEndpoints
                     return Results.ValidationProblem(validationErrors);
                 }
 
-                var customer = await customerService.CreateAsync(
-                    request,
-                    cancellationToken);
+                try
+                {
+                    var customer = await customerService.CreateAsync(
+                        request,
+                        cancellationToken);
 
-                return Results.Created(
-                    $"/api/customers/{customer.Id}",
-                    customer);
+                    return Results.Created(
+                        $"/api/customers/{customer.Id}",
+                        customer);
+                }
+                catch (DuplicateCustomerIdentificationException)
+                {
+                    return Results.Problem(
+                        title: "Identificación duplicada.",
+                        detail:
+                            "Ya existe un cliente registrado con esta identificación.",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
             })
             .WithName("CreateCustomer");
 
@@ -86,14 +104,25 @@ public static class CustomerEndpoints
                     return Results.ValidationProblem(validationErrors);
                 }
 
-                var customer = await customerService.UpdateAsync(
-                    id,
-                    request,
-                    cancellationToken);
+                try
+                {
+                    var customer = await customerService.UpdateAsync(
+                        id,
+                        request,
+                        cancellationToken);
 
-                return customer is null
-                    ? Results.NotFound()
-                    : Results.Ok(customer);
+                    return customer is null
+                        ? Results.NotFound()
+                        : Results.Ok(customer);
+                }
+                catch (DuplicateCustomerIdentificationException)
+                {
+                    return Results.Problem(
+                        title: "Identificación duplicada.",
+                        detail:
+                            "Ya existe un cliente registrado con esta identificación.",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
             })
             .WithName("UpdateCustomer");
 
@@ -117,8 +146,9 @@ public static class CustomerEndpoints
         return endpoints;
     }
 
-    private static Dictionary<string, string[]> ValidateRequest(
-        CustomerUpsertRequest request)
+    private static Dictionary<string, string[]> ValidateRequest<TRequest>(
+        TRequest request)
+        where TRequest : class
     {
         var validationResults = new List<ValidationResult>();
         var validationContext = new ValidationContext(request);

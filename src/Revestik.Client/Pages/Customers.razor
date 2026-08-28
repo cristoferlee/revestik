@@ -25,19 +25,24 @@
         </div>
     }
 
-    <section class="customer-card" aria-labelledby="customer-form-title">
+    <section class="customer-card"
+             aria-labelledby="customer-form-title">
         <h2 id="customer-form-title">@FormTitle</h2>
 
-        <EditForm Model="formModel" OnValidSubmit="SaveCustomerAsync">
+        <EditForm Model="formModel"
+                  OnValidSubmit="SaveCustomerAsync">
             <DataAnnotationsValidator />
             <ValidationSummary />
 
             <div class="form-grid">
                 <div class="form-group">
                     <label for="customer-name">Nombre</label>
+
                     <InputText id="customer-name"
                                @bind-Value="formModel.Name" />
-                    <ValidationMessage For="@(() => formModel.Name)" />
+
+                    <ValidationMessage
+                        For="@(() => formModel.Name)" />
                 </div>
 
                 <div class="form-group">
@@ -47,13 +52,18 @@
 
                     <InputSelect id="customer-identification-type"
                                  @bind-Value="formModel.IdentificationType">
-                        <option value="">Cédula de identidad</option>
+                        <option value="">
+                            Seleccione un tipo de identificación
+                        </option>
+
                         <option value="@IdentificationType.PhysicalPerson">
                             Cédula física
                         </option>
+
                         <option value="@IdentificationType.Dimex">
                             DIMEX
                         </option>
+
                         <option value="@IdentificationType.LegalEntity">
                             Cédula jurídica
                         </option>
@@ -105,19 +115,29 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="customer-email">Correo electrónico</label>
+                    <label for="customer-email">
+                        Correo electrónico
+                    </label>
+
                     <InputText id="customer-email"
                                type="email"
                                @bind-Value="formModel.Email" />
-                    <ValidationMessage For="@(() => formModel.Email)" />
+
+                    <ValidationMessage
+                        For="@(() => formModel.Email)" />
                 </div>
 
                 <div class="form-group">
-                    <label for="customer-phone">Teléfono</label>
+                    <label for="customer-phone">
+                        Teléfono
+                    </label>
+
                     <InputText id="customer-phone"
                                type="tel"
                                @bind-Value="formModel.PhoneNumber" />
-                    <ValidationMessage For="@(() => formModel.PhoneNumber)" />
+
+                    <ValidationMessage
+                        For="@(() => formModel.PhoneNumber)" />
                 </div>
 
                 <fieldset class="address-section form-wide">
@@ -130,19 +150,26 @@
 
                     @if (!string.IsNullOrWhiteSpace(locationErrorMessage))
                     {
-                        <p class="lookup-message lookup-error" role="alert">
+                        <p class="lookup-message lookup-error"
+                           role="alert">
                             @locationErrorMessage
                         </p>
                     }
 
                     <div class="address-grid">
                         <div class="form-group">
-                            <label for="customer-province">Provincia</label>
+                            <label for="customer-province">
+                                Provincia
+                            </label>
+
                             <select id="customer-province"
                                     value="@formModel.ProvinceCode"
                                     disabled="@isLoadingLocations"
                                     @onchange="OnProvinceChangedAsync">
-                                <option value="">Seleccione una provincia</option>
+                                <option value="">
+                                    Seleccione una provincia
+                                </option>
+
                                 @foreach (var province in provinces)
                                 {
                                     <option value="@province.Code">
@@ -153,12 +180,18 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="customer-canton">Cantón</label>
+                            <label for="customer-canton">
+                                Cantón
+                            </label>
+
                             <select id="customer-canton"
                                     value="@formModel.CantonCode"
                                     disabled="@(!CanSelectCanton)"
                                     @onchange="OnCantonChangedAsync">
-                                <option value="">Seleccione un cantón</option>
+                                <option value="">
+                                    Seleccione un cantón
+                                </option>
+
                                 @foreach (var canton in cantons)
                                 {
                                     <option value="@canton.Code">
@@ -169,12 +202,18 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="customer-district">Distrito</label>
+                            <label for="customer-district">
+                                Distrito
+                            </label>
+
                             <select id="customer-district"
                                     value="@formModel.DistrictCode"
                                     disabled="@(!CanSelectDistrict)"
                                     @onchange="OnDistrictChanged">
-                                <option value="">Seleccione un distrito</option>
+                                <option value="">
+                                    Seleccione un distrito
+                                </option>
+
                                 @foreach (var district in districts)
                                 {
                                     <option value="@district.Code">
@@ -185,16 +224,22 @@
                         </div>
 
                         <div class="form-group form-wide">
-                            <label for="customer-address">Otras señas</label>
+                            <label for="customer-address">
+                                Otras señas
+                            </label>
+
                             <InputTextArea id="customer-address"
                                            rows="3"
                                            maxlength="160"
                                            placeholder="Ejemplo: 100 metros al norte de la iglesia, casa color blanco."
                                            @bind-Value="formModel.OtherSigns" />
+
                             <p class="field-guidance">
                                 Escribe entre 5 y 160 caracteres.
                             </p>
-                            <ValidationMessage For="@(() => formModel.OtherSigns)" />
+
+                            <ValidationMessage
+                                For="@(() => formModel.OtherSigns)" />
                         </div>
                     </div>
                 </fieldset>
@@ -202,7 +247,10 @@
                 <div class="form-group checkbox-group">
                     <InputCheckbox id="customer-active"
                                    @bind-Value="formModel.IsActive" />
-                    <label for="customer-active">Cliente activo</label>
+
+                    <label for="customer-active">
+                        Cliente activo
+                    </label>
                 </div>
             </div>
 
@@ -220,49 +268,91 @@
                 <button type="submit"
                         class="primary-button"
                         disabled="@isSaving">
-                    @(isSaving ? "Guardando..." : SaveButtonText)
+                    @(isSaving
+                        ? "Guardando..."
+                        : SaveButtonText)
                 </button>
             </div>
         </EditForm>
     </section>
 
-    <section class="customer-card" aria-labelledby="customer-list-title">
+    <section class="customer-card"
+             aria-labelledby="customer-list-title">
         <div class="list-header">
             <div>
-                <h2 id="customer-list-title">Lista de clientes</h2>
+                <h2 id="customer-list-title">
+                    Lista de clientes
+                </h2>
+
                 <p>@CustomerCountText</p>
             </div>
 
-            <form class="search-form"
-                  @onsubmit="SearchAsync"
-                  @onsubmit:preventDefault>
-                <input type="search"
-                       placeholder="Buscar por nombre o identificación"
-                       aria-label="Buscar clientes"
-                       @bind="searchTerm" />
+            <div class="customer-list-filters">
+                <div class="form-group">
+                    <label for="customer-type-filter">
+                        Tipo de identificación
+                    </label>
 
-                <button type="submit" class="primary-button">
-                    Buscar
-                </button>
+                    <select id="customer-type-filter"
+                            aria-label="Filtrar por tipo de identificación"
+                            @onchange="OnIdentificationTypeFilterChangedAsync">
+                        <option value="">
+                            Todos
+                        </option>
 
-                @if (!string.IsNullOrWhiteSpace(searchTerm))
-                {
-                    <button type="button"
-                            class="secondary-button"
-                            @onclick="ClearSearchAsync">
-                        Limpiar
+                        <option value="@IdentificationType.PhysicalPerson">
+                            Cédula física
+                        </option>
+
+                        <option value="@IdentificationType.LegalEntity">
+                            Cédula jurídica
+                        </option>
+
+                        <option value="@IdentificationType.Dimex">
+                            DIMEX
+                        </option>
+                    </select>
+                </div>
+
+                <form class="search-form"
+                      @onsubmit="SearchAsync"
+                      @onsubmit:preventDefault>
+                    <input type="search"
+                           maxlength="150"
+                           placeholder="Buscar por nombre"
+                           aria-label="Buscar clientes por nombre"
+                           @bind="searchTerm" />
+
+                    <button type="submit"
+                            class="primary-button"
+                            disabled="@isLoading">
+                        Buscar
                     </button>
-                }
-            </form>
+
+                    @if (!string.IsNullOrWhiteSpace(searchTerm))
+                    {
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@isLoading"
+                                @onclick="ClearSearchAsync">
+                            Limpiar
+                        </button>
+                    }
+                </form>
+            </div>
         </div>
 
         @if (isLoading)
         {
-            <p class="empty-state">Cargando clientes...</p>
+            <p class="empty-state">
+                Cargando clientes...
+            </p>
         }
         else if (customers.Count == 0)
         {
-            <p class="empty-state">No se encontraron clientes.</p>
+            <p class="empty-state">
+                No se encontraron clientes.
+            </p>
         }
         else
         {
@@ -270,32 +360,46 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Nombre</th>
                             <th>Identificación</th>
-                            <th>Contacto</th>
+                            <th>Nombre</th>
+                            <th>Correo</th>
+                            <th>Teléfono</th>
                             <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
+
                     <tbody>
                         @foreach (var customer in customers)
                         {
                             <tr>
-                                <td data-label="Nombre">@customer.Name</td>
                                 <td data-label="Identificación">
-                                    @(customer.IdentificationNumber ?? "—")
+                                    @customer.IdentificationNumber
                                 </td>
-                                <td data-label="Contacto">
-                                    <span>@(customer.Email ?? "—")</span>
-                                    <small>@(customer.PhoneNumber ?? "—")</small>
+
+                                <td data-label="Nombre">
+                                    @customer.Name
                                 </td>
+
+                                <td data-label="Correo">
+                                    @customer.Email
+                                </td>
+
+                                <td data-label="Teléfono">
+                                    @customer.PhoneNumber
+                                </td>
+
                                 <td data-label="Estado">
                                     <span class="@GetStatusCssClass(customer)">
-                                        @(customer.IsActive ? "Activo" : "Inactivo")
+                                        @(customer.IsActive
+                                            ? "Activo"
+                                            : "Inactivo")
                                     </span>
                                 </td>
+
                                 <td data-label="Acciones">
-                                    @if (customerPendingDeactivationId == customer.Id)
+                                    @if (customerPendingDeactivationId ==
+                                         customer.Id)
                                     {
                                         <div class="action-buttons">
                                             <button type="button"
@@ -303,6 +407,7 @@
                                                     @onclick="() => DeactivateCustomerAsync(customer.Id)">
                                                 Confirmar
                                             </button>
+
                                             <button type="button"
                                                     class="secondary-button"
                                                     @onclick="CancelDeactivation">
@@ -335,6 +440,27 @@
                     </tbody>
                 </table>
             </div>
+
+            <nav class="pagination-controls"
+                 aria-label="Paginación de clientes">
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@(!CanGoToPreviousPage)"
+                        @onclick="GoToPreviousPageAsync">
+                    Anterior
+                </button>
+
+                <span aria-live="polite">
+                    @PageDisplayText
+                </span>
+
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@(!CanGoToNextPage)"
+                        @onclick="GoToNextPageAsync">
+                    Siguiente
+                </button>
+            </nav>
         }
     </section>
 </section>

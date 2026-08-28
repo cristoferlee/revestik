@@ -1,6 +1,8 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Data;
 using Revestik.Api.Models;
+using Revestik.Shared.Common;
 using Revestik.Shared.Customers;
 
 namespace Revestik.Api.Services.Customers;
@@ -9,40 +11,73 @@ public sealed class CustomerService(
     RevestikDbContext dbContext)
     : ICustomerService
 {
-    public async Task<IReadOnlyList<CustomerResponse>> GetAllAsync(
-        string? search,
+    public async Task<PaginatedResponse<CustomerListItemResponse>> GetPageAsync(
+        CustomerListRequest request,
         CancellationToken cancellationToken)
     {
         var query = dbContext.Customers
             .AsNoTracking();
 
-        if (!string.IsNullOrWhiteSpace(search))
+        if (!string.IsNullOrWhiteSpace(request.Search))
         {
-            var normalizedSearch = search.Trim();
+            var normalizedSearch = request.Search.Trim();
 
             query = query.Where(customer =>
-                customer.Name.Contains(normalizedSearch) ||
-                (customer.IdentificationNumber != null &&
-                 customer.IdentificationNumber.Contains(normalizedSearch)));
+                customer.Name.Contains(normalizedSearch));
         }
 
-        return await query
-            .OrderBy(customer => customer.Name)
-            .Select(customer => new CustomerResponse(
-                customer.Id,
-                customer.Name,
-                customer.IdentificationType,
-                customer.IdentificationNumber,
-                customer.Email,
-                customer.PhoneNumber,
-                customer.ProvinceCode,
-                customer.CantonCode,
-                customer.DistrictCode,
-                customer.OtherSigns,
-                customer.IsActive,
-                customer.CreatedAtUtc,
-                customer.UpdatedAtUtc))
-            .ToListAsync(cancellationToken);
+        if (request.IdentificationType.HasValue)
+        {
+            query = query.Where(customer =>
+                customer.IdentificationType ==
+                request.IdentificationType.Value);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var skip = ((long)request.Page - 1) * request.PageSize;
+
+        IReadOnlyList<CustomerListItemResponse> items;
+
+        if (skip >= totalCount)
+        {
+            items = [];
+        }
+        else
+        {
+            items = await query
+                .OrderBy(customer =>
+                    customer.IdentificationType ==
+                        IdentificationType.LegalEntity &&
+                    customer.Name == customer.IdentificationNumber
+                        ? 0
+                        : 1)
+                .ThenBy(customer =>
+                    customer.IdentificationType ==
+                        IdentificationType.LegalEntity &&
+                    customer.Name == customer.IdentificationNumber
+                        ? customer.IdentificationNumber
+                        : null)
+                .ThenBy(customer => customer.Name)
+                .ThenBy(customer => customer.Id)
+                .Skip((int)skip)
+                .Take(request.PageSize)
+                .Select(customer => new CustomerListItemResponse(
+                    customer.Id,
+                    customer.IdentificationNumber,
+                    customer.Name,
+                    customer.Email,
+                    customer.PhoneNumber,
+                    customer.IdentificationType,
+                    customer.IsActive))
+                .ToListAsync(cancellationToken);
+        }
+
+        return new PaginatedResponse<CustomerListItemResponse>(
+            items,
+            request.Page,
+            request.PageSize,
+            totalCount);
     }
 
     public async Task<CustomerResponse?> GetByIdAsync(
@@ -76,7 +111,8 @@ public sealed class CustomerService(
         var customer = new Customer
         {
             Name = NormalizeRequired(request.Name),
-            IdentificationType = request.IdentificationType,
+            IdentificationType = GetRequiredIdentificationType(
+                request.IdentificationType),
             IdentificationNumber =
                 NormalizeRequired(request.IdentificationNumber),
             Email = NormalizeRequired(request.Email),
@@ -91,7 +127,7 @@ public sealed class CustomerService(
 
         dbContext.Customers.Add(customer);
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await SaveCustomerChangesAsync(cancellationToken);
 
         return MapToResponse(customer);
     }
@@ -112,7 +148,8 @@ public sealed class CustomerService(
         }
 
         customer.Name = NormalizeRequired(request.Name);
-        customer.IdentificationType = request.IdentificationType;
+        customer.IdentificationType = GetRequiredIdentificationType(
+            request.IdentificationType);
         customer.IdentificationNumber =
             NormalizeRequired(request.IdentificationNumber);
         customer.Email = NormalizeRequired(request.Email);
@@ -124,7 +161,7 @@ public sealed class CustomerService(
         customer.IsActive = request.IsActive;
         customer.UpdatedAtUtc = DateTime.UtcNow;
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await SaveCustomerChangesAsync(cancellationToken);
 
         return MapToResponse(customer);
     }
@@ -151,6 +188,29 @@ public sealed class CustomerService(
         return true;
     }
 
+    private async Task SaveCustomerChangesAsync(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception)
+            when (IsUniqueConstraintViolation(exception))
+        {
+            throw new DuplicateCustomerIdentificationException(exception);
+        }
+    }
+
+    private static bool IsUniqueConstraintViolation(
+        DbUpdateException exception)
+    {
+        return exception.InnerException is SqlException
+        {
+            Number: 2601 or 2627
+        };
+    }
+
     private static CustomerResponse MapToResponse(Customer customer)
     {
         return new CustomerResponse(
@@ -167,6 +227,15 @@ public sealed class CustomerService(
             customer.IsActive,
             customer.CreatedAtUtc,
             customer.UpdatedAtUtc);
+    }
+
+    private static IdentificationType GetRequiredIdentificationType(
+        IdentificationType? identificationType)
+    {
+        return identificationType
+            ?? throw new ArgumentException(
+                "Identification type is required.",
+                nameof(identificationType));
     }
 
     private static string NormalizeRequired(string value)

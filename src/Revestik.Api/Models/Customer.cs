@@ -8,21 +8,21 @@ public sealed class Customer
 
     public string Name { get; set; } = string.Empty;
 
-    public IdentificationType? IdentificationType { get; set; }
+    public IdentificationType IdentificationType { get; set; }
 
-    public string? IdentificationNumber { get; set; }
+    public string IdentificationNumber { get; set; } = string.Empty;
 
-    public string? Email { get; set; }
+    public string Email { get; set; } = string.Empty;
 
-    public string? PhoneNumber { get; set; }
+    public string PhoneNumber { get; set; } = string.Empty;
 
-    public string? ProvinceCode { get; set; }
+    public string ProvinceCode { get; set; } = string.Empty;
 
-    public string? CantonCode { get; set; }
+    public string CantonCode { get; set; } = string.Empty;
 
-    public string? DistrictCode { get; set; }
+    public string DistrictCode { get; set; } = string.Empty;
 
-    public string? OtherSigns { get; set; }
+    public string OtherSigns { get; set; } = string.Empty;
 
     public bool IsActive { get; set; } = true;
 

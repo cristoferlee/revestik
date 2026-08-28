@@ -369,3 +369,46 @@ td small {
         width: 100%;
     }
 }
+
+.customer-list-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 14px;
+}
+
+.customer-list-filters .form-group {
+    min-width: 210px;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.pagination-controls span {
+    min-width: 120px;
+    color: var(--color-text-secondary);
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    .customer-list-filters {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .customer-list-filters .form-group,
+    .customer-list-filters .search-form,
+    .customer-list-filters select {
+        width: 100%;
+    }
+
+    .pagination-controls {
+        justify-content: space-between;
+    }
+}

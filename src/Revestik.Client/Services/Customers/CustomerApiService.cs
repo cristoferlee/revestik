@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
+using Revestik.Shared.Common;
 using Revestik.Shared.Customers;
 
 namespace Revestik.Client.Services.Customers;
@@ -8,18 +10,43 @@ public sealed class CustomerApiService(
     HttpClient httpClient)
     : ICustomerApiService
 {
-    public async Task<IReadOnlyList<CustomerResponse>> GetAllAsync(
-        string? search,
+    public async Task<PaginatedResponse<CustomerListItemResponse>> GetPageAsync(
+        CustomerListRequest request,
         CancellationToken cancellationToken = default)
     {
-        var requestUri = string.IsNullOrWhiteSpace(search)
-            ? "api/customers"
-            : $"api/customers?search={Uri.EscapeDataString(search.Trim())}";
+        var queryParameters = new List<string>
+        {
+            $"page={request.Page.ToString(CultureInfo.InvariantCulture)}",
+            $"pageSize={request.PageSize.ToString(CultureInfo.InvariantCulture)}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            queryParameters.Add(
+                $"search={Uri.EscapeDataString(request.Search.Trim())}");
+        }
+
+        if (request.IdentificationType.HasValue)
+        {
+            queryParameters.Add(
+                "identificationType=" +
+                Uri.EscapeDataString(
+                    request.IdentificationType.Value.ToString()));
+        }
+
+        var requestUri =
+            $"api/customers?{string.Join("&", queryParameters)}";
 
         return await httpClient
-            .GetFromJsonAsync<List<CustomerResponse>>(
+            .GetFromJsonAsync<
+                PaginatedResponse<CustomerListItemResponse>>(
                 requestUri,
-                cancellationToken) ?? [];
+                cancellationToken)
+            ?? new PaginatedResponse<CustomerListItemResponse>(
+                [],
+                request.Page,
+                request.PageSize,
+                0);
     }
 
     public async Task<CustomerResponse?> GetByIdAsync(
@@ -51,6 +78,11 @@ public sealed class CustomerApiService(
             request,
             cancellationToken);
 
+        if (response.StatusCode == HttpStatusCode.Conflict)
+        {
+            throw new CustomerIdentificationConflictException();
+        }
+
         response.EnsureSuccessStatusCode();
 
         return await ReadRequiredCustomerAsync(
@@ -71,6 +103,11 @@ public sealed class CustomerApiService(
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
+        }
+
+        if (response.StatusCode == HttpStatusCode.Conflict)
+        {
+            throw new CustomerIdentificationConflictException();
         }
 
         response.EnsureSuccessStatusCode();
