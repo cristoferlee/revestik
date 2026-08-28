@@ -136,9 +136,12 @@ public static class AuthenticationEndpoints
         SignInManager<ApplicationUser> signInManager,
         UserManager<ApplicationUser> userManager,
         IConfiguration configuration,
+        IHostEnvironment hostEnvironment,
         ILoggerFactory loggerFactory)
     {
-        var clientBaseUrl = GetClientBaseUrl(configuration);
+        var clientBaseUrl = GetClientBaseUrl(
+            configuration,
+            hostEnvironment);
         var safeReturnPath = NormalizeReturnPath(returnPath);
         var logger = loggerFactory.CreateLogger(
             "Revestik.Api.Authentication");
@@ -317,8 +320,14 @@ public static class AuthenticationEndpoints
     }
 
     private static string GetClientBaseUrl(
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment hostEnvironment)
     {
+        if (!hostEnvironment.IsDevelopment())
+        {
+            return string.Empty;
+        }
+
         var clientBaseUrl =
             configuration["Authentication:ClientBaseUrl"]
             ?? throw new InvalidOperationException(

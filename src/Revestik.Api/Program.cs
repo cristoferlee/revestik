@@ -12,21 +12,30 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 
-var allowedOrigins = builder.Configuration
-    .GetSection("AllowedOrigins")
-    .Get<string[]>() ?? [];
-
-builder.Services.AddCors(options =>
+if (builder.Environment.IsDevelopment())
 {
-    options.AddPolicy(ClientCorsPolicy, policy =>
+    var allowedOrigins = builder.Configuration
+        .GetSection("AllowedOrigins")
+        .Get<string[]>() ?? [];
+
+    if (allowedOrigins.Length == 0)
     {
-        policy
-            .WithOrigins(allowedOrigins)
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
+        throw new InvalidOperationException(
+            "At least one development client origin must be configured.");
+    }
+
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy(ClientCorsPolicy, policy =>
+        {
+            policy
+                .WithOrigins(allowedOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        });
     });
-});
+}
 
 var connectionString = builder.Configuration
     .GetConnectionString("RevestikDatabase")
@@ -80,7 +89,28 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseCors(ClientCorsPolicy);
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors(ClientCorsPolicy);
+}
+else
+{
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Path.Equals(
+                "/index.html",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.OnStarting(() =>
+            {
+                DisableClientIndexCaching(context.Response);
+                return Task.CompletedTask;
+            });
+        }
+
+        await next(context);
+    });
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -119,6 +149,37 @@ app.MapTaxpayerEndpoints();
 app.MapLocationEndpoints();
 app.MapAuthenticationEndpoints();
 
+if (!app.Environment.IsDevelopment())
+{
+    app.MapStaticAssets()
+        .AllowAnonymous();
+
+    app.MapFallback(
+            "/api/{**path}",
+            () => Results.NotFound())
+        .AllowAnonymous();
+
+    app.MapFallbackToFile(
+            "index.html",
+            new StaticFileOptions
+            {
+                OnPrepareResponse = static context =>
+                    DisableClientIndexCaching(
+                        context.Context.Response)
+            })
+        .AllowAnonymous();
+}
+
 await app.InitializeIdentityAsync();
 
 app.Run();
+
+static void DisableClientIndexCaching(
+    HttpResponse response)
+{
+    response.Headers.CacheControl = "no-store, no-cache";
+    response.Headers.Pragma = "no-cache";
+    response.Headers.Expires = "0";
+}
+
+public partial class Program;

@@ -44,3 +44,13 @@ jobs:
 
       - name: Run tests
         run: dotnet test Revestik.sln --configuration Release --no-build --verbosity normal
+
+      - name: Publish hosted application
+        run: dotnet publish src/Revestik.Api/Revestik.Api.csproj --configuration Release --no-build --output artifacts/publish
+
+      - name: Verify hosted Blazor assets
+        run: |
+          test -f artifacts/publish/wwwroot/index.html
+          test -f artifacts/publish/wwwroot/_framework/blazor.webassembly.js
+          find artifacts/publish/wwwroot/_framework -type f \( -name 'dotnet.runtime.*.js' -o -name 'dotnet.native.*.wasm' \) -print -quit | grep -q .
+          find artifacts/publish/wwwroot/_framework -type f -name '*.br' -print -quit | grep -q .
