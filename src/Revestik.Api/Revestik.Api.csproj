@@ -20,6 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Revestik.Client\Revestik.Client.csproj" />
     <ProjectReference Include="..\Revestik.Shared\Revestik.Shared.csproj" />
   </ItemGroup>
 

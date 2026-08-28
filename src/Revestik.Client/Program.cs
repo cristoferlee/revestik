@@ -12,9 +12,12 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-var apiBaseUrl = builder.Configuration["ApiBaseUrl"]
-    ?? throw new InvalidOperationException(
-        "The API base URL was not configured.");
+var apiBaseAddress = builder.HostEnvironment.IsDevelopment()
+    ? new Uri(
+        builder.Configuration["ApiBaseUrl"]
+            ?? throw new InvalidOperationException(
+                "The development API base URL was not configured."))
+    : new Uri(builder.HostEnvironment.BaseAddress);
 
 builder.Services.AddAuthorizationCore();
 
@@ -29,7 +32,7 @@ builder.Services.AddScoped(serviceProvider =>
 
     return new HttpClient(cookieHandler)
     {
-        BaseAddress = new Uri(apiBaseUrl)
+        BaseAddress = apiBaseAddress
     };
 });
 
