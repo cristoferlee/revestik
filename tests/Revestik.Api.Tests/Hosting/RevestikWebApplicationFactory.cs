@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -23,6 +25,7 @@ public sealed class RevestikWebApplicationFactory(
         builder.UseSetting(
             "ConnectionStrings:RevestikDatabase",
             "Server=(local);Database=RevestikHostingTests;");
+
         builder.ConfigureLogging(logging =>
         {
             logging.ClearProviders();
@@ -57,6 +60,25 @@ public sealed class RevestikWebApplicationFactory(
                 options.UseInMemoryDatabase(
                     $"RevestikHostingTests-{Guid.NewGuid()}");
             });
+        });
+
+        builder.ConfigureTestServices(services =>
+        {
+            services
+                .AddAuthentication(options =>
+                {
+                    options.DefaultAuthenticateScheme =
+                        TestAuthenticationHandler.SchemeName;
+                    options.DefaultChallengeScheme =
+                        TestAuthenticationHandler.SchemeName;
+                })
+                .AddScheme<
+                    AuthenticationSchemeOptions,
+                    TestAuthenticationHandler>(
+                    TestAuthenticationHandler.SchemeName,
+                    _ =>
+                    {
+                    });
         });
     }
 

@@ -87,6 +87,7 @@ public static class CustomerEndpoints
                         statusCode: StatusCodes.Status409Conflict);
                 }
             })
+            .AddEndpointFilter<AntiforgeryValidationFilter>()
             .WithName("CreateCustomer");
 
         group.MapPut(
@@ -124,6 +125,7 @@ public static class CustomerEndpoints
                         statusCode: StatusCodes.Status409Conflict);
                 }
             })
+            .AddEndpointFilter<AntiforgeryValidationFilter>()
             .WithName("UpdateCustomer");
 
         group.MapDelete(
@@ -141,6 +143,7 @@ public static class CustomerEndpoints
                     ? Results.NoContent()
                     : Results.NotFound();
             })
+            .AddEndpointFilter<AntiforgeryValidationFilter>()
             .WithName("DeactivateCustomer");
 
         return endpoints;
