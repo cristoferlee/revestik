@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Identity;
@@ -37,7 +38,34 @@ public static class AuthenticationEndpoints
             .AllowAnonymous();
 
         group.MapGet(
-                "/login/google",
+                "/csrf",
+                (
+                    HttpContext context,
+                    IAntiforgery antiforgery) =>
+                {
+                    var tokens =
+                        antiforgery.GetAndStoreTokens(context);
+
+                    if (tokens.RequestToken is null)
+                    {
+                        return Results.Problem(
+                            title: "CSRF token generation failed.",
+                            statusCode:
+                                StatusCodes.Status500InternalServerError);
+                    }
+
+                    context.Response.Headers.CacheControl =
+                        "no-store, no-cache";
+
+                    return Results.Ok(
+                        new CsrfTokenResponse(
+                            tokens.RequestToken));
+                })
+            .WithName("GetCsrfToken")
+            .RequireAuthorization();
+
+        group.MapGet(
+            "/login/google",
                 async (
                     string? returnPath,
                     SignInManager<ApplicationUser> signInManager,
@@ -125,6 +153,7 @@ public static class AuthenticationEndpoints
 
                     return Results.NoContent();
                 })
+            .AddEndpointFilter<AntiforgeryValidationFilter>()
             .WithName("Logout")
             .RequireAuthorization();
 

@@ -21,16 +21,41 @@ var apiBaseAddress = builder.HostEnvironment.IsDevelopment()
 
 builder.Services.AddAuthorizationCore();
 
-builder.Services.AddScoped<CookieHandler>();
+builder.Services.AddTransient<CookieHandler>();
+
+builder.Services.AddKeyedScoped<HttpClient>(
+    CsrfTokenService.HttpClientKey,
+    (serviceProvider, _) =>
+    {
+        var cookieHandler =
+            serviceProvider.GetRequiredService<CookieHandler>();
+
+        cookieHandler.InnerHandler = new HttpClientHandler();
+
+        return new HttpClient(cookieHandler)
+        {
+            BaseAddress = apiBaseAddress
+        };
+    });
+
+builder.Services.AddScoped<CsrfTokenService>();
 
 builder.Services.AddScoped(serviceProvider =>
 {
+    var csrfTokenService =
+        serviceProvider.GetRequiredService<CsrfTokenService>();
+
+    var csrfHandler = new CsrfHandler(
+        csrfTokenService,
+        apiBaseAddress);
+
     var cookieHandler =
         serviceProvider.GetRequiredService<CookieHandler>();
 
     cookieHandler.InnerHandler = new HttpClientHandler();
+    csrfHandler.InnerHandler = cookieHandler;
 
-    return new HttpClient(cookieHandler)
+    return new HttpClient(csrfHandler)
     {
         BaseAddress = apiBaseAddress
     };

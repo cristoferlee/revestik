@@ -8,7 +8,8 @@ namespace Revestik.Client.Services.Authentication;
 public sealed class AuthenticationService(
     HttpClient httpClient,
     NavigationManager navigationManager,
-    CookieAuthenticationStateProvider authenticationStateProvider)
+    CookieAuthenticationStateProvider authenticationStateProvider,
+    CsrfTokenService csrfTokenService)
     : IAuthenticationService
 {
     public async Task<AuthenticationProviderResponse> GetProviderAsync(
@@ -42,15 +43,18 @@ public sealed class AuthenticationService(
     public async Task LogoutAsync(
         CancellationToken cancellationToken = default)
     {
-        var response = await httpClient.PostAsJsonAsync(
+        using var response = await httpClient.PostAsJsonAsync(
             "api/auth/logout",
             new LogoutRequest(Confirm: true),
             cancellationToken);
-        //An unauthorized response means the session is already missing or expired, wich is a valid logout outcome.
+        // An unauthorized response means the session is already
+        // missing or expired, which is a valid logout outcome
         if (response.StatusCode != HttpStatusCode.Unauthorized)
         {
             response.EnsureSuccessStatusCode();
         }
+
+        csrfTokenService.Clear();
 
         authenticationStateProvider.RefreshAuthenticationState();
         navigationManager.NavigateTo(
