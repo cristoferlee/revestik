@@ -480,3 +480,9 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Local development settings
+.vscode/
+
+# Local generated output
+output/
