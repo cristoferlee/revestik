@@ -1,166 +1,268 @@
 # Revestik
 
-Revestik is a full-stack business management application designed to help a small family business organize customers, inventory, invoices, purchases, quotations, and daily financial operations.
+Revestik is a full-stack business management application built with the Microsoft .NET ecosystem.
 
-The project began as a client-side JavaScript beta and is being rebuilt with the Microsoft .NET ecosystem to provide server-side validation, relational persistence, authentication, authorization, and a maintainable architecture.
+It is designed to centralize operational workflows such as customer management, inventory, quotations, purchases, accounts receivable, invoicing, and business analytics within a secure and maintainable web application.
 
-## Project Status
+The project originated from real small-business operational requirements and is being developed incrementally, with an emphasis on business rules, data integrity, security, testing, and maintainable architecture.
 
-Revestik is currently in active development and is not yet deployed for production use.
+> **Project status:** Active development. The application foundation and customer domain are implemented; additional business modules remain under development or planned.
 
-The current version includes a functional .NET architecture, customer management, SQL Server persistence, Costa Rican taxpayer lookup, structured customer locations, and Google authentication with role-based authorization.
-
-The original HTML, CSS, and JavaScript application remains available under `legacy/vanilla-js/` and through the `v0.1.0-legacy` Git tag.
-
-## Architecture
-
-The solution is divided into three projects:
-
-- **Revestik.Client** — Blazor WebAssembly user interface and client-side services.
-- **Revestik.Api** — ASP.NET Core API, business services, integrations, authentication, and data access.
-- **Revestik.Shared** — Request and response contracts shared between the client and API.
-
-The client communicates with the API through HTTP. The API validates requests, enforces authorization policies, executes business operations, and uses Entity Framework Core to persist data in SQL Server.
+---
 
 ## Technology Stack
 
-- .NET 10
-- C#
-- ASP.NET Core Minimal APIs
-- Blazor WebAssembly
-- ASP.NET Core Identity
-- Google OAuth 2.0
-- Entity Framework Core
-- SQL Server
-- LINQ
-- RESTful APIs
-- Data Annotations
-- Dependency Injection
-- OpenAPI
-- HTML5
-- CSS3
-- Git and GitHub
+### Backend
 
-## Implemented Features
+* .NET 10
+* C#
+* ASP.NET Core
+* Minimal APIs
+* ASP.NET Core Identity
+* Google external authentication
+* Entity Framework Core
+* SQL Server
+* LINQ
+* OpenAPI
 
-### Application interface
+### Frontend
 
-- Responsive application layout
-- Dashboard
-- Desktop and mobile navigation
-- Module routing
-- Loading, validation, success, and error states
-- Spanish user-facing interface
+* Blazor WebAssembly
+* HTML
+* CSS
+* JavaScript interoperability where required
 
-### Customer management
+### Engineering
 
-- Create and update customers
-- Search customers by name or identification
-- Activate and deactivate customer records
-- Server-side and client-side validation
-- Support for Costa Rican physical identification, legal identification, and DIMEX
-- Structured province, canton, and district selection
-- Additional address details
-- SQL Server persistence through Entity Framework Core
+* xUnit
+* Git
+* GitHub
+* GitHub Actions
+* EF Core migrations
+* CI build/test/publish verification
 
-### External integrations
+---
 
-- Costa Rican Ministry of Finance taxpayer lookup
-- Automatic taxpayer name retrieval
-- Province, canton, and district catalog integration
-- In-memory caching for location catalog responses
-- Integration error handling
+## Architecture
 
-### Authentication and authorization
+Revestik is organized into three primary application projects:
 
-- Google OAuth authentication
-- ASP.NET Core Identity user persistence
-- Secure HttpOnly authentication cookies
-- Unique and confirmed external email accounts
-- Default authenticated-user requirement
-- Server-enforced role authorization
-- Unauthorized and access-denied API responses
-- Local secret storage with .NET User Secrets
+```text
+src/
+├── Revestik.Client
+├── Revestik.Api
+└── Revestik.Shared
 
-Current application roles:
+tests/
+└── Revestik.Api.Tests
+```
 
-- `Administrator`
-- `Accountant`
-- `Sales`
-- `Warehouse`
+* **Revestik.Client** — Blazor WebAssembly frontend.
+* **Revestik.Api** — ASP.NET Core API, business services, authentication, authorization, integrations, persistence, and production host.
+* **Revestik.Shared** — request and response contracts shared between client and API.
+* **Revestik.Api.Tests** — automated server, security, and hosting tests.
 
-Authorization policies control access to customer, inventory, invoice, and audit operations.
+```mermaid
+flowchart TB
+    Browser[User / Browser]
+    Client[Revestik.Client<br/>Blazor WebAssembly]
+    API[Revestik.Api<br/>ASP.NET Core]
+    EF[Entity Framework Core]
+    DB[(SQL Server)]
+    External[External Services]
 
-## Database
+    Browser --> Client
+    Client -->|HTTPS / JSON| API
+    API --> EF
+    EF --> DB
+    API --> External
+```
 
-Revestik uses SQL Server with Entity Framework Core Code First.
+For the detailed architecture:
 
-Database changes are tracked through EF Core migrations, including:
+[Architecture Overview](docs/architecture/architecture-overview.md)
 
-- Initial customer storage
-- Structured customer locations
-- ASP.NET Core Identity tables
+---
 
-Apply the migrations with:
+## Implemented Capabilities
+
+### Authentication and Security
+
+* ASP.NET Core Identity
+* Google external authentication
+* Secure cookie-based sessions
+* Protected-by-default API authorization
+* Role and policy-based authorization
+* Antiforgery protection for mutable authenticated operations
+* Server-side validation
+* Development CORS restrictions
+* Secure server-side secret boundary
+
+### Customer Management
+
+* Create customers
+* Edit customers
+* Retrieve individual customers
+* Customer listing
+* Pagination
+* Name search
+* Identification-type filtering
+* Deterministic ordering
+* Customer activation state / deactivation
+* Costa Rican physical identification validation
+* Legal entity identification validation
+* DIMEX validation
+* Unique identification enforcement
+* Email and phone validation
+* Structured province, canton, and district information
+* Additional address information
+* SQL Server persistence
+
+### External Integrations
+
+* Costa Rican taxpayer lookup integration
+* Location catalog integration
+* In-memory caching for location data
+
+### Engineering Foundation
+
+* Automated validation tests
+* Customer-service tests
+* Pagination tests
+* CSRF tests
+* Hosting integration tests
+* CI on pull requests and `main`
+* Release build verification
+* Hosted Blazor publish verification
+* Static asset verification
+* Brotli asset verification
+* Database health endpoint
+
+---
+
+## Request Flow
+
+A typical state-changing request follows this path:
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Client as Blazor Client
+    participant API as ASP.NET Core API
+    participant Service as Application Service
+    participant EF as Entity Framework Core
+    participant DB as SQL Server
+
+    User->>Client: Submit operation
+    Client->>Client: Client-side validation
+    Client->>API: HTTPS + auth cookie + CSRF token
+    API->>API: Authenticate
+    API->>API: Authorize
+    API->>API: Validate CSRF
+    API->>API: Validate request
+    API->>Service: Execute business operation
+    Service->>EF: Query / persist
+    EF->>DB: Parameterized database operation
+    DB-->>EF: Result
+    EF-->>Service: Result
+    Service-->>API: Response DTO
+    API-->>Client: JSON response
+```
+
+The browser is not treated as a trusted security boundary. Business-critical validation and authorization are enforced by the server.
+
+---
+
+## Business Rules
+
+Important business behavior is documented explicitly instead of existing only implicitly in source code.
+
+Current examples include:
+
+* Customer identification must be unique.
+* Identification format depends on identification type.
+* Customer contact and location information is required.
+* Customer deletion currently behaves as deactivation rather than physical removal.
+* Customer listing is paginated and deterministically ordered.
+
+See:
+
+[Business Rules](docs/product/business-rules.md)
+
+---
+
+## Testing
+
+Automated tests currently cover:
+
+* Customer request validation
+* Customer pagination contracts
+* Customer service behavior
+* CSRF behavior
+* Protected mutable endpoints
+* Development hosting
+* Production hosting
+* SPA/API fallback behavior
+
+Run the complete suite:
+
+```powershell
+dotnet test Revestik.sln
+```
+
+Detailed testing strategy:
+
+[Testing Strategy](docs/development/testing.md)
+
+---
+
+## Continuous Integration
+
+GitHub Actions currently performs:
+
+```text
+Restore
+   ↓
+Release Build
+   ↓
+Automated Tests
+   ↓
+Publish
+   ↓
+Hosted Blazor Asset Verification
+```
+
+CI runs on pull requests targeting `main`, pushes to `main`, and manual workflow execution.
+
+The current workflow provides continuous integration, not automated production deployment.
+
+---
+
+## Local Development
+
+### Requirements
+
+* .NET 10 SDK
+* SQL Server / SQL Server Express
+* Git
+* Google OAuth development credentials for authentication
+
+Restore dependencies and repository tools:
 
 ```powershell
 dotnet tool restore
+dotnet restore Revestik.sln
+```
 
+Apply database migrations:
+
+```powershell
 dotnet tool run dotnet-ef database update `
     --project src/Revestik.Api/Revestik.Api.csproj `
     --startup-project src/Revestik.Api/Revestik.Api.csproj
 ```
 
-## Local Development
-
-### Prerequisites
-
-- .NET 10 SDK
-- SQL Server or SQL Server Express
-- Visual Studio Code or Visual Studio
-- A Google OAuth client configured for local development
-
-### Restore and build
-
-```powershell
-dotnet restore Revestik.sln
-dotnet build Revestik.sln
-```
-
-### Development configuration
-
-The development SQL Server connection string is configured in:
-
-```text
-src/Revestik.Api/appsettings.Development.json
-```
-
-Google credentials and the initial administrator email must be stored with .NET User Secrets and must not be committed to source control:
-
-```powershell
-dotnet user-secrets set `
-    "Authentication:Google:ClientId" `
-    "YOUR_GOOGLE_CLIENT_ID" `
-    --project src/Revestik.Api/Revestik.Api.csproj
-
-dotnet user-secrets set `
-    "Authentication:Google:ClientSecret" `
-    "YOUR_GOOGLE_CLIENT_SECRET" `
-    --project src/Revestik.Api/Revestik.Api.csproj
-
-dotnet user-secrets set `
-    "Authentication:BootstrapAdministratorEmail" `
-    "YOUR_AUTHORIZED_EMAIL" `
-    --project src/Revestik.Api/Revestik.Api.csproj
-```
-
-For the default HTTPS development profile, configure this authorized redirect URI in Google Cloud:
-
-```text
-https://localhost:7126/signin-google
-```
-
-### Run the API
+Run the API:
 
 ```powershell
 dotnet run `
@@ -168,15 +270,7 @@ dotnet run `
     --launch-profile https
 ```
 
-Default API address:
-
-```text
-https://localhost:7126
-```
-
-### Run the Blazor client
-
-Open a second terminal and execute:
+Run the Blazor client in a second terminal:
 
 ```powershell
 dotnet run `
@@ -184,77 +278,183 @@ dotnet run `
     --launch-profile https
 ```
 
-Default client address:
+Current development addresses:
 
 ```text
-https://localhost:7081
+API:    https://localhost:7126
+Client: https://localhost:7081
 ```
 
-## Project Structure
+Complete setup instructions:
+
+[Local Development Setup](docs/development/local-setup.md)
+
+---
+
+## Database
+
+Revestik uses SQL Server with Entity Framework Core Code First.
+
+The persistence layer uses:
+
+* EF Core migrations
+* Entity configurations
+* Required-field constraints
+* Maximum lengths
+* Check constraints
+* Unique indexes
+* ASP.NET Core Identity persistence
+
+Important business invariants are protected at more than one level where appropriate:
 
 ```text
-Revestik/
-  legacy/
-    vanilla-js/
-  src/
-    Revestik.Api/
-      Authorization/
-      Data/
-      Endpoints/
-      Extensions/
-      Integrations/
-      Models/
-      Services/
-    Revestik.Client/
-      Layout/
-      Pages/
-      Services/
-      wwwroot/
-    Revestik.Shared/
-      Authentication/
-      Customers/
-      Locations/
-      Taxpayers/
-  Revestik.sln
+Client validation
+        ↓
+Server validation
+        ↓
+Business logic
+        ↓
+EF Core configuration
+        ↓
+SQL Server constraints
 ```
+
+---
+
+## Deployment
+
+Revestik currently produces a deployable hosted ASP.NET Core + Blazor WebAssembly artifact.
+
+The application is publishable, but a final production hosting platform has not yet been selected and documented.
+
+Current deployment foundations include:
+
+* Release publishing
+* Hosted Blazor WebAssembly
+* Static asset fingerprinting
+* Brotli-compressed assets
+* Environment configuration
+* Health checks
+* Server-side secret boundary
+
+Production infrastructure decisions such as hosting, database infrastructure, secret management, monitoring, backups, and automated deployment remain part of future production work.
+
+See:
+
+[Deployment Guide](docs/deployment/deployment.md)
+
+---
+
+## Product Roadmap
+
+Revestik is being developed incrementally.
+
+Planned domains include:
+
+* Suppliers
+* Inventory
+* Purchases
+* Quotations
+* Accounts receivable
+* Invoicing
+* CABYS support
+* Dashboard and analytics
+* Electronic invoicing
+* Administrative configuration
+
+These areas should not be considered implemented merely because they appear in the roadmap.
+
+See:
+
+[Product Roadmap](docs/product/roadmap.md)
+
+---
+
+## Documentation
+
+### Product
+
+* [Product Overview](docs/product/product-overview.md)
+* [Business Rules](docs/product/business-rules.md)
+* [Product Roadmap](docs/product/roadmap.md)
+
+### Architecture
+
+* [Architecture Overview](docs/architecture/architecture-overview.md)
+
+Architecture Decision Records:
+
+* [ADR-001 — Client / API / Shared Architecture](docs/architecture/decisions/ADR-001-client-api-shared-architecture.md)
+* [ADR-002 — Cookie-Based Authentication](docs/architecture/decisions/ADR-002-cookie-based-authentication.md)
+* [ADR-003 — EF Core and SQL Server](docs/architecture/decisions/ADR-003-ef-core-sql-server.md)
+
+### Security
+
+* [Security Overview](docs/security/security-overview.md)
+
+### Development
+
+* [Local Development Setup](docs/development/local-setup.md)
+* [Testing Strategy](docs/development/testing.md)
+
+### Deployment
+
+* [Deployment Guide](docs/deployment/deployment.md)
+
+---
 
 ## Legacy Application
 
-The original version was built with HTML, CSS, and JavaScript and used browser-based local storage.
+The original Revestik prototype was built with HTML, CSS, and JavaScript and used browser-based local storage.
 
-It includes early implementations of:
+It remains under:
 
-- Quotation creation
-- Quotation PDF generation
-- Inventory management
-- Purchase registration
-- Customer and business workflows
+```text
+legacy/vanilla-js/
+```
 
-Preserving this version documents the evolution from a browser-only prototype into a full-stack .NET application.
+and is preserved through the Git tag:
 
-## Roadmap
+```text
+v0.1.0-legacy
+```
 
-The following functionality is planned or under development:
+The legacy application documents the evolution of Revestik from a browser-only prototype into a full-stack .NET application.
 
-- Inventory persistence and management
-- Purchases
-- Quotations
-- Electronic invoicing
-- XML document generation and processing
-- Costa Rican Ministry of Finance electronic-document integration
-- Audit history for business operations
-- Automated tests
-- Production deployment
-- Continuous integration and delivery
+---
 
 ## Development Principles
 
-- Business rules are enforced by the API.
-- The client does not receive database credentials or authentication secrets.
-- Authorization is enforced on the server, not only in the interface.
-- External input is validated before persistence.
-- Database access is handled through Entity Framework Core.
-- Asynchronous operations are used for HTTP and database access.
-- Components and services have focused responsibilities.
-- Code, folders, routes, comments, and technical documentation use English.
-- User-facing application content uses Spanish.
+Revestik follows several engineering principles:
+
+* Business rules are enforced by the server.
+* The client is not considered a trusted security boundary.
+* Persistence entities are not exposed as HTTP contracts.
+* Critical data integrity is protected at multiple levels.
+* Architecture should remain proportional to actual complexity.
+* New technologies should solve real requirements.
+* Important behavior should receive automated regression coverage.
+* Documentation should describe the implemented system rather than aspirational architecture.
+* Features should be completed vertically rather than creating many partially implemented modules.
+
+---
+
+## Current Direction
+
+The current development sequence is:
+
+```text
+Engineering foundation
+        ↓
+Customer domain hardening
+        ↓
+Core operational domains
+        ↓
+Financial workflows
+        ↓
+Electronic invoicing integration
+        ↓
+Production hardening
+```
+
+The goal is to evolve Revestik into a reliable business-management platform while keeping architecture, security, testing, and product requirements aligned.
