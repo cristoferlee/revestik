@@ -35,18 +35,12 @@ These areas protect business behavior, security-sensitive requests, API contract
 
 ## 4. Customer Validation Tests
 
-Customer request validation tests verify important rules before invalid information reaches persistence.
+Customer request validation tests currently cover:
 
-Examples include:
-
-* Required fields.
-* Identification type.
-* Identification format.
-* Identification length.
-* Email requirements.
-* Phone requirements.
-* Province, canton, and district formats.
-* Address requirements.
+* Valid identification formats for physical persons, legal entities, and DIMEX.
+* Invalid identification length, prefix, and non-numeric values.
+* Required name, identification type, identification number, and email values.
+* Province, canton, and district code formats.
 
 These tests protect business rules documented in:
 
@@ -60,33 +54,32 @@ Where practical, tests should remain traceable to the behavior described there.
 
 Customer service tests verify server-side business and persistence behavior independently from the Blazor user interface.
 
-Relevant behaviors include:
+Current automated coverage includes:
 
-* Customer creation.
-* Customer updates.
-* Customer retrieval.
-* Customer deactivation.
-* Identification uniqueness behavior.
-* Filtering.
-* Search behavior.
-* Ordering.
-* Pagination-related behavior.
+* Persisted customer deactivation.
+* Customer reactivation through update, including persistence of the updated fields.
+* The missing-customer deactivation result.
+* Customer ordering.
+* Identification-type filtering.
+* Name-only search behavior.
+* Pagination results, metadata, and out-of-range pages.
+
+Customer creation, direct customer retrieval, identification uniqueness, and broader update failure scenarios are not currently covered by the Customer service tests.
 
 Service tests are important because client-side validation cannot be considered authoritative.
 
 ## 6. Pagination Contract Tests
 
-Pagination tests verify the behavior of customer list requests and paginated responses.
+Pagination tests verify customer list request validation, paginated response calculations, and customer service pagination behavior.
 
-Pagination must remain bounded and deterministic.
+Current automated coverage includes:
 
-Tests should protect behavior such as:
-
-* Page normalization.
-* Page-size normalization.
-* Total result metadata.
-* Result boundaries.
-* Stable pagination behavior.
+* Default page and page-size values.
+* Rejection of page and page-size values outside their allowed ranges.
+* Search-length and identification-type validation.
+* Total-page calculation.
+* Page metadata and result boundaries.
+* Customer ordering, filtering, and name-only search behavior.
 
 Pagination testing becomes increasingly important as the amount of business data grows.
 
