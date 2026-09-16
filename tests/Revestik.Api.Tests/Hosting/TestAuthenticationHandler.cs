@@ -18,6 +18,7 @@ public sealed class TestAuthenticationHandler(
 {
     public const string SchemeName = "Test";
     public const string UserHeaderName = "X-Test-User";
+    public const string RoleHeaderName = "X-Test-Role";
 
     protected override Task<AuthenticateResult>
         HandleAuthenticateAsync()
@@ -31,18 +32,32 @@ public sealed class TestAuthenticationHandler(
                 AuthenticateResult.NoResult());
         }
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
             new Claim(
                 ClaimTypes.NameIdentifier,
                 userName.ToString()),
             new Claim(
                 ClaimTypes.Name,
-                userName.ToString()),
-            new Claim(
-                ClaimTypes.Role,
-                RoleNames.Administrator)
+                userName.ToString())
         };
+
+        if (!Request.Headers.TryGetValue(
+                RoleHeaderName,
+                out var roleValues))
+        {
+            claims.Add(
+                new Claim(
+                    ClaimTypes.Role,
+                    RoleNames.Administrator));
+        }
+        else if (!string.IsNullOrWhiteSpace(roleValues))
+        {
+            claims.Add(
+                new Claim(
+                    ClaimTypes.Role,
+                    roleValues.ToString()));
+        }
 
         var identity = new ClaimsIdentity(
             claims,
