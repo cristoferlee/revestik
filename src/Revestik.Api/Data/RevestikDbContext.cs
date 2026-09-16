@@ -14,6 +14,11 @@ public sealed class RevestikDbContext(
         string>(options)
 {
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Quotation> Quotations => Set<Quotation>();
+
+    public DbSet<QuotationLine> QuotationLines => Set<QuotationLine>();
+
+    public DbSet<QuotationCharge> QuotationCharges => Set<QuotationCharge>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
