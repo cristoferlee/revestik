@@ -14,7 +14,8 @@ using Revestik.Api.Data;
 namespace Revestik.Api.Tests.Hosting;
 
 public sealed class RevestikWebApplicationFactory(
-    string environmentName)
+    string environmentName,
+    string? databaseConnectionString = null)
     : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(
@@ -24,6 +25,7 @@ public sealed class RevestikWebApplicationFactory(
         builder.UseWebRoot(GetClientWebRoot());
         builder.UseSetting(
             "ConnectionStrings:RevestikDatabase",
+            databaseConnectionString ??
             "Server=(local);Database=RevestikHostingTests;");
 
         builder.ConfigureLogging(logging =>
@@ -37,6 +39,7 @@ public sealed class RevestikWebApplicationFactory(
                 new Dictionary<string, string?>
                 {
                     ["ConnectionStrings:RevestikDatabase"] =
+                        databaseConnectionString ??
                         "Server=(local);Database=RevestikHostingTests;",
                     ["AllowedOrigins:0"] =
                         "https://localhost:7081",
@@ -57,8 +60,15 @@ public sealed class RevestikWebApplicationFactory(
 
             services.AddDbContext<RevestikDbContext>(options =>
             {
-                options.UseInMemoryDatabase(
-                    $"RevestikHostingTests-{Guid.NewGuid()}");
+                if (databaseConnectionString is null)
+                {
+                    options.UseInMemoryDatabase(
+                        $"RevestikHostingTests-{Guid.NewGuid()}");
+                }
+                else
+                {
+                    options.UseSqlServer(databaseConnectionString);
+                }
             });
         });
 
