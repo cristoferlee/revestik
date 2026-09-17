@@ -367,6 +367,7 @@ public sealed class QuotationEndpointTests(
                 {
                     CabysCode = "1234567890123",
                     Description = "Porcelanato 60x120",
+                    Unit = "m²",
                     Quantity = 1m,
                     UnitPrice = 15000m,
                     DiscountValue = 0m,
@@ -398,6 +399,7 @@ public sealed class QuotationEndpointTests(
                 {
                     CabysCode = "1234567890123",
                     Description = "Porcelanato 60x120",
+                    Unit = "m²",
                     Quantity = 2m,
                     UnitPrice = 15000m,
                     DiscountType =

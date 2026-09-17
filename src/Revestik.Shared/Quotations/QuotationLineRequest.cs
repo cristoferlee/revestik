@@ -18,6 +18,12 @@ public sealed class QuotationLineRequest : IValidatableObject
         ErrorMessage = "La descripción no puede superar los 500 caracteres.")]
     public string Description { get; set; } = string.Empty;
 
+    [Required(ErrorMessage = "La unidad de medida es obligatoria.")]
+    [StringLength(
+        50,
+        ErrorMessage = "La unidad de medida no puede superar los 50 caracteres.")]
+    public string Unit { get; set; } = string.Empty;
+
     [Range(
         typeof(decimal),
         "0.00001",

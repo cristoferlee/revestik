@@ -14,6 +14,7 @@ public sealed class QuotationLine
     public string CabysCode { get; set; } = string.Empty;
 
     public string Description { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
 
     public decimal Quantity { get; set; }
 

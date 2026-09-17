@@ -10,6 +10,8 @@ public sealed class QuotationLineResponse
 
     public string Description { get; set; } = string.Empty;
 
+    public string Unit { get; set; } = string.Empty;
+
     public decimal Quantity { get; set; }
 
     public decimal UnitPrice { get; set; }

@@ -19,6 +19,33 @@ public sealed class QuotationRequestValidationTests
         Assert.Empty(validationResults);
     }
 
+    [Fact]
+    public void QuotationLine_WithMissingUnit_IsInvalid()
+    {
+        var request = CreateValidLine();
+        request.Unit = string.Empty;
+
+        var validationResults = Validate(request);
+
+        Assert.Contains(
+            validationResults,
+            result => result.MemberNames.Contains(
+                nameof(QuotationLineRequest.Unit)));
+    }
+
+    [Fact]
+    public void QuotationLine_WithUnitAboveMaximumLength_IsInvalid()
+    {
+        var request = CreateValidLine();
+        request.Unit = new string('A', 51);
+
+        var validationResults = Validate(request);
+
+        Assert.Contains(
+            validationResults,
+            result => result.MemberNames.Contains(
+                nameof(QuotationLineRequest.Unit)));
+    }
     [Theory]
     [InlineData("")]
     [InlineData("123")]
@@ -456,6 +483,7 @@ public sealed class QuotationRequestValidationTests
         {
             CabysCode = "1234567890123",
             Description = "Porcelanato 60x120",
+            Unit = "m²",
             Quantity = 20m,
             UnitPrice = 15000m,
             DiscountType = null,

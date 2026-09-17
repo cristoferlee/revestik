@@ -19,6 +19,10 @@ public sealed class QuotationLineConfiguration : IEntityTypeConfiguration<Quotat
         builder.Property(line => line.Description)
             .HasMaxLength(500)
             .IsRequired();
+            
+        builder.Property(line => line.Unit)
+            .HasMaxLength(50)
+            .IsRequired();
 
         builder.Property(line => line.DiscountType)
             .HasConversion<string>()
