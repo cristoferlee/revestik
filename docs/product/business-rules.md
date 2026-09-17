@@ -341,73 +341,93 @@ They will receive their own rule sections when development begins.
 
 ## Quotations
 
-### QUO-001 — A quotation belongs to an existing customer
+The Quotations domain is currently **In Progress**.
 
-**Status:** Planned
+Its server-side business rules, persistence, monetary calculations, authorization, and API operations are implemented. Rules that specifically depend on the Blazor user interface or document generation remain planned until those workflows are implemented and verified.
+
+### QUO-001 — A quotation belongs to an existing active customer
+
+**Status:** Implemented
 
 Every quotation must belong to an existing customer through `CustomerId`.
 
-Customer identification remains unique and is used by the user interface to locate the customer. When an identification is entered, the existing customer information should be loaded.
+The selected customer must be active when the quotation is created or modified.
 
-A quotation cannot be completed when required customer information is missing.
+The server validates this requirement independently from the user interface.
 
-Hacienda lookup is part of the intended customer-identification workflow. Its integration details are not yet defined.
+Customer lookup and selection behavior in the Blazor interface remains part of the quotation UI workflow.
 
 ---
 
 ### QUO-002 — Quotation lines may use registered or manual products
 
-**Status:** Planned
+**Status:** Implemented
 
-A quotation may contain products already registered in Revestik or products entered manually for that quotation.
+A quotation line may optionally reference a registered product through `ProductId`.
 
 A product does not need to exist in Inventory to be quoted.
+
+Manual quotation lines are therefore valid as long as they satisfy the required quotation-line rules.
 
 ---
 
 ### QUO-003 — Existing products may provide initial quotation values
 
-**Status:** Planned
+**Status:** In Progress
 
-Selecting an existing product may populate available information such as its name or description, CABYS code, and price.
+When product and quotation UI integration is implemented, selecting an existing product may populate available information such as its name or description, CABYS code, and price.
 
-An automatically populated price is only a starting value. The user may freely change the quotation price without additional role-based approval.
+An automatically populated price is only a starting value.
+
+The quotation price remains commercial quotation data and may be changed according to the quotation workflow.
+
+The current backend supports optional product association but does not itself implement the product-selection user experience.
 
 ---
 
 ### QUO-004 — Quotation quantities represent commercial quantities
 
-**Status:** Planned
+**Status:** Implemented
 
-Quotation quantities may be decimal and represent the commercial quantity, commonly square meters.
+Quotation quantities may be decimal and represent the commercial quantity being quoted.
 
-Quotations must not apply a universal box-to-square-meter conversion.
+Quotations do not apply a universal box-to-square-meter conversion.
+
+Any future unit or packaging conversion must be defined by the relevant product or inventory requirements rather than assumed by the Quotations domain.
 
 ---
 
 ### QUO-005 — Quoting does not modify inventory
 
-**Status:** Planned
+**Status:** Implemented
 
-Quoting a product must not reserve, deduct, or otherwise modify inventory.
+Creating or modifying a quotation must not reserve, deduct, or otherwise modify inventory.
+
+A quotation represents a commercial proposal rather than a confirmed inventory movement.
+
+Future sales or invoicing workflows may affect inventory when their own business rules determine that a real inventory movement has occurred.
 
 ---
 
 ### QUO-006 — CABYS is required for quotation lines
 
-**Status:** Planned
+**Status:** Implemented
 
 Every quotation line must have a CABYS code.
+
+CABYS is required even when the quotation line represents a manually entered product rather than a registered Inventory product.
 
 ---
 
 ### QUO-007 — Quotation prices include IVA when enabled
 
-**Status:** Planned
+**Status:** Implemented
 
-When 13% IVA is enabled, the unit price entered by the user represents the public or final unit price with IVA included.
+The unit price entered for a quotation line represents the public or final unit price.
 
-The system must separate the IVA-inclusive amount into its taxable base and IVA instead of adding 13% to the entered price.
+When the applicable tax rate is 13%, that unit price already includes IVA.
+
+The system separates the IVA-inclusive amount into its taxable base and IVA instead of adding another 13% to the entered price.
 
 Conceptually:
 
@@ -416,37 +436,48 @@ base = IVA-inclusive amount / 1.13
 IVA = IVA-inclusive amount - base
 ```
 
-When IVA is removed for an exempt transaction, the IVA portion is removed and the taxable or base amount becomes the resulting total.
+When the applicable tax rate is 0%, the IVA portion is removed and the taxable or base amount becomes the resulting amount.
+
+The currently supported quotation tax rates are 0% and 13%.
 
 ---
 
-### QUO-008 — Monetary calculations use decimal arithmetic
+### QUO-008 — Monetary calculations use decimal arithmetic and defined rounding
 
-**Status:** Planned
+**Status:** Implemented
 
-All quotation monetary calculations must use decimal arithmetic.
+Quotation monetary calculations use decimal arithmetic.
 
-The exact monetary rounding precision and rules are not yet defined.
+Calculated monetary values are rounded to two decimal places using midpoint rounding away from zero.
+
+The server is authoritative for persisted and returned quotation calculations.
+
+A future client implementation may reproduce calculations for immediate user feedback but must not replace server-side calculation authority.
 
 ---
 
 ### QUO-009 — Quotation lines support percentage or fixed discounts
 
-**Status:** Planned
+**Status:** Implemented
 
-A quotation line may receive either a percentage discount or a fixed monetary discount.
+A quotation line may receive either:
 
-The user chooses the discount type according to the commercial negotiation.
+* A percentage discount.
+* A fixed monetary discount.
+
+The selected discount is applied as part of the quotation-line monetary calculation.
 
 A discount must not produce a negative line amount.
 
-No maximum discount percentage or additional approval rule is currently defined.
+The request contract validates the applicable discount rules before the quotation is persisted.
+
+No additional role-based discount approval workflow is currently implemented.
 
 ---
 
 ### QUO-010 — Quotations support additional charges
 
-**Status:** Planned
+**Status:** Implemented
 
 A quotation may contain additional charges with one of the following types:
 
@@ -455,41 +486,63 @@ A quotation may contain additional charges with one of the following types:
 * `Installation`
 * `Other`
 
-Each additional charge must have a description or detail and a positive monetary amount.
+Each additional charge must contain the information required by the quotation request contract and a valid monetary amount.
 
-Additional charges are added to the quotation total.
+Additional charges contribute to the quotation total.
 
-The tax treatment of additional charges is not yet defined.
+The current quotation calculation adds charge amounts to the quotation total.
+
+The final tax treatment required for additional charges in future invoicing or electronic invoicing workflows remains a separate business decision.
 
 ---
 
 ### QUO-011 — Quotation numbers are generated by the backend
 
-**Status:** Planned
+**Status:** Implemented
 
-Every quotation must have a unique consecutive number generated by the backend.
+Every quotation receives a consecutive number generated by the backend when the quotation is created.
 
-The legacy browser-local `COT-0001` counter does not define the persistence rule for the current application.
+The current format is:
 
-The exact quotation consecutive format is not yet defined.
+```text
+COT-000001
+```
+
+The numeric portion is generated using a SQL Server sequence.
+
+Quotation-number generation is therefore not controlled by browser-local state.
+
+The sequence-based implementation is verified against SQL Server, including concurrent number generation.
+
+The current `COT-` format belongs to the commercial quotation workflow and must not be assumed to represent a future Ministerio de Hacienda fiscal consecutive.
 
 ---
 
 ### QUO-012 — Saved quotations retain their identity when modified
 
-**Status:** Planned
+**Status:** Implemented
 
-A saved quotation can be reopened and modified while retaining the same quotation identity and consecutive number.
+A saved quotation can be modified while retaining:
 
-No Draft, Sent, Approved, or Expired lifecycle is currently defined and such a lifecycle must not be introduced yet.
+* Its quotation identifier.
+* Its quotation consecutive number.
+* Its original creation timestamp.
+
+Updating a quotation replaces its current quotation lines and additional charges with the submitted state and records the modification time.
+
+No `Draft`, `Sent`, `Approved`, or `Expired` lifecycle is currently implemented.
+
+Such a lifecycle must not be treated as existing behavior until its requirements are explicitly defined and implemented.
 
 ---
 
 ### QUO-013 — Quotations are persisted server-side
 
-**Status:** Planned
+**Status:** Implemented
 
-Quotations must be persisted server-side.
+Quotations are persisted through the ASP.NET Core backend using Entity Framework Core and SQL Server.
+
+Quotation persistence includes the quotation record, quotation lines, and additional charges.
 
 Browser-local storage is not an authoritative quotation store.
 
@@ -499,25 +552,40 @@ Browser-local storage is not an authoritative quotation store.
 
 **Status:** Planned
 
-Quotations should support PDF generation.
+Quotations should support generation of a commercial quotation document or PDF.
 
-Generating a PDF and persisting a quotation are separate operations.
+Generating a document and persisting a quotation are separate operations.
+
+A quotation must not depend on successful PDF generation in order to exist as persisted business data.
+
+PDF generation is not currently considered implemented.
 
 ---
 
 ### QUO-015 — Projects are outside the Quotations domain
 
-**Status:** Planned
+**Status:** Implemented
 
-Projects are a future separate feature and must not be introduced into Quotations.
+Projects are outside the current Quotations domain.
+
+The Quotations implementation must not introduce project-management concepts solely because a quotation may eventually be associated with a larger commercial project.
+
+If Projects becomes a concrete product requirement, it should be designed as its own domain and integrated deliberately.
 
 ---
 
 ### QUO-016 — Quotations support CRC and USD
 
-**Status:** Planned
+**Status:** Implemented
 
-Quotations must support CRC and USD currencies.
+Quotations support the following currencies:
+
+* CRC.
+* USD.
+
+The selected currency applies to the quotation as a whole.
+
+Currency conversion or exchange-rate management is not currently part of the Quotations domain.
 
 ---
 
@@ -525,7 +593,11 @@ Quotations must support CRC and USD currencies.
 
 **Status:** Planned
 
-The user interface should immediately recalculate line totals and quotation totals when relevant values change.
+The Blazor quotation interface should provide immediate recalculation feedback when values affecting line or quotation totals change.
+
+Client-side calculations exist for user experience only.
+
+The server remains authoritative for final quotation calculations.
 
 ---
 
@@ -533,18 +605,32 @@ The user interface should immediately recalculate line totals and quotation tota
 
 **Status:** Planned
 
-The user interface should preserve clear separation between quotation lines, additional charges, totals, and document actions.
+The quotation user interface should preserve clear separation between:
+
+* Quotation lines.
+* Additional charges.
+* Totals.
+* Document actions.
+
+The exact UI organization will be defined during implementation of the Blazor quotation workflow.
 
 ---
 
 ### Unresolved Quotations Decisions
 
-The following rules require a future business decision:
+The following areas still require future implementation or business decisions:
 
-* Exact quotation consecutive format.
-* Monetary rounding precision and rules.
-* Tax treatment of additional charges.
-* Hacienda integration details.
+* Blazor quotation workflow and interaction design.
+* Product-selection and product-prefill behavior.
+* PDF/document layout and generation.
+* Final tax treatment of additional charges for later invoicing workflows.
+* Broader CABYS catalog integration.
+* Future quotation lifecycle requirements, if required.
+* Relationship between quotations and later sales/invoice workflows.
+* Electronic invoicing integration details.
+
+The current `COT-` consecutive is an internal commercial quotation identifier and does not define future fiscal numbering requirements.
+
 
 ## Inventory
 

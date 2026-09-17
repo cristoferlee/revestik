@@ -80,6 +80,10 @@ Functionality is classified using three states:
 
 This distinction prevents roadmap functionality from being presented as existing functionality.
 
+The application foundation and Customer domain are implemented and hardened.
+
+The Quotations domain is currently **In Progress**. Its backend persistence, monetary calculations, validation, authorization, API operations, and automated verification are implemented. The Blazor user interface and document-generation workflow remain to be completed before Quotations is considered an end-to-end implemented product module.
+
 ## 6. Implemented Capabilities
 
 ### Authentication and Access Control
@@ -90,7 +94,7 @@ Implemented capabilities include:
 
 * Authenticated application access.
 * Cookie-based authentication.
-* Role and policy-based authorization foundation.
+* Role and policy-based authorization.
 * External authentication integration.
 * Protected server endpoints.
 * Antiforgery protection for authenticated mutable operations.
@@ -124,9 +128,44 @@ Customer records currently support:
 
 Detailed rules are maintained in:
 
-```text id="k3r6x2"
+```text
 docs/product/business-rules.md
 ```
+
+### Quotation Backend
+
+The Quotations backend currently provides the server-side foundation for commercial quotations.
+
+Implemented capabilities include:
+
+* Server-side quotation persistence.
+* Association with an existing active customer.
+* Quotation lines.
+* Optional association of quotation lines with registered products.
+* Manual quotation lines.
+* Required CABYS codes.
+* Decimal commercial quantities.
+* CRC and USD currency support.
+* IVA-inclusive pricing calculations.
+* 0% and 13% IVA handling.
+* Percentage discounts.
+* Fixed-amount discounts.
+* Additional quotation charges.
+* Server-calculated quotation totals.
+* Backend-generated quotation consecutive numbers.
+* SQL Server sequence-backed quotation numbering.
+* Preservation of quotation identity and consecutive number during updates.
+* Quotation creation through the API.
+* Quotation retrieval by identifier through the API.
+* Quotation modification through the API.
+* Role and policy-based quotation authorization.
+* Antiforgery protection for mutable quotation endpoints.
+* Server-side validation of quotation requests, lines, and charges.
+* Automated unit, service, authorization, HTTP contract, and SQL Server integration tests.
+
+Creating or modifying a quotation does not reserve, deduct, or otherwise modify inventory.
+
+Quotation PDF generation and the complete Blazor quotation workflow are not yet implemented and therefore the Quotations domain remains **In Progress**.
 
 ### Location Data
 
@@ -156,20 +195,46 @@ The project includes automated tests and continuous integration.
 Current automated coverage includes areas such as:
 
 * Customer validation.
-* Pagination behavior.
+* Customer pagination behavior.
 * Customer service behavior.
+* Quotation monetary calculations.
+* Quotation request and nested request validation.
+* Quotation service behavior.
+* Quotation authorization.
+* Quotation API contracts.
+* Quotation consecutive-number generation.
+* Concurrent quotation-number generation against SQL Server.
 * CSRF protection.
 * Mutable endpoint protection.
 * Development hosting behavior.
 * Production hosting behavior.
 
+At the current documented baseline, the complete automated test suite contains **161 passing tests with no failures**.
+
 The CI pipeline also verifies that the hosted Blazor application is correctly produced during publishing.
 
 ## 7. In-Progress Product Areas
 
-Revestik continues to evolve beyond its current customer-management and platform foundation.
+### Quotations
 
-Areas under development may include the expansion and integration of business workflows that depend on the core customer, authentication, and persistence infrastructure.
+The Quotations domain is the current active business module.
+
+Its server-side foundation is implemented and verified.
+
+Current remaining work includes:
+
+* Blazor quotation listing.
+* Quotation creation user interface.
+* Customer selection and integration with the existing Customer domain.
+* Quotation line editing.
+* Product-assisted quotation lines when Inventory becomes available.
+* Additional-charge editing.
+* Immediate client-side total feedback.
+* Quotation editing workflow.
+* PDF/document generation.
+* Final end-to-end workflow verification.
+
+The server remains authoritative for quotation validation and monetary calculations even when equivalent client-side calculations are introduced for immediate user feedback.
 
 An area should only be moved to **Implemented** after the relevant end-to-end behavior is available and verified.
 
@@ -189,18 +254,6 @@ Potential information includes:
 * Commercial performance.
 * Operational summaries.
 
-### Quotations
-
-Management of commercial quotations, including:
-
-* Sequential quotation numbers.
-* Customer association.
-* Products and quantities.
-* Pricing.
-* Totals.
-* Quotation status.
-* Document/PDF generation.
-
 ### Inventory
 
 Inventory management capabilities intended to track:
@@ -210,6 +263,10 @@ Inventory management capabilities intended to track:
 * Inventory movements.
 * Product information.
 * Commercial availability.
+
+Quotation creation does not currently depend on Inventory because quotation lines may be entered manually.
+
+When Inventory is implemented, registered products may provide initial quotation information without making quotation creation an inventory movement.
 
 ### Accounts Receivable
 
@@ -230,15 +287,37 @@ Centralized supplier information and future integration with purchasing and inve
 
 ### Product and Tax Classification
 
-Support for product information and Costa Rican tax-related classifications such as CABYS where required by the applicable business workflow.
+Quotation lines already require a CABYS code.
+
+A broader CABYS/product-classification domain remains planned and may later provide catalog, search, product association, and regulatory-support capabilities.
+
+### Sales and Invoicing
+
+Future commercial workflows will build on rules already established by Quotations where appropriate, including:
+
+* Customer association.
+* Commercial lines.
+* CABYS information.
+* Monetary calculations.
+* Discounts.
+* Additional charges.
+* Commercial document generation.
+
+The implementation should reuse appropriate quotation foundations rather than recreating equivalent business logic independently.
+
+Sales and invoicing introduce additional behavior that does not belong to quotations, including confirmed sale state and inventory impact where applicable.
 
 ### Electronic Invoicing
 
-Electronic invoicing is a potential future integration area.
+Electronic invoicing is a future integration area.
 
-Any implementation involving Costa Rican electronic invoicing must be designed according to the applicable Ministerio de Hacienda technical and legal requirements at the time it is implemented.
+The planned interim workflow may allow an electronic invoice to be requested from Revestik while the actual electronic document is generated through the existing external invoicing process.
 
-It is not considered an implemented Revestik capability unless the complete required workflow has been developed and verified.
+Requesting an electronic invoice must not by itself be treated as confirmation that the sale has been electronically invoiced.
+
+Direct electronic invoicing integration must eventually be designed according to the applicable Ministerio de Hacienda technical and legal requirements at the time it is implemented.
+
+Electronic invoicing is not considered an implemented Revestik capability until the required workflow has been developed and verified.
 
 ### Application Configuration
 
@@ -262,6 +341,8 @@ Business information should not become publicly accessible simply because a deve
 
 The frontend guides the user, but the server and persistence layers remain responsible for protecting the integrity of business data.
 
+For financial calculations, the client may provide immediate feedback, but authoritative quotation values are calculated by the server.
+
 ### Incremental delivery
 
 Modules should be implemented and validated incrementally rather than attempting to build the complete business platform at once.
@@ -269,6 +350,12 @@ Modules should be implemented and validated incrementally rather than attempting
 ### Real requirements over artificial complexity
 
 Architecture and features should respond to actual business requirements. Revestik should not introduce technical complexity solely to demonstrate technologies or design patterns.
+
+### Reuse proven business foundations
+
+When later commercial workflows share concepts already implemented by Quotations, common behavior should be reused or extracted when the concrete requirements justify it.
+
+Premature abstraction should still be avoided.
 
 ## 10. Scope Management
 
@@ -289,6 +376,26 @@ Features that do not yet have clear answers to these questions should remain in 
 ## 11. Product Direction
 
 Revestik is intended to evolve from its current application foundation into an integrated business management platform.
+
+The current development direction is to complete the Quotations vertical workflow before expanding into additional transactional domains.
+
+The immediate sequence is:
+
+```text
+Customer domain
+    ↓
+Quotation backend
+    ↓
+Quotation Blazor workflow
+    ↓
+Quotation document generation
+    ↓
+Sales / invoicing workflows
+    ↓
+Inventory and financial integration
+```
+
+The exact sequence may evolve as real business dependencies become clearer.
 
 Development should prioritize complete vertical workflows over a large number of partially implemented modules.
 

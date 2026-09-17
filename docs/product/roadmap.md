@@ -49,31 +49,39 @@ The current application foundation includes:
 * Server-side secret boundary.
 * Security-focused automated tests.
 
-### Customer Domain
+### Quotation Domain
 
-The customer domain currently provides the strongest implemented business foundation.
+The Quotations domain is currently **In Progress**, with its backend foundation implemented and verified.
 
-Current capabilities include:
+Current server-side capabilities include:
 
-* Customer creation.
-* Customer editing.
-* Customer retrieval.
-* Customer listing.
-* Search.
-* Filtering.
-* Ordering.
-* Pagination.
-* Customer deactivation/removal behavior according to current business rules.
-* Identification validation.
-* Identification uniqueness enforcement.
-* Physical person identification support.
-* Legal entity identification support.
-* DIMEX identification support.
-* Geographic/address information.
-* Email and phone information.
+* Quotation creation.
+* Quotation retrieval by identifier.
+* Quotation modification.
+* Association with existing active customers.
+* Quotation lines.
+* Manual quotation lines and optional registered-product association.
+* Required CABYS codes.
+* Decimal commercial quantities.
+* CRC and USD currencies.
+* IVA-inclusive monetary calculations.
+* 0% and 13% IVA handling.
+* Percentage and fixed discounts.
+* Additional charges.
+* Server-calculated quotation totals.
+* Backend-generated consecutive quotation numbers.
+* SQL Server sequence-backed number generation.
+* Preservation of quotation identity during updates.
 * Server-side validation.
-* Database integrity constraints.
-* Automated tests.
+* Role and policy-based authorization.
+* Antiforgery protection for mutable operations.
+* SQL Server integration and concurrency verification.
+* Automated quotation tests.
+
+Quotation operations do not reserve or deduct inventory.
+
+The Blazor quotation workflow and document/PDF generation remain to be implemented before the Quotations domain is considered complete end to end.
+
 
 ### Engineering Foundation
 
@@ -99,39 +107,61 @@ The project currently includes:
 
 ## 4. Current Development Phase
 
-Revestik is currently in a **foundation and domain-hardening phase**.
+Revestik has moved beyond its initial foundation-hardening phase and is now expanding into its first transactional business workflows.
 
-The priority is not to maximize the number of visible modules.
+The Customer domain provides the reference implementation for data integrity, validation, authorization, persistence, and API design.
 
-The priority is to ensure that new modules are built on a stable foundation containing:
+The Quotations backend is the first substantial commercial workflow built on that foundation.
+
+The current objective is to complete Quotations vertically before expanding into additional transactional domains.
 
 ```text
-Architecture
-     +
-Authentication
-     +
-Authorization
-     +
-Security
-     +
-Persistence
-     +
-Testing
-     +
-Documentation
-     =
-Reliable foundation
+Engineering foundation
+    +
+Customer domain
+    +
+Quotation backend
+    =
+Current platform foundation
 ```
 
-The customer domain serves as the initial reference implementation for how future business domains should be structured.
+The next step is not to redesign the backend architecture or introduce additional abstraction prematurely.
+
+The priority is to complete the remaining quotation workflow while preserving the existing standards for:
+
+* Business rules.
+* Server authority.
+* Security.
+* Persistence.
+* Automated verification.
+* Documentation.
 
 ## 5. Near-Term Priorities
 
-The next development stage should focus on completing and validating the engineering foundation before expanding into larger transactional modules.
+### Complete the Quotations Vertical Workflow
 
-### Documentation Completion
+The immediate product priority is to complete the Quotations domain.
 
-Complete the first documentation baseline:
+Remaining work includes:
+
+* Blazor quotation listing.
+* Quotation creation interface.
+* Customer selection.
+* Quotation-line editing.
+* Product-assisted line entry when appropriate.
+* Additional-charge editing.
+* Immediate client-side calculation feedback.
+* Quotation editing.
+* Commercial quotation PDF/document generation.
+* Final end-to-end verification.
+
+The server remains authoritative for quotation validation and monetary calculations.
+
+### Preserve Documentation Alignment
+
+Documentation should continue to be updated when meaningful business or architectural behavior changes.
+
+The current documentation baseline includes:
 
 * Product overview.
 * Business rules.
@@ -144,20 +174,21 @@ Complete the first documentation baseline:
 * Product roadmap.
 * Repository README.
 
-### Customer Domain Review
+### Prepare Later Commercial Workflows
 
-Before treating Customers as a reference domain, review:
+After Quotations is completed, later commercial workflows may reuse appropriate foundations established by the quotation implementation.
 
-* Endpoint behavior.
-* Validation consistency.
-* Authorization requirements.
-* Persistence constraints.
-* Error responses.
-* Pagination.
-* Search.
-* Ordering.
-* UI behavior.
-* Test coverage.
+Potential areas include:
+
+* Sales.
+* Invoicing.
+* Inventory integration.
+* Accounts receivable.
+* Electronic invoice requests.
+
+Shared concepts should be extracted only when concrete requirements demonstrate that reuse is appropriate.
+
+Quotations should not be prematurely redesigned into a generic Sales abstraction.
 
 ### Production Infrastructure Decision
 
@@ -174,11 +205,12 @@ When Revestik approaches its first real deployment, select and document:
 
 The hosting decision should be recorded through an ADR rather than assumed.
 
-## 6. Planned Business Domains
 
-The following domains are part of the intended Revestik product direction.
+## 6. Business Domains
 
-Their exact implementation order may change according to business value and technical dependencies.
+The following domains represent current and planned areas of the Revestik product.
+
+Their implementation status and exact development order may change according to business value and technical dependencies.
 
 ### Suppliers
 
@@ -208,20 +240,43 @@ Inventory rules must be defined before implementation because incorrect stock tr
 
 ### Quotations
 
-Planned capabilities include:
+**Status: In Progress**
 
-* Quotation creation.
-* Customer association.
-* Line items.
-* Quantities.
-* Prices.
-* Totals.
-* Consecutive numbering.
-* Quotation status.
-* PDF generation.
-* Conversion into later commercial workflows where applicable.
+The Quotations backend foundation is implemented.
 
-Financial calculations should have dedicated automated tests.
+Implemented capabilities include:
+
+* Quotation creation, retrieval, and modification.
+* Active-customer association.
+* Quotation lines.
+* Manual line entry.
+* Optional product association.
+* CABYS validation.
+* Decimal quantities.
+* CRC and USD support.
+* IVA-inclusive monetary calculations.
+* Percentage and fixed discounts.
+* Additional charges.
+* Server-calculated totals.
+* SQL Server-backed consecutive numbering.
+* Authorization and antiforgery protection.
+* Server-side persistence.
+* Automated unit and integration verification.
+
+Remaining capabilities include:
+
+* Complete Blazor quotation workflow.
+* Customer-selection user experience.
+* Product-assisted quotation entry.
+* Immediate client-side total feedback.
+* PDF/document generation.
+* Final end-to-end verification.
+
+No quotation-status lifecycle such as `Draft`, `Sent`, `Approved`, or `Expired` is currently implemented.
+
+Quotations do not modify inventory.
+
+Later sales or invoicing workflows may consume concepts established by Quotations, but those domains introduce separate business state and must not be treated as equivalent to a quotation.
 
 ### Purchases
 

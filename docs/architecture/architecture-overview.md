@@ -71,11 +71,12 @@ Integrations
 
 These include request and response models for domains such as:
 
-* Authentication.
-* Customers.
-* Locations.
-* Taxpayer information.
-* Common response structures such as pagination.
+Authentication.
+Customers.
+Quotations.
+Locations.
+Taxpayer information.
+Common response structures such as pagination.
 
 This project allows the client and API to share their HTTP contract without giving the client access to server implementation or persistence details.
 
@@ -85,13 +86,20 @@ This project allows the client and API to share their HTTP contract without givi
 
 Current test areas include:
 
-* Customer validation.
-* Customer pagination.
-* Customer service behavior.
-* CSRF protection.
-* Mutable endpoint protection.
-* Development hosting.
-* Production hosting.
+Customer validation.
+Customer pagination.
+Customer service behavior.
+Quotation request validation.
+Quotation monetary calculations.
+Quotation service behavior.
+Quotation authorization.
+Quotation API contracts.
+SQL Server quotation integration.
+Concurrent quotation-number generation.
+CSRF protection.
+Mutable endpoint protection.
+Development hosting.
+Production hosting.
 
 ## 3. High-Level Architecture
 
@@ -116,23 +124,24 @@ flowchart TB
 
 ## 4. Request Flow
 
-```mermaid
+Business operations follow a common client-to-server flow.
+
 sequenceDiagram
     actor User
     participant Client as Blazor Client
     participant API as ASP.NET Core API
-    participant Service as CustomerService
+    participant Service as Application Service
     participant EF as Entity Framework Core
     participant DB as SQL Server
 
-    User->>Client: Submit customer form
+    User->>Client: Submit operation
     Client->>Client: Client-side validation
 
     Client->>API: HTTP request + auth cookie + CSRF token
 
     API->>API: Authenticate user
     API->>API: Authorize operation
-    API->>API: Validate CSRF token
+    API->>API: Validate CSRF token when required
     API->>API: Validate request
 
     API->>Service: Execute business operation
@@ -145,6 +154,10 @@ sequenceDiagram
     API-->>Client: JSON response
 
     Client-->>User: Update interface
+
+The exact flow varies according to the operation. Read-only requests, for example, do not require antiforgery validation.
+
+Business-critical rules remain enforced by the server even when equivalent client-side validation exists for user experience.
 
 ## 5. Persistence
 
@@ -162,6 +175,45 @@ Database integrity is enforced at multiple levels where appropriate:
 4. SQL Server constraints and indexes.
 
 This layered approach prevents the correctness of persisted data from depending exclusively on the frontend.
+
+### Quotation Persistence and Number Generation
+
+The Quotations domain extends the existing API/service/persistence architecture without introducing a separate architectural layer.
+
+Its server-side flow is conceptually:
+
+```text
+QuotationEndpoints
+        ↓
+IQuotationService
+        ↓
+QuotationService
+        ↓
+Entity Framework Core
+        ↓
+SQL Server
+```
+
+Quotation request and response contracts are defined in `Revestik.Shared`, while persistence entities and business-service implementations remain inside `Revestik.Api`.
+
+Quotation monetary calculations are centralized in server-side quotation logic so persisted and returned totals do not depend on calculations performed by the browser.
+
+Quotation consecutive numbers are generated independently from browser state through:
+
+```text
+IQuotationNumberGenerator
+        ↓
+SqlQuotationNumberGenerator
+        ↓
+SQL Server Sequence
+```
+
+The current commercial quotation format is `COT-000001`.
+
+Using a database sequence provides database-backed consecutive generation and avoids relying on application-memory or browser-local counters. Concurrent sequence generation is verified against SQL Server through integration tests.
+
+The quotation number is generated when a quotation is created and is preserved when that quotation is later modified.
+
 
 ## 6. Authentication and Authorization
 

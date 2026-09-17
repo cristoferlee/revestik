@@ -343,20 +343,39 @@ Examples include:
 
 A mocked database cannot prove that a SQL Server constraint actually works.
 
-## 21. Migration Testing
+## 21. ## 21. Database Testing
 
-EF Core migrations require special attention because a migration can compile while still being unsafe for existing data.
+Database-related behavior is tested at the lowest level capable of verifying the required behavior reliably.
 
-Before production deployment, relevant migration verification should consider:
+Mocked or in-memory persistence may remain appropriate when a test does not depend on SQL Server-specific behavior.
 
-* Migration applies successfully.
-* Existing data satisfies new constraints.
-* Required fields have a valid transition strategy.
-* New indexes can be created.
-* Data transformations behave correctly.
-* Application code remains compatible with the resulting schema.
+Behavior that depends on SQL Server is verified against a real SQL Server instance through integration tests using Testcontainers.
 
-Formal automated production-like migration testing is a future improvement for Revestik.
+The current SQL Server integration-test infrastructure:
+
+* Starts an isolated SQL Server container.
+* Uses a dedicated integration-test database.
+* Applies EF Core migrations.
+* Creates application `DbContext` instances configured for that database.
+* Allows tests to exercise actual SQL Server behavior independently from the developer's local database contents.
+
+Current SQL Server-backed verification includes quotation API persistence and quotation consecutive-number generation.
+
+The quotation-number integration suite also verifies concurrent SQL Server sequence behavior.
+
+Real database integration testing is particularly appropriate for behavior involving:
+
+* SQL Server sequences.
+* Database-generated behavior.
+* Constraints and indexes.
+* EF Core migrations.
+* SQL Server-specific persistence behavior.
+* Concurrency behavior that depends on the database.
+
+An in-memory or mocked database cannot prove that SQL Server-specific behavior actually works.
+
+Testcontainers therefore complements rather than replaces focused tests: infrastructure-dependent behavior uses the real database while isolated business logic should remain independent from unnecessary infrastructure.
+
 
 ## 22. UI Testing
 
@@ -512,14 +531,21 @@ Likely priorities include:
 
 New modules should not be considered complete solely because their UI works manually.
 
-## 31. Testing Principle
+## 31. Future Testing Priorities
 
-The core testing principle for Revestik is:
+As new Revestik domains are implemented, testing should expand alongside them.
 
-> Test important behavior at the lowest level that can verify it reliably.
+Likely priorities include:
 
-Tests exist to provide confidence that business and technical behavior remains correct as the application changes.
+1. Remaining quotation workflow behavior as the Blazor and document-generation layers are implemented.
+2. Inventory quantity and movement rules.
+3. Accounts receivable calculations.
+4. Payment behavior and financial state transitions.
+5. Expanded authorization coverage as additional business roles and domains are introduced.
+6. Electronic invoicing integration boundaries.
+7. Broader database migration verification.
+8. Critical browser workflows.
 
-The objective is not more tests.
+Quotation lifecycle/status transitions should only receive tests if such a lifecycle is later defined as a real business requirement.
 
-The objective is useful protection against regressions.
+New modules should not be considered complete solely because their UI works manually.
