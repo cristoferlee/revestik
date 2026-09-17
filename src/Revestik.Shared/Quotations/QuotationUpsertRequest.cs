@@ -38,5 +38,62 @@ public sealed class QuotationUpsertRequest : IValidatableObject
                 "La fecha de validez debe ser posterior a la fecha actual.",
                 [nameof(ValidUntilUtc)]);
         }
+
+        for (var index = 0; index < Lines.Count; index++)
+        {
+            var validationResults =
+                ValidateChild(Lines[index]);
+
+            foreach (var validationResult in validationResults)
+            {
+                var memberNames =
+                    validationResult.MemberNames
+                        .DefaultIfEmpty("request")
+                        .Select(memberName =>
+                            $"{nameof(Lines)}[{index}].{memberName}");
+
+                yield return new ValidationResult(
+                    validationResult.ErrorMessage,
+                    memberNames);
+            }
+        }
+
+        for (var index = 0; index < Charges.Count; index++)
+        {
+            var validationResults =
+                ValidateChild(Charges[index]);
+
+            foreach (var validationResult in validationResults)
+            {
+                var memberNames =
+                    validationResult.MemberNames
+                        .DefaultIfEmpty("request")
+                        .Select(memberName =>
+                            $"{nameof(Charges)}[{index}].{memberName}");
+
+                yield return new ValidationResult(
+                    validationResult.ErrorMessage,
+                    memberNames);
+            }
+        }
+    }
+
+    private static List<ValidationResult> ValidateChild<TRequest>(
+        TRequest request)
+        where TRequest : class
+    {
+        var validationResults =
+            new List<ValidationResult>();
+
+        var validationContext =
+            new ValidationContext(request);
+
+        Validator.TryValidateObject(
+            request,
+            validationContext,
+            validationResults,
+            validateAllProperties: true);
+
+        return validationResults;
     }
 }

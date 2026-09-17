@@ -24,7 +24,9 @@ public sealed class RevestikDbContext(
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.ApplyConfigurationsFromAssembly(
-            typeof(RevestikDbContext).Assembly);
+        modelBuilder.HasSequence<long>("QuotationNumberSequence")
+            .StartsAt(1);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(RevestikDbContext).Assembly);
     }
+
 }

@@ -7,6 +7,7 @@ using Revestik.Api.Data;
 using Revestik.Api.Tests.Hosting;
 using Revestik.Shared.Authentication;
 using Revestik.Shared.Customers;
+using Revestik.Shared.Quotations;
 
 namespace Revestik.Api.Tests.Authentication;
 
@@ -45,6 +46,8 @@ public sealed class MutableEndpointCsrfTests
     [InlineData("POST", "/api/customers")]
     [InlineData("PUT", "/api/customers/1")]
     [InlineData("DELETE", "/api/customers/1")]
+    [InlineData("POST", "/api/quotations")]
+    [InlineData("PUT", "/api/quotations/1")]
     [InlineData("POST", "/api/auth/logout")]
     public async Task MutableEndpoint_WithoutCsrfToken_ReturnsBadRequest(
         string method,
@@ -185,6 +188,15 @@ public sealed class MutableEndpointCsrfTests
             request.Content = JsonContent.Create(
                 new LogoutRequest(Confirm: true));
         }
+        else if (
+            path.StartsWith(
+                "/api/quotations",
+                StringComparison.OrdinalIgnoreCase) &&
+            method != HttpMethod.Delete)
+        {
+            request.Content = JsonContent.Create(
+                CreateValidQuotationRequest());
+        }
         else if (method != HttpMethod.Delete)
         {
             request.Content = JsonContent.Create(
@@ -210,6 +222,26 @@ public sealed class MutableEndpointCsrfTests
             DistrictCode = "01",
             OtherSigns = "CSRF integration test address",
             IsActive = true
+        };
+    }
+
+    private static QuotationUpsertRequest
+        CreateValidQuotationRequest()
+    {
+        return new QuotationUpsertRequest
+        {
+            CustomerId = 1,
+            Lines =
+            [
+                new QuotationLineRequest
+                {
+                    CabysCode = "1234567890123",
+                    Description = "CSRF test product",
+                    Quantity = 1m,
+                    UnitPrice = 113m,
+                    TaxRate = 13m
+                }
+            ]
         };
     }
 }

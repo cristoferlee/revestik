@@ -14,6 +14,9 @@ public static class PolicyNames
     public const string ManageInvoices =
         "ManageInvoices";
 
+    public const string ManageQuotations =
+        "ManageQuotations";
+
     public const string ViewAuditLog =
         "ViewAuditLog";
 }

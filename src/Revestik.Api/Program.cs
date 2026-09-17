@@ -5,6 +5,7 @@ using Revestik.Api.Extensions;
 using Revestik.Api.Integrations.Hacienda;
 using Revestik.Api.Integrations.Locations;
 using Revestik.Api.Services.Customers;
+using Revestik.Api.Services.Quotations;
 
 const string ClientCorsPolicy = "ClientCorsPolicy";
 
@@ -63,6 +64,8 @@ builder.Services.AddRevestikAuthentication(
     builder.Configuration);
 
 builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<IQuotationService, QuotationService>();
+builder.Services.AddScoped<IQuotationNumberGenerator, SqlQuotationNumberGenerator>();
 
 var haciendaBaseUrl =
     builder.Configuration["Hacienda:BaseUrl"]
@@ -158,6 +161,7 @@ app.MapGet(
     .AllowAnonymous();
 
 app.MapCustomerEndpoints();
+app.MapQuotationEndpoints();
 app.MapTaxpayerEndpoints();
 app.MapLocationEndpoints();
 app.MapAuthenticationEndpoints();
