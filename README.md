@@ -2,11 +2,11 @@
 
 Revestik is a full-stack business management application built with the Microsoft .NET ecosystem.
 
-It is designed to centralize operational workflows such as customer management, inventory, quotations, purchases, accounts receivable, invoicing, and business analytics within a secure and maintainable web application.
+It is designed to centralize operational workflows such as customer management, quotations, sales, inventory, purchases, expenses, accounts receivable, and business analytics within a secure and maintainable web application.
 
-The project originated from real small-business operational requirements and is being developed incrementally, with an emphasis on business rules, data integrity, security, testing, and maintainable architecture.
+The project originates from real small-business operational requirements and is developed incrementally, with an emphasis on business rules, data integrity, security, testing, and maintainable architecture.
 
-> **Project status:** Project status: Active development. The application foundation and Customer domain are implemented and hardened. The Quotations backend is implemented and verified, while its Blazor workflow and document generation remain in development. Additional business domains are planned.
+> **Project status:** Active development. The application foundation, Customer Management, and the complete Quotations workflow are implemented and verified. Sales is the next active business domain.
 
 ---
 
@@ -24,6 +24,7 @@ The project originated from real small-business operational requirements and is 
 * SQL Server
 * LINQ
 * OpenAPI
+* QuestPDF
 
 ### Frontend
 
@@ -43,7 +44,6 @@ The project originated from real small-business operational requirements and is 
 * CI build/test/publish verification
 * SQL Server integration testing
 
-
 ---
 
 ## Architecture
@@ -61,9 +61,9 @@ tests/
 ```
 
 * **Revestik.Client** — Blazor WebAssembly frontend.
-* **Revestik.Api** — ASP.NET Core API, business services, authentication, authorization, integrations, persistence, and production host.
+* **Revestik.Api** — ASP.NET Core API, business services, authentication, authorization, integrations, persistence, PDF generation, and production host.
 * **Revestik.Shared** — request and response contracts shared between client and API.
-* **Revestik.Api.Tests** — automated server, security, and hosting tests.
+* **Revestik.Api.Tests** — automated server, security, persistence, and hosting tests.
 
 ```mermaid
 flowchart TB
@@ -103,38 +103,60 @@ For the detailed architecture:
 
 ### Customer Management
 
+Implemented customer capabilities include:
+
+* Create, retrieve, edit, deactivate, and reactivate customers
+* Costa Rican identification validation
+* Unique customer identification enforcement
+* Contact and structured location information
+* Pagination, filtering, search, and deterministic ordering
+* Active/inactive state
+* Server-side validation and database integrity protections
+
 ### Quotation Management
 
-The Quotations backend is implemented; the Blazor workflow and document generation remain in development.
+The Quotations workflow is implemented end to end.
 
-Current server-side capabilities include:
+Current capabilities include:
 
-* Create quotations
-* Retrieve quotations by identifier
-* Update quotations
+* Create and edit quotations
+* `Draft` and `Issued` states
 * Existing active-customer association
-* Registered or manual quotation lines
-* Required CABYS codes
+* Customer snapshot captured when a quotation is issued or reissued
+* Product-assisted and manual quotation lines
+* Optional CABYS on commercial quotation lines
+* Unit of measure
 * Decimal quantities
 * CRC and USD currencies
 * IVA-inclusive pricing
 * 0% and 13% IVA calculations
 * Percentage and fixed discounts
 * Additional charges
+* Immediate client-side calculation feedback
 * Server-authoritative monetary calculations
 * Backend-generated `COT-000001`-style consecutive numbers
 * SQL Server sequence-backed number generation
-* Preservation of quotation identity during updates
+* Preservation of quotation identity and COT number during updates and reissue
+* Confirmed-line workflow before save/issue
+* Backend PDF generation with QuestPDF
+* Authenticated PDF download from the Blazor client
 * Role and policy-based authorization
 * Antiforgery protection for mutable operations
-* Server-side persistence and validation
 * SQL Server-backed integration testing
 * Concurrent consecutive-number verification
 
-Creating or modifying a quotation does not reserve or deduct inventory.
+Creating, editing, issuing, or reissuing a quotation does not reserve or deduct inventory.
 
-Remaining quotation work includes the Blazor workflow, product-assisted entry, client-side calculation feedback, and commercial PDF/document generation.
+### Product Support for Quotations
 
+A focused product lookup capability supports quotation entry without turning Quotations into the Inventory domain.
+
+Current support includes:
+
+* Product persistence
+* Product search/pagination
+* Product-assisted quotation entry
+* Authorization and pagination tests
 
 ### External Integrations
 
@@ -145,10 +167,9 @@ Remaining quotation work includes the Blazor workflow, product-assisted entry, c
 ### Engineering Foundation
 
 * Automated request-validation tests
-* Customer-service and pagination tests
-* Quotation calculation and service tests
-* Quotation authorization tests
-* Quotation API integration tests
+* Customer service and pagination tests
+* Quotation calculation, service, authorization, and API tests
+* Product authorization and pagination tests
 * SQL Server Testcontainers integration tests
 * Concurrent quotation-number tests
 * CSRF tests
@@ -159,7 +180,6 @@ Remaining quotation work includes the Blazor workflow, product-assisted entry, c
 * Static asset verification
 * Brotli asset verification
 * Database health endpoint
-
 
 ---
 
@@ -205,16 +225,18 @@ Current examples include:
 * Customer identification must be unique.
 * Identification format depends on identification type.
 * Customer contact and location information is required.
-* Customer deletion currently behaves as deactivation rather than physical removal.
-* Customer listing is paginated and deterministically ordered.
+* Customer records support active/inactive state.
 * Quotations belong to existing active customers.
-* Quotation lines require CABYS.
-* Quotation prices are treated as IVA-inclusive when the applicable rate is 13%.
+* Quotations may contain registered-product or manual lines.
+* CABYS is optional in the commercial quotation workflow.
+* Quotation prices are IVA-inclusive when the applicable rate is 13%.
 * Quotations support percentage and fixed discounts.
 * Quotation monetary calculations are authoritative on the server.
 * Quotation consecutive numbers are generated by the backend through SQL Server.
-* Quotation creation does not modify inventory.
-
+* Quotation lines must be confirmed before save or issue.
+* Issued quotations store a customer snapshot.
+* Reissuing preserves quotation identity and COT number.
+* Quotations do not modify inventory.
 
 See:
 
@@ -239,6 +261,8 @@ Current automated coverage includes:
 * Quotation SQL Server persistence
 * SQL Server sequence-based consecutive generation
 * Concurrent quotation-number generation
+* Product authorization
+* Product pagination contracts and service behavior
 * CSRF behavior
 * Protected mutable endpoints
 * Development hosting
@@ -248,7 +272,7 @@ Current automated coverage includes:
 
 SQL Server-specific behavior is tested against an isolated SQL Server instance using Testcontainers rather than relying exclusively on mocked or in-memory persistence.
 
-> **Current automated test baseline:** 161 passing tests, 0 failed, 0 skipped.
+> **Current automated test baseline:** 194 passing tests, 0 failed, 0 skipped.
 
 Run the complete suite:
 
@@ -261,7 +285,6 @@ Detailed testing strategy:
 [Testing Strategy](docs/development/testing.md)
 
 ---
-
 
 ## Continuous Integration
 
@@ -351,6 +374,7 @@ The persistence layer uses:
 * Check constraints
 * Unique indexes
 * ASP.NET Core Identity persistence
+* SQL Server sequences where database-backed consecutive generation is required
 
 Important business invariants are protected at more than one level where appropriate:
 
@@ -394,48 +418,48 @@ See:
 
 ## Product Roadmap
 
-Revestik is being developed incrementally, completing business workflows vertically rather than opening many partially implemented modules.
+Revestik is developed incrementally, completing business workflows vertically rather than opening many partially implemented modules.
+
+### Completed Core Domains
+
+* Customer Management
+* Quotations
 
 ### Current Focus
 
-**Quotations — In Progress**
+**Sales — Investigation / next implementation block**
 
-The backend foundation is implemented and verified.
-
-Remaining work includes:
-
-* Blazor quotation listing and creation workflow
-* Customer-selection experience
-* Quotation-line editing
-* Product-assisted entry
-* Additional-charge editing
-* Immediate client-side calculation feedback
-* Quotation editing workflow
-* Commercial PDF/document generation
-* Final end-to-end verification
+The next domain will define how an accepted commercial operation becomes an internal sale, including its own `VEN-xxxxxx` identity and future inventory impact.
 
 ### Planned Domains
 
 Later product areas include:
 
-* Suppliers
 * Inventory
 * Purchases
+* Suppliers
 * Accounts receivable
-* Sales and invoicing
-* Broader CABYS support
+* Expenses
 * Dashboard and analytics
-* Electronic invoicing
 * Administrative configuration
+* Production hardening
 
-These areas should not be considered implemented merely because they appear in the roadmap.
+### Deferred / Future
+
+The following capabilities are intentionally outside the current MVP:
+
+* Direct Costa Rican electronic invoicing integration with Ministerio de Hacienda
+* Automated email distribution
+* WhatsApp distribution
+* AI-assisted expense ingestion and classification
+
+Costa Rican electronic invoices will continue to be issued through the existing external invoicing provider until direct integration is intentionally revisited.
 
 See:
 
 [Product Roadmap](docs/product/roadmap.md)
 
 ---
-
 
 ## Documentation
 
@@ -503,6 +527,7 @@ Revestik follows several engineering principles:
 * Important behavior should receive automated regression coverage.
 * Documentation should describe the implemented system rather than aspirational architecture.
 * Features should be completed vertically rather than creating many partially implemented modules.
+* Deferred integrations should not delay a smaller production-ready core.
 
 ---
 
@@ -515,23 +540,21 @@ Engineering foundation
         ↓
 Customer domain
         ↓
-Quotation backend
+Quotations
         ↓
-Quotation Blazor workflow
+Sales
         ↓
-Commercial document generation
+Inventory
         ↓
-Sales / invoicing workflows
+Purchases / Suppliers
         ↓
-Inventory and financial integration
+Expenses
         ↓
-Electronic invoicing integration
+Dashboard / Analytics
         ↓
 Production hardening
 ```
 
-The immediate objective is to complete Quotations vertically before expanding into additional transactional domains.
-
-The project favors extracting shared abstractions only when concrete requirements demonstrate that reuse is appropriate, rather than prematurely redesigning Quotations into a generic Sales model.
+Direct electronic invoicing, automated email delivery, WhatsApp distribution, and AI-assisted expense ingestion remain future capabilities rather than current MVP blockers.
 
 The goal is to evolve Revestik into a reliable business-management platform while keeping architecture, security, testing, and product requirements aligned.

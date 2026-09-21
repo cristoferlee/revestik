@@ -4,13 +4,11 @@
 
 This document describes the current high-level architecture of Revestik.
 
-Revestik is a full-stack business management web application built with .NET and Blazor. The application separates the browser client, server-side API, shared contracts, persistence, authentication, and external integrations while remaining within a single solution.
+Revestik is a full-stack business management web application built with .NET and Blazor. The application separates the browser client, server-side API, shared contracts, persistence, authentication, document generation, and external integrations while remaining within a single solution.
 
-This document reflects the implemented architecture. Planned functionality is documented separately and should not be represented here as already implemented.
+This document reflects implemented architecture. Planned functionality is documented separately.
 
 ## 2. Solution Structure
-
-The solution is organized into the following primary projects:
 
 ```text
 Revestik
@@ -27,34 +25,36 @@ Revestik
 
 `Revestik.Client` is the Blazor WebAssembly frontend.
 
-Its responsibilities include:
+Responsibilities include:
 
 * Rendering the user interface.
-* Managing client-side navigation and UI state.
-* Performing client-side form validation.
+* Managing navigation and UI state.
+* Client-side form validation and calculation feedback.
 * Communicating with the API through HTTP services.
-* Managing the client-side authentication state.
-* Obtaining and sending antiforgery tokens for protected mutable requests.
+* Managing client authentication state.
+* Obtaining/sending antiforgery tokens for protected mutable requests.
+* Downloading server-generated documents through authenticated HTTP flows and JavaScript interop where required.
 
-The client does not access SQL Server directly.
+The client does not access SQL Server directly and is not a trusted security boundary.
 
 ### Revestik.Api
 
-`Revestik.Api` is the ASP.NET Core server application and represents the trusted server-side boundary of Revestik.
+`Revestik.Api` is the trusted ASP.NET Core server application.
 
-Its responsibilities include:
+Responsibilities include:
 
-* Exposing HTTP API endpoints.
+* HTTP API endpoints.
 * Authentication and authorization.
-* Server-side request validation.
+* Server-side validation.
 * Antiforgery protection.
-* Business operations and application services.
-* Database access through Entity Framework Core.
+* Business/application services.
+* EF Core database access.
 * External service integrations.
-* Serving the published Blazor WebAssembly application in the hosted production model.
-* Health checks and application hosting configuration.
+* Server-side document generation.
+* Hosting the published Blazor WebAssembly application.
+* Health checks and production-host configuration.
 
-The API is internally organized by responsibility, including areas such as:
+Internal organization includes responsibilities such as:
 
 ```text
 Endpoints
@@ -67,39 +67,17 @@ Integrations
 
 ### Revestik.Shared
 
-`Revestik.Shared` contains contracts shared between the client and API.
+`Revestik.Shared` contains request/response contracts shared between the client and API.
 
-These include request and response models for domains such as:
+Current contract areas include authentication, customers, quotations, products, locations, taxpayer information, and common response structures such as pagination.
 
-Authentication.
-Customers.
-Quotations.
-Locations.
-Taxpayer information.
-Common response structures such as pagination.
-
-This project allows the client and API to share their HTTP contract without giving the client access to server implementation or persistence details.
+Persistence entities remain server-side.
 
 ### Revestik.Api.Tests
 
-`Revestik.Api.Tests` contains automated tests for server-side behavior.
+`Revestik.Api.Tests` contains automated verification for server behavior, persistence, security, and hosting.
 
-Current test areas include:
-
-Customer validation.
-Customer pagination.
-Customer service behavior.
-Quotation request validation.
-Quotation monetary calculations.
-Quotation service behavior.
-Quotation authorization.
-Quotation API contracts.
-SQL Server quotation integration.
-Concurrent quotation-number generation.
-CSRF protection.
-Mutable endpoint protection.
-Development hosting.
-Production hosting.
+Current areas include customers, products, quotations, authentication/CSRF, SQL Server integration, concurrency, and hosting.
 
 ## 3. High-Level Architecture
 
@@ -112,6 +90,7 @@ flowchart TB
     EF[Entity Framework Core]
     DB[(SQL Server)]
     External[External Services]
+    Pdf[QuestPDF<br/>Server-side PDF]
 
     User --> Client
     Client -->|HTTPS / JSON| Api
@@ -120,12 +99,12 @@ flowchart TB
     Api --> EF
     EF --> DB
     Api --> External
-
+    Api --> Pdf
+```
 
 ## 4. Request Flow
 
-Business operations follow a common client-to-server flow.
-
+```mermaid
 sequenceDiagram
     actor User
     participant Client as Blazor Client
@@ -136,172 +115,200 @@ sequenceDiagram
 
     User->>Client: Submit operation
     Client->>Client: Client-side validation
-
     Client->>API: HTTP request + auth cookie + CSRF token
-
-    API->>API: Authenticate user
-    API->>API: Authorize operation
-    API->>API: Validate CSRF token when required
+    API->>API: Authenticate / authorize / validate CSRF
     API->>API: Validate request
-
     API->>Service: Execute business operation
     Service->>EF: Read / persist data
     EF->>DB: Parameterized database operation
-
-    DB-->>EF: Database result
-    EF-->>Service: Entity / result
+    DB-->>EF: Result
+    EF-->>Service: Result
     Service-->>API: Response DTO
     API-->>Client: JSON response
+    Client-->>User: Update UI
+```
 
-    Client-->>User: Update interface
+Read-only requests do not require antiforgery validation.
 
-The exact flow varies according to the operation. Read-only requests, for example, do not require antiforgery validation.
-
-Business-critical rules remain enforced by the server even when equivalent client-side validation exists for user experience.
+Business-critical rules remain server-enforced even when the client reproduces validation or calculations for user experience.
 
 ## 5. Persistence
 
-Revestik uses Entity Framework Core with SQL Server.
+Revestik uses EF Core with SQL Server.
 
-`RevestikDbContext` is the application's EF Core database context and also integrates ASP.NET Core Identity persistence.
+`RevestikDbContext` also integrates ASP.NET Core Identity persistence.
 
-Entity configuration is separated from the `DbContext` using `IEntityTypeConfiguration<T>` implementations and applied from the API assembly.
+Entity configuration is separated using `IEntityTypeConfiguration<T>` implementations.
 
-Database integrity is enforced at multiple levels where appropriate:
+Data integrity is enforced at multiple levels where appropriate:
 
 1. Request validation.
 2. Server-side application logic.
-3. EF Core model configuration.
-4. SQL Server constraints and indexes.
+3. EF Core configuration.
+4. SQL Server constraints/indexes.
 
-This layered approach prevents the correctness of persisted data from depending exclusively on the frontend.
+## 6. Quotations Architecture
 
-### Quotation Persistence and Number Generation
+Quotations extend the existing Client/API/Shared structure without introducing a new architectural layer.
 
-The Quotations domain extends the existing API/service/persistence architecture without introducing a separate architectural layer.
-
-Its server-side flow is conceptually:
+The current flow is conceptually:
 
 ```text
+Quotes.razor / Quotes.razor.cs
+        ↓
+IQuotationApiService
+        ↓
+QuotationApiService
+        ↓
 QuotationEndpoints
         ↓
 IQuotationService
         ↓
 QuotationService
+        ├── QuotationCalculator
+        ├── product lookup/support
+        └── QuotationPdfService
         ↓
 Entity Framework Core
         ↓
 SQL Server
 ```
 
-Quotation request and response contracts are defined in `Revestik.Shared`, while persistence entities and business-service implementations remain inside `Revestik.Api`.
+Quotation request/response contracts live in `Revestik.Shared`.
 
-Quotation monetary calculations are centralized in server-side quotation logic so persisted and returned totals do not depend on calculations performed by the browser.
+The server remains authoritative for monetary calculations and persisted state.
 
-Quotation consecutive numbers are generated independently from browser state through:
+### Consecutive Number Generation
+
+Quotation numbers are generated through SQL Server-backed sequence infrastructure.
+
+Current commercial format:
 
 ```text
-IQuotationNumberGenerator
-        ↓
-SqlQuotationNumberGenerator
-        ↓
-SQL Server Sequence
+COT-000001
 ```
 
-The current commercial quotation format is `COT-000001`.
+The number is generated when the quotation is created and preserved when the quotation is edited or reissued.
 
-Using a database sequence provides database-backed consecutive generation and avoids relying on application-memory or browser-local counters. Concurrent sequence generation is verified against SQL Server through integration tests.
+Concurrent sequence behavior is verified against SQL Server.
 
-The quotation number is generated when a quotation is created and is preserved when that quotation is later modified.
+### Customer Snapshot
 
+When a quotation is issued or reissued, customer information required by the quotation document is persisted as a snapshot.
 
-## 6. Authentication and Authorization
+This allows the commercial document to remain stable if the Customer record changes later.
+
+### Product-Assisted Lines
+
+Quotation lines may reference a registered product or remain manual.
+
+Product lookup is a supporting capability and does not imply that the complete Inventory domain or stock-movement model has been implemented.
+
+### PDF Generation
+
+Commercial quotation PDFs are generated exclusively in the backend through `QuotationPdfService` using QuestPDF.
+
+The client requests the document from the authenticated API and downloads the returned bytes through JavaScript Blob handling.
+
+The browser does not hold PDF-generation authority.
+
+## 7. Authentication and Authorization
 
 Revestik uses ASP.NET Core Identity with cookie-based authentication.
 
-The application follows a protected-by-default model: authenticated access is required unless an endpoint is explicitly configured for anonymous access.
+The application follows a protected-by-default model.
 
-Authorization policies and roles are used for operations requiring elevated permissions.
+Roles/policies restrict privileged operations.
 
-Mutable authenticated requests are additionally protected with antiforgery validation.
+Applicable mutable authenticated requests are protected with antiforgery validation.
 
-Detailed security behavior is documented in:
+Detailed behavior is documented in:
 
 ```text
 docs/security/security-overview.md
 ```
 
-## 7. Hosted Application Model
+## 8. Hosted Application Model
 
-During development, the Blazor client and API can run with development-specific configuration.
+During local development, Client and API may run on separate development origins.
 
-For the published application, the ASP.NET Core API also serves the compiled Blazor WebAssembly application.
+For the published application, ASP.NET Core serves the compiled Blazor WebAssembly application and the API.
 
-Static assets are served using ASP.NET Core static asset infrastructure.
+Blazor routes use SPA fallback behavior while unknown `/api/*` routes remain API responses rather than returning `index.html`.
 
-Blazor routes fall back to the client application's `index.html`, while unknown `/api/*` routes are kept separate from the SPA fallback so an invalid API request cannot accidentally return the Blazor HTML application.
+## 9. External Integrations
 
-## 8. External Integrations
+External systems are kept behind server-side boundaries.
 
-External systems are isolated from UI components behind server-side integrations and services.
+This prevents secrets or privileged external communication from being exposed to Blazor WebAssembly.
 
-This keeps external communication inside the trusted server boundary and avoids exposing implementation details or credentials to the Blazor WebAssembly client.
+Current integrations include taxpayer/location-related services.
 
-Integrations should be accessed through abstractions where practical so their implementation can evolve independently from consuming application code.
+Future integrations should use the same server-side trust boundary.
 
-## 9. Testing and Continuous Integration
+## 10. Deferred Electronic Invoicing Boundary
+
+Direct Costa Rican electronic invoicing is not part of the current architecture.
+
+If revisited, fiscal signing credentials, API credentials, signing operations, and Ministerio de Hacienda communication must remain exclusively server-side.
+
+The current architecture intentionally avoids introducing that regulatory integration before the core application is production-proven.
+
+## 11. Testing and Continuous Integration
 
 Automated tests are maintained in `Revestik.Api.Tests`.
 
-The GitHub Actions CI pipeline currently validates the application by:
+Current CI:
 
-1. Restoring dependencies.
-2. Building the solution in Release configuration.
-3. Running automated tests.
-4. Publishing the hosted application.
-5. Verifying required Blazor WebAssembly assets.
-6. Verifying runtime assets and compressed static assets.
+1. Restores dependencies.
+2. Builds Release.
+3. Runs automated tests.
+4. Publishes the hosted application.
+5. Verifies required Blazor/runtime/static assets.
 
-CI runs for changes targeting `main` and helps prevent invalid builds from being merged unnoticed.
+Current local verified baseline:
 
-## 10. Architectural Principles
+**194 passed, 0 failed, 0 skipped.**
 
-The current architecture follows these principles:
+## 12. Architectural Principles
 
 ### Separation of concerns
 
-Frontend presentation, HTTP contracts, server-side behavior, persistence, and tests have distinct responsibilities.
+Frontend presentation, HTTP contracts, server behavior, persistence, document generation, and tests have distinct responsibilities.
 
 ### Server as the trust boundary
 
-The client is never trusted to enforce business or security rules by itself.
+The browser is never trusted to enforce business/security rules or protect secrets.
 
 ### Defense in depth
 
-Important rules can be enforced across validation, application logic, persistence configuration, and database constraints.
+Critical invariants can be protected through validation, application logic, EF configuration, and database constraints.
 
 ### Explicit contracts
 
-Client/server communication uses shared request and response contracts instead of exposing persistence entities directly.
+Client/API communication uses shared contracts rather than persistence entities.
 
 ### Incremental complexity
 
-Revestik favors an architecture appropriate for its current size rather than introducing additional architectural layers without a demonstrated requirement.
+New infrastructure and abstractions should solve concrete requirements rather than exist only to imitate a reference architecture.
 
-The architecture may evolve as the application grows, but additional complexity should be introduced to solve concrete problems rather than to follow a pattern for its own sake.
+### Scope discipline
 
-## 11. Current Architectural Classification
+Deferred integrations should not delay completion and production hardening of the core business application.
 
-Revestik is best described as a modular full-stack .NET application with:
+## 13. Current Architectural Classification
 
-* A Blazor WebAssembly client.
-* An ASP.NET Core API and application host.
+Revestik is a modular full-stack .NET application with:
+
+* Blazor WebAssembly client.
+* ASP.NET Core API/application host.
 * Shared HTTP contracts.
-* Internal server-side separation by responsibility.
-* Entity Framework Core and SQL Server persistence.
-* ASP.NET Core Identity authentication.
-* Automated server and hosting tests.
+* Server-side separation by responsibility.
+* EF Core and SQL Server persistence.
+* ASP.NET Core Identity.
+* Backend-generated commercial PDFs.
+* Automated server, persistence, security, and hosting tests.
 
-It is not currently implemented as Clean Architecture or as independently deployable microservices.
+It is intentionally not implemented as independently deployable microservices.
 
-That distinction is intentional: the current structure provides clear separation while keeping deployment and development complexity appropriate for the application's present scope.
+The current structure keeps deployment and development complexity proportional to the application's actual requirements.

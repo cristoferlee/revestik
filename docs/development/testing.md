@@ -4,9 +4,9 @@
 
 This document describes the current automated testing strategy for Revestik.
 
-The objective of testing is not to maximize the number of tests or achieve an arbitrary coverage percentage.
+The objective is not to maximize test count or chase an arbitrary coverage percentage.
 
-Tests should protect important application behavior, business rules, security boundaries, and hosting assumptions so regressions can be detected before changes reach `main`.
+Tests should protect important business behavior, security boundaries, persistence assumptions, API contracts, and hosting behavior so regressions can be detected before changes reach `main`.
 
 ## 2. Test Project
 
@@ -18,163 +18,142 @@ tests/Revestik.Api.Tests
 
 The project uses xUnit and is included in `Revestik.sln`.
 
-Tests are executed locally and by the GitHub Actions continuous integration pipeline.
+Tests run locally and in GitHub Actions.
 
-## 3. Current Testing Areas
+## 3. Current Test Baseline
 
-The current test suite covers three primary areas:
+Current complete-suite baseline:
+
+**194 passed, 0 failed, 0 skipped.**
+
+This number is a snapshot, not a quality target. New tests should be added when they protect meaningful behavior.
+
+## 4. Current Testing Areas
+
+The suite currently covers areas including:
 
 ```text
 Revestik.Api.Tests
 ├── Authentication
 ├── Customers
+├── Products
+├── Quotations
 └── Hosting
 ```
 
-These areas protect business behavior, security-sensitive requests, API contracts, and application hosting.
+Coverage includes focused behavior, HTTP/API integration, SQL Server integration, security, concurrency, and hosting verification.
 
-## 4. Customer Validation Tests
+## 5. Customer Tests
 
-Customer request validation tests currently cover:
+Current customer coverage includes:
 
-* Valid identification formats for physical persons, legal entities, and DIMEX.
-* Invalid identification length, prefix, and non-numeric values.
-* Required name, identification type, identification number, and email values.
-* Province, canton, and district code formats.
+* Identification-format validation.
+* Required customer data.
+* Pagination contracts.
+* Service pagination behavior.
+* Filtering and search.
+* Deterministic ordering.
+* Deactivation/reactivation behavior.
+* Relevant persistence and error behavior.
 
-These tests protect business rules documented in:
+Client-side validation is not considered authoritative.
 
-```text
-docs/product/business-rules.md
-```
+## 6. Product Tests
 
-Where practical, tests should remain traceable to the behavior described there.
+Product support currently exists to assist quotation entry.
 
-## 5. Customer Service Tests
+Automated coverage includes:
 
-Customer service tests verify server-side business and persistence behavior independently from the Blazor user interface.
+* Product authorization behavior.
+* Product pagination request contracts.
+* Product service pagination behavior.
 
-Current automated coverage includes:
+These tests protect the supporting lookup capability without implying that the complete Inventory domain exists.
 
-* Persisted customer deactivation.
-* Customer reactivation through update, including persistence of the updated fields.
-* The missing-customer deactivation result.
-* Customer ordering.
-* Identification-type filtering.
-* Name-only search behavior.
-* Pagination results, metadata, and out-of-range pages.
+## 7. Quotation Tests
 
-Customer creation, direct customer retrieval, identification uniqueness, and broader update failure scenarios are not currently covered by the Customer service tests.
+Quotation coverage includes:
 
-Service tests are important because client-side validation cannot be considered authoritative.
+* Request and nested-request validation.
+* Decimal quantities and quotation-line rules.
+* Monetary calculations.
+* 0% and 13% IVA behavior.
+* Percentage/fixed discounts.
+* Additional charges.
+* Service behavior.
+* Draft/Issued behavior where exercised by current endpoints/services.
+* Customer snapshot behavior.
+* Authorization.
+* API contracts.
+* SQL Server persistence.
+* SQL Server sequence-based COT generation.
+* Concurrent quotation-number generation.
+* Product-linked/manual quotation behavior.
+* PDF endpoint/service boundaries where covered by the current suite.
 
-## 6. Pagination Contract Tests
+The Blazor UI is also manually verified for critical quotation workflows because the project does not currently maintain a comprehensive browser E2E suite.
 
-Pagination tests verify customer list request validation, paginated response calculations, and customer service pagination behavior.
+## 8. Authentication and CSRF Tests
 
-Current automated coverage includes:
+Security tests verify observable behavior such as:
 
-* Default page and page-size values.
-* Rejection of page and page-size values outside their allowed ranges.
-* Search-length and identification-type validation.
-* Total-page calculation.
-* Page metadata and result boundaries.
-* Customer ordering, filtering, and name-only search behavior.
-
-Pagination testing becomes increasingly important as the amount of business data grows.
-
-## 7. Authentication and CSRF Tests
-
-Revestik uses cookie-based authentication and antiforgery protection for applicable mutable authenticated operations.
-
-Security tests verify behavior such as:
-
-* Missing required antiforgery tokens are rejected.
+* Missing antiforgery tokens are rejected where required.
 * Invalid antiforgery tokens are rejected.
-* Protected mutable operations cannot execute without passing the required security checks.
+* Protected mutable operations cannot execute without required security checks.
+* Authorization protects applicable endpoints.
 
-These tests protect an important application security boundary.
+Tests should verify behavior rather than merely confirming middleware configuration exists.
 
-A test should verify observable security behavior rather than merely confirming that a particular middleware or method exists in source code.
+## 9. Hosting Tests
 
-## 8. Hosting Tests
-
-Revestik includes tests for application hosting behavior.
-
-These tests cover development and production hosting assumptions.
-
-Relevant behavior includes:
+Hosting verification covers development and production assumptions such as:
 
 * Blazor application hosting.
 * Static asset handling.
-* SPA fallback behavior.
-* Separation between application routes and `/api/*` routes.
-* Production static asset behavior.
+* SPA fallback.
+* Separation between client routes and `/api/*`.
+* Production static assets.
 
-This protects against configuration regressions that may compile successfully but prevent the published application from working correctly.
-
-## 9. Unknown API Route Protection
-
-Unknown API routes must not accidentally return the Blazor application's `index.html`.
-
-The application verifies unknown API behavior for methods including:
-
-* `GET`
-* `POST`
-* `PUT`
-* `DELETE`
-
-An unknown `/api/*` request should remain an API response, normally `404`, rather than being handled by the SPA fallback.
-
-This distinction prevents invalid API requests from appearing to succeed with an HTML response.
+Unknown `/api/*` routes must remain API responses and must not fall through to `index.html`.
 
 ## 10. Static Asset Verification
 
-Production hosting tests and CI verify important published application assets.
-
-Examples include:
+Published application checks include assets such as:
 
 * `wwwroot/index.html`
 * `_framework/blazor.webassembly.js`
-* .NET runtime assets.
-* Brotli-compressed assets.
+* .NET runtime assets
+* Brotli-compressed assets
 
-Published asset verification helps detect deployment failures that normal unit tests may not reveal.
+These checks detect deployment regressions that ordinary unit tests may miss.
 
 ## 11. Test Classification
 
-The current suite can be understood using three broad categories.
+### Focused / Unit Tests
 
-### Unit / Focused Behavior Tests
+Used for isolated behavior such as request validation and monetary calculations.
 
-These test isolated application behavior such as request validation or business logic.
-
-They should be:
-
-* Fast.
-* Deterministic.
-* Focused on one behavior.
-* Independent from unrelated infrastructure where practical.
+They should be fast, deterministic, and independent from unnecessary infrastructure.
 
 ### Integration Tests
 
-Integration tests exercise multiple application components together.
+Used when behavior depends on multiple application components such as routing, middleware, persistence, authorization, or API contracts.
 
-Examples include requests executed against an ASP.NET Core test host to verify security or endpoint behavior.
+### SQL Server Integration Tests
 
-These tests are valuable when the behavior depends on middleware, routing, authentication, antiforgery, or hosting configuration.
+Used when behavior depends specifically on SQL Server, including sequences, constraints, migrations, persistence behavior, or concurrency.
 
 ### Hosting / Application Tests
 
-These verify assumptions about how the complete application behaves when hosted or published.
+Used for published-application and hosting assumptions.
 
-They protect concerns that cannot be reliably verified through isolated unit tests.
+### Manual UI Verification
+
+Used for current critical Blazor workflows that are not yet protected by browser automation.
 
 ## 12. Testing Pyramid
 
-Revestik should generally favor many focused tests and fewer expensive end-to-end tests.
-
-Conceptually:
+Revestik generally favors many focused tests and fewer expensive end-to-end tests:
 
 ```text
              /\
@@ -187,11 +166,9 @@ Conceptually:
       /________________\
 ```
 
-This is a guideline rather than a required numerical ratio.
+A behavior should be tested at the lowest level capable of verifying it reliably.
 
-A test should be placed at the lowest level capable of reliably verifying the behavior.
-
-## 13. Running All Tests
+## 13. Running Tests
 
 From the repository root:
 
@@ -199,44 +176,24 @@ From the repository root:
 dotnet test Revestik.sln
 ```
 
-For Release configuration:
+Release configuration:
 
 ```powershell
 dotnet test Revestik.sln `
     --configuration Release
 ```
 
-## 14. Running the API Test Project
-
-To run only the API test project:
+API test project only:
 
 ```powershell
 dotnet test tests/Revestik.Api.Tests/Revestik.Api.Tests.csproj
 ```
 
-Release configuration:
+When restore/build already completed, `--no-restore` or `--no-build` may be used intentionally.
 
-```powershell
-dotnet test tests/Revestik.Api.Tests/Revestik.Api.Tests.csproj `
-    --configuration Release
-```
+## 14. Test Naming
 
-## 15. Running Tests Without Restore
-
-When dependencies have already been restored:
-
-```powershell
-dotnet test Revestik.sln `
-    --no-restore
-```
-
-CI may combine `--no-restore` and `--no-build` after completing those steps separately.
-
-Local developers should only use those options when the required previous steps have actually completed.
-
-## 16. Test Naming
-
-Test names should describe observable behavior.
+Test names should communicate observable behavior.
 
 A useful pattern is:
 
@@ -244,19 +201,11 @@ A useful pattern is:
 MethodOrScenario_Condition_ExpectedBehavior
 ```
 
-For example:
+The exact naming style may vary when another form is clearer.
 
-```text
-CreateCustomer_DuplicateIdentification_ReturnsConflict
-```
+## 15. Arrange, Act, Assert
 
-Exact naming may vary where another structure produces clearer tests.
-
-The important requirement is that a failing test should communicate what behavior has regressed.
-
-## 17. Arrange, Act, Assert
-
-Focused tests should generally remain easy to read using the conceptual structure:
+Focused tests should remain easy to read conceptually:
 
 ```text
 Arrange
@@ -266,171 +215,111 @@ Act
 Assert
 ```
 
-### Arrange
+Tests should avoid unnecessary setup that obscures the behavior being protected.
 
-Prepare the required state and inputs.
+## 16. Business Rule Traceability
 
-### Act
+Important rules should have automated verification where practical.
 
-Execute the behavior being tested.
+Rule identifiers do not need to appear mechanically in every test name.
 
-### Assert
+The goal is to be able to answer:
 
-Verify the externally meaningful result.
+> What test protects this behavior?
 
-Tests should avoid unnecessary setup that makes the behavior difficult to identify.
+## 17. Regression Workflow
 
-## 18. Business Rule Traceability
-
-Important business rules should have automated verification where practical.
-
-For example:
+When a defect affects testable business or technical behavior, prefer:
 
 ```text
-CUS-004
-Physical person identification = exactly 9 digits
-        ↓
-Customer request validation
-        ↓
-CustomerUpsertRequestValidationTests
-```
-
-Rule IDs do not need to be mechanically inserted into every test name.
-
-The goal is to maintain enough traceability to answer:
-
-> What test protects this rule?
-
-## 19. Bug Fixes and Regression Tests
-
-When a defect is discovered, the preferred workflow is:
-
-```text
-Reproduce defect
-      ↓
-Identify expected behavior
-      ↓
-Add or update regression test
-      ↓
-Confirm test fails for the defect
-      ↓
+Reproduce
+   ↓
+Define expected behavior
+   ↓
+Add/update regression test
+   ↓
+Confirm failure
+   ↓
 Implement fix
-      ↓
-Confirm test passes
-      ↓
+   ↓
+Confirm pass
+   ↓
 Run relevant suite
 ```
 
-Not every visual or environmental issue can be reproduced efficiently through automated tests.
+Not every visual/environmental defect requires automated reproduction.
 
-For business logic, security behavior, persistence rules, and API behavior, regression tests should be strongly preferred.
+## 18. Database Testing
 
-## 20. Database Testing
+Behavior that depends on SQL Server is verified against a real isolated SQL Server instance through Testcontainers.
 
-Database-related behavior should be tested at the appropriate level.
-
-Mocking or isolated tests may be sufficient for some business logic.
-
-However, behavior that specifically depends on SQL Server should eventually be verified against a real or representative SQL Server environment.
-
-Examples include:
-
-* Unique constraints.
-* SQL Server-specific behavior.
-* Migrations.
-* Transaction behavior.
-* Database-generated behavior.
-
-A mocked database cannot prove that a SQL Server constraint actually works.
-
-## 21. ## 21. Database Testing
-
-Database-related behavior is tested at the lowest level capable of verifying the required behavior reliably.
-
-Mocked or in-memory persistence may remain appropriate when a test does not depend on SQL Server-specific behavior.
-
-Behavior that depends on SQL Server is verified against a real SQL Server instance through integration tests using Testcontainers.
-
-The current SQL Server integration-test infrastructure:
+The integration-test infrastructure:
 
 * Starts an isolated SQL Server container.
-* Uses a dedicated integration-test database.
+* Uses a dedicated integration database.
 * Applies EF Core migrations.
-* Creates application `DbContext` instances configured for that database.
-* Allows tests to exercise actual SQL Server behavior independently from the developer's local database contents.
+* Creates application `DbContext` instances against that database.
+* Avoids dependence on developer-local database contents.
 
-Current SQL Server-backed verification includes quotation API persistence and quotation consecutive-number generation.
+SQL Server integration is appropriate for:
 
-The quotation-number integration suite also verifies concurrent SQL Server sequence behavior.
-
-Real database integration testing is particularly appropriate for behavior involving:
-
-* SQL Server sequences.
-* Database-generated behavior.
-* Constraints and indexes.
+* Sequences.
+* Constraints/indexes.
 * EF Core migrations.
-* SQL Server-specific persistence behavior.
-* Concurrency behavior that depends on the database.
+* Database-generated behavior.
+* SQL Server-specific persistence.
+* Relevant concurrency behavior.
 
-An in-memory or mocked database cannot prove that SQL Server-specific behavior actually works.
+Testcontainers complements focused tests rather than replacing them.
 
-Testcontainers therefore complements rather than replaces focused tests: infrastructure-dependent behavior uses the real database while isolated business logic should remain independent from unnecessary infrastructure.
+## 19. UI Testing
 
+Revestik does not currently maintain a comprehensive automated browser/E2E suite.
 
-## 22. UI Testing
+Important UI changes should receive manual verification.
 
-Revestik does not currently rely on a comprehensive automated browser/end-to-end UI suite.
-
-Client behavior should still be verified manually for relevant changes.
-
-Potential future automated UI coverage may include critical workflows such as:
+Potential future browser automation should focus on high-value workflows such as:
 
 * Authentication.
-* Customer creation.
-* Customer editing.
+* Customer management.
 * Quotations.
+* Sales.
+* Inventory movements.
 * Payments.
-* Other high-value end-to-end business workflows.
 
-UI automation should be introduced when the maintenance cost is justified by the workflows it protects.
+UI automation should be introduced when its maintenance cost is justified.
 
-## 23. Performance Testing
+## 20. Performance Testing
 
-The current automated suite is not a substitute for load or performance testing.
+The automated suite is not a substitute for load/performance testing.
 
-Performance testing should be introduced when Revestik has measurable workload requirements.
+Performance work should begin when measurable workload requirements exist.
 
 Potential scenarios include:
 
-* Large customer datasets.
+* Large customer/product datasets.
 * Dashboard aggregation.
-* Concurrent business users.
+* Concurrent users.
 * Inventory queries.
 * Reporting.
-* External service latency.
+* External-service latency.
 
-Performance optimization should be based on measurements rather than assumptions.
+## 21. Security Testing Limitations
 
-## 24. Security Testing Limitations
+Automated security regression tests do not constitute a penetration test or security certification.
 
-Automated security regression tests protect known application behavior but do not constitute a penetration test or security certification.
-
-The current suite does not claim to provide comprehensive coverage for:
+The current suite does not claim comprehensive coverage for:
 
 * Penetration testing.
 * Dependency vulnerability assessment.
 * Infrastructure security.
 * Secret scanning.
 * Dynamic application security testing.
-* Full authorization matrix testing.
+* Complete authorization-matrix verification.
 
-These may be introduced as the project and deployment requirements evolve.
+## 22. Continuous Integration
 
-## 25. Continuous Integration
-
-GitHub Actions runs automated verification for changes targeting the main development history.
-
-The CI process currently performs:
+GitHub Actions currently performs:
 
 ```text
 Restore
@@ -444,13 +333,13 @@ Publish Application
 Verify Hosted Blazor Assets
 ```
 
-CI protects the shared repository from changes that fail basic build, test, or publish verification.
+CI protects shared history from changes that fail core verification.
 
-A successful CI run increases confidence but does not by itself prove that a change is production-ready.
+A successful CI run increases confidence but does not by itself prove production readiness.
 
-## 26. Pre-Review Verification
+## 23. Pre-Review Verification
 
-Before a code change is considered ready for pull-request review, the developer should normally run:
+Before pull-request review, the normal verification sequence is:
 
 ```powershell
 dotnet restore Revestik.sln
@@ -464,88 +353,60 @@ dotnet test Revestik.sln `
     --no-build
 ```
 
-For changes affecting hosting or deployment, publishing should also be verified.
+Hosting/deployment changes should also verify publishing.
 
-## 27. What Should Be Tested
+## 24. What Should Be Tested
 
-Tests should prioritize behavior where failure would have meaningful impact.
-
-Examples include:
+Prioritize behavior where failure would have meaningful impact:
 
 * Business rules.
 * Financial calculations.
 * Data integrity.
-* Authentication.
-* Authorization.
+* Authentication/authorization.
 * Security boundaries.
 * API contracts.
 * State transitions.
-* Persistence behavior.
-* Critical application hosting.
+* Persistence.
+* Critical hosting assumptions.
 
-Simple implementation details do not necessarily require dedicated tests if they are already adequately protected by higher-value behavioral tests.
+Avoid tests that are coupled unnecessarily to private implementation details.
 
-## 28. What Tests Should Avoid
-
-Tests should avoid unnecessary coupling to implementation details.
-
-For example, a test should generally prefer:
-
-> An unauthenticated request receives the expected response.
-
-over:
-
-> A specific private method was called exactly once.
-
-Tests that depend heavily on implementation details become expensive to maintain during legitimate refactoring.
-
-## 29. Deterministic Tests
-
-Automated tests should produce the same result when the application behavior has not changed.
+## 25. Deterministic Tests
 
 Tests should avoid uncontrolled dependencies on:
 
 * Current local time.
 * Random values.
 * External network services.
-* Developer-specific machine state.
+* Developer-machine state.
 * Execution order.
 * Existing local database contents.
 
-When such dependencies are necessary, they should be controlled explicitly.
+Control such dependencies explicitly when they are required.
 
-## 30. Future Testing Priorities
+## 26. Future Testing Priorities
 
-As new Revestik domains are implemented, testing should expand alongside them.
+As the next domains are implemented, priorities include:
 
-Likely priorities include:
+1. Sales conversion and state-transition rules.
+2. Inventory quantity and movement invariants.
+3. Purchase-to-stock behavior.
+4. Accounts receivable and payment transitions.
+5. Expense classification/storage behavior.
+6. Expanded authorization coverage.
+7. Broader migration verification.
+8. Critical browser workflows where automation is justified.
 
-1. Quotation calculations and status transitions.
-2. Inventory quantity and movement rules.
-3. Accounts receivable calculations.
-4. Payment behavior.
-5. Authorization by business role.
-6. Electronic invoicing integration boundaries.
-7. Database migration verification.
-8. Critical browser workflows.
+Direct electronic invoicing tests are intentionally not a near-term priority while that integration remains deferred.
 
-New modules should not be considered complete solely because their UI works manually.
+## 27. Definition of a Verified Change
 
-## 31. Future Testing Priorities
+A critical change should normally satisfy the applicable combination of:
 
-As new Revestik domains are implemented, testing should expand alongside them.
-
-Likely priorities include:
-
-1. Remaining quotation workflow behavior as the Blazor and document-generation layers are implemented.
-2. Inventory quantity and movement rules.
-3. Accounts receivable calculations.
-4. Payment behavior and financial state transitions.
-5. Expanded authorization coverage as additional business roles and domains are introduced.
-6. Electronic invoicing integration boundaries.
-7. Broader database migration verification.
-8. Critical browser workflows.
-
-Quotation lifecycle/status transitions should only receive tests if such a lifecycle is later defined as a real business requirement.
-
-New modules should not be considered complete solely because their UI works manually.
+* Relevant focused tests.
+* Integration tests when infrastructure behavior matters.
+* Manual UI verification for user-facing flows.
+* Successful solution build.
+* Successful complete test suite.
+* Successful CI.
+* Updated documentation when behavior materially changes.
