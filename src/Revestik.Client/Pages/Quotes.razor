@@ -1,6 +1,1001 @@
 @page "/quotes"
+@using Revestik.Shared.Customers
+@using Revestik.Shared.Quotations
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales")]
 
 <PageTitle>Cotizaciones | Revestik</PageTitle>
 
-<h1>Cotizaciones</h1>
-<p>La administración de cotizaciones se encuentra en desarrollo.</p>
+<section class="quotations-page">
+    <header class="page-header">
+        <div>
+            <h1>Cotizaciones</h1>
+            <p>
+                Crea y administra cotizaciones para tus clientes.
+            </p>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message"
+             role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(quotationSuccessMessage))
+    {
+        <div class="status-message" role="status">
+            @quotationSuccessMessage
+        </div>
+    }
+
+    <section class="customer-card"
+             aria-labelledby="quotation-form-title">
+        <h2 id="quotation-form-title">
+            Nueva cotización
+        </h2>
+
+        @if (currentQuotationId.HasValue)
+        {
+            <p class="field-guidance">
+                <strong>@currentQuotationNumber</strong> ·
+                @(currentQuotationStatus == QuotationStatus.Issued
+                    ? "Emitida"
+                    : "Borrador")
+            </p>
+        }
+
+        <div class="form-grid">
+            <div class="form-group form-wide">
+                <label for="quotation-customer-search">
+                    Cliente
+                </label>
+
+                <form class="search-form"
+                      @onsubmit="SearchCustomersAsync"
+                      @onsubmit:preventDefault>
+                    <input id="quotation-customer-search"
+                           type="search"
+                           maxlength="150"
+                           placeholder="Buscar cliente por nombre"
+                           aria-label="Buscar cliente por nombre"
+                           @bind="customerSearchTerm" />
+
+                    <button type="submit"
+                            class="primary-button"
+                            disabled="@isSearchingCustomers">
+                        @(isSearchingCustomers
+                            ? "Buscando..."
+                            : "Buscar")
+                    </button>
+
+                    @if (!string.IsNullOrWhiteSpace(customerSearchTerm) ||
+                         customerSearchResults.Count > 0)
+                    {
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@isSearchingCustomers"
+                                @onclick="ClearCustomerSearch">
+                            Limpiar
+                        </button>
+                    }
+                </form>
+
+                <div class="form-actions">
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@isNewCustomerFormOpen"
+                            @onclick="OpenNewCustomerFormAsync">
+                        Nuevo cliente
+                    </button>
+                </div>
+
+                @if (isNewCustomerFormOpen)
+                {
+                    <section class="customer-card"
+                             aria-labelledby="new-customer-title">
+                        <div class="page-header">
+                            <div>
+                                <h3 id="new-customer-title">
+                                    Nuevo cliente
+                                </h3>
+
+                                <p>
+                                    Registra el cliente sin salir de la cotización.
+                                </p>
+                            </div>
+
+                            <button type="button"
+                                    class="secondary-button"
+                                    disabled="@isSavingNewCustomer"
+                                    @onclick="CloseNewCustomerForm">
+                                Cancelar
+                            </button>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(
+                                newCustomerErrorMessage))
+                        {
+                            <div class="status-message error-message"
+                                 role="alert">
+                                @newCustomerErrorMessage
+                            </div>
+                        }
+
+                        <EditForm Model="newCustomerModel"
+                                  OnValidSubmit="SaveNewCustomerAsync">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary />
+
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="quotation-new-customer-name">
+                                        Nombre
+                                    </label>
+
+                                    <InputText id="quotation-new-customer-name"
+                                               @bind-Value="newCustomerModel.Name" />
+
+                                    <ValidationMessage
+                                        For="@(() => newCustomerModel.Name)" />
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="quotation-new-customer-identification-type">
+                                        Tipo de identificación
+                                    </label>
+
+                                    <InputSelect id="quotation-new-customer-identification-type"
+                                                 @bind-Value="newCustomerModel.IdentificationType">
+                                        <option value="">
+                                            Seleccione un tipo de identificación
+                                        </option>
+
+                                        <option value="@IdentificationType.PhysicalPerson">
+                                            Cédula física
+                                        </option>
+
+                                        <option value="@IdentificationType.Dimex">
+                                            DIMEX
+                                        </option>
+
+                                        <option value="@IdentificationType.LegalEntity">
+                                            Cédula jurídica
+                                        </option>
+                                    </InputSelect>
+
+                                    <ValidationMessage
+                                        For="@(() => newCustomerModel.IdentificationType)" />
+                                </div>
+
+                                <div class="form-group form-wide">
+                                    <label for="quotation-new-customer-identification">
+                                        Cédula de identidad
+                                    </label>
+
+                                    <div class="identification-input-row">
+                                        <InputText id="quotation-new-customer-identification"
+                                                   inputmode="numeric"
+                                                   maxlength="@NewCustomerIdentificationMaximumLength"
+                                                   placeholder="@NewCustomerIdentificationPlaceholder"
+                                                   @bind-Value="newCustomerModel.IdentificationNumber" />
+
+                                        <button type="button"
+                                                class="secondary-button lookup-button"
+                                                disabled="@(!CanLookupNewCustomerTaxpayer ||
+                                                            isLookingUpNewCustomerTaxpayer)"
+                                                @onclick="LookupNewCustomerTaxpayerAsync">
+                                            @(isLookingUpNewCustomerTaxpayer
+                                                ? "Consultando..."
+                                                : "Consultar en Hacienda")
+                                        </button>
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                            NewCustomerIdentificationRule))
+                                    {
+                                        <p class="field-guidance">
+                                            @NewCustomerIdentificationRule
+                                        </p>
+                                    }
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                            newCustomerTaxpayerMessage))
+                                    {
+                                        <p class="@(wasNewCustomerTaxpayerLookupSuccessful
+                                                        ? "lookup-message lookup-success"
+                                                        : "lookup-message lookup-error")"
+                                           role="@(wasNewCustomerTaxpayerLookupSuccessful
+                                                      ? "status"
+                                                      : "alert")">
+                                            @newCustomerTaxpayerMessage
+                                        </p>
+                                    }
+
+                                    <ValidationMessage
+                                        For="@(() => newCustomerModel.IdentificationNumber)" />
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="quotation-new-customer-email">
+                                        Correo electrónico
+                                    </label>
+
+                                    <InputText id="quotation-new-customer-email"
+                                               type="email"
+                                               @bind-Value="newCustomerModel.Email" />
+
+                                    <ValidationMessage
+                                        For="@(() => newCustomerModel.Email)" />
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="quotation-new-customer-phone">
+                                        Teléfono
+                                    </label>
+
+                                    <InputText id="quotation-new-customer-phone"
+                                               type="tel"
+                                               @bind-Value="newCustomerModel.PhoneNumber" />
+
+                                    <ValidationMessage
+                                        For="@(() => newCustomerModel.PhoneNumber)" />
+                                </div>
+
+                                <fieldset class="address-section form-wide">
+                                    <legend>
+                                        Dirección
+                                    </legend>
+
+                                    <p class="field-guidance">
+                                        Selecciona la ubicación administrativa y
+                                        agrega las señas necesarias para localizar
+                                        al cliente.
+                                    </p>
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                            newCustomerLocationErrorMessage))
+                                    {
+                                        <p class="lookup-message lookup-error"
+                                           role="alert">
+                                            @newCustomerLocationErrorMessage
+                                        </p>
+                                    }
+
+                                    <div class="address-grid">
+                                        <div class="form-group">
+                                            <label for="quotation-new-customer-province">
+                                                Provincia
+                                            </label>
+
+                                            <select id="quotation-new-customer-province"
+                                                    value="@newCustomerModel.ProvinceCode"
+                                                    disabled="@isLoadingNewCustomerLocations"
+                                                    @onchange="OnNewCustomerProvinceChangedAsync">
+                                                <option value="">
+                                                    Seleccione una provincia
+                                                </option>
+
+                                                @foreach (var province in newCustomerProvinces)
+                                                {
+                                                    <option value="@province.Code">
+                                                        @province.Name
+                                                    </option>
+                                                }
+                                            </select>
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label for="quotation-new-customer-canton">
+                                                Cantón
+                                            </label>
+
+                                            <select id="quotation-new-customer-canton"
+                                                    value="@newCustomerModel.CantonCode"
+                                                    disabled="@(!CanSelectNewCustomerCanton)"
+                                                    @onchange="OnNewCustomerCantonChangedAsync">
+                                                <option value="">
+                                                    Seleccione un cantón
+                                                </option>
+
+                                                @foreach (var canton in newCustomerCantons)
+                                                {
+                                                    <option value="@canton.Code">
+                                                        @canton.Name
+                                                    </option>
+                                                }
+                                            </select>
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label for="quotation-new-customer-district">
+                                                Distrito
+                                            </label>
+
+                                            <select id="quotation-new-customer-district"
+                                                    value="@newCustomerModel.DistrictCode"
+                                                    disabled="@(!CanSelectNewCustomerDistrict)"
+                                                    @onchange="OnNewCustomerDistrictChanged">
+                                                <option value="">
+                                                    Seleccione un distrito
+                                                </option>
+
+                                                @foreach (var district in newCustomerDistricts)
+                                                {
+                                                    <option value="@district.Code">
+                                                        @district.Name
+                                                    </option>
+                                                }
+                                            </select>
+                                        </div>
+
+                                        <div class="form-group form-wide">
+                                            <label for="quotation-new-customer-address">
+                                                Otras señas
+                                            </label>
+
+                                            <InputTextArea id="quotation-new-customer-address"
+                                                           rows="3"
+                                                           maxlength="160"
+                                                           placeholder="Ejemplo: 100 metros al norte de la iglesia, casa color blanco."
+                                                           @bind-Value="newCustomerModel.OtherSigns" />
+
+                                            <p class="field-guidance">
+                                                Escribe entre 5 y 160 caracteres.
+                                            </p>
+
+                                            <ValidationMessage
+                                                For="@(() => newCustomerModel.OtherSigns)" />
+                                        </div>
+                                    </div>
+                                </fieldset>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="button"
+                                        class="secondary-button"
+                                        disabled="@isSavingNewCustomer"
+                                        @onclick="CloseNewCustomerForm">
+                                    Cancelar
+                                </button>
+
+                                <button type="submit"
+                                        class="primary-button"
+                                        disabled="@isSavingNewCustomer">
+                                    @(isSavingNewCustomer
+                                        ? "Guardando..."
+                                        : "Guardar cliente")
+                                </button>
+                            </div>
+                        </EditForm>
+                    </section>
+                }
+
+                @if (isSearchingCustomers)
+                {
+                    <p class="empty-state">
+                        Buscando clientes...
+                    </p>
+                }
+                else if (hasSearchedCustomers &&
+                         customerSearchResults.Count == 0)
+                {
+                    <p class="empty-state">
+                        No se encontraron clientes activos.
+                    </p>
+                }
+                else if (customerSearchResults.Count > 0)
+                {
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Identificación</th>
+                                    <th>Nombre</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var customer in customerSearchResults)
+                                {
+                                    <tr>
+                                        <td data-label="Identificación">
+                                            @customer.IdentificationNumber
+                                        </td>
+
+                                        <td data-label="Nombre">
+                                            @customer.Name
+                                        </td>
+
+                                        <td data-label="Acción">
+                                            <button type="button"
+                                                    class="secondary-button"
+                                                    @onclick="() => SelectCustomer(customer)">
+                                                Seleccionar
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            @if (selectedCustomer is not null)
+            {
+                <div class="form-group form-wide">
+                    <p class="field-guidance">
+                        Cliente seleccionado
+                    </p>
+
+                    <strong>
+                        @selectedCustomer.Name
+                    </strong>
+
+                    <p>
+                        @selectedCustomer.IdentificationNumber
+                    </p>
+
+                    <button type="button"
+                            class="secondary-button"
+                            @onclick="ClearSelectedCustomer">
+                        Cambiar cliente
+                    </button>
+                </div>
+            }
+
+            <div class="form-group">
+                <label for="quotation-currency">
+                    Moneda
+                </label>
+
+                <InputSelect id="quotation-currency"
+                             @bind-Value="formModel.Currency">
+                    <option value="@Currency.CRC">
+                        CRC
+                    </option>
+
+                    <option value="@Currency.USD">
+                        USD
+                    </option>
+                </InputSelect>
+            </div>
+
+            <div class="form-group">
+                <label for="quotation-valid-until">
+                    Válida hasta
+                </label>
+
+                <InputDate id="quotation-valid-until"
+                           @bind-Value="formModel.ValidUntilUtc" />
+            </div>
+        </div>
+    </section>
+
+    <section class="customer-card"
+             aria-labelledby="quotation-lines-title">
+        <div class="page-header">
+            <div>
+                <h2 id="quotation-lines-title">Productos y servicios</h2>
+                <p>
+                    Prepara una línea, agrégala al resumen y continúa con la siguiente.
+                </p>
+            </div>
+
+            @if (!isLineEditorOpen)
+            {
+                <button type="button"
+                        class="primary-button"
+                        @onclick="StartNewQuotationLine">
+                    Nueva línea
+                </button>
+            }
+        </div>
+
+        @if (isLineEditorOpen)
+        {
+            <section class="quotation-line-card quotation-line-editor">
+                <div class="page-header">
+                    <div>
+                        <h3>
+                            @(editingQuotationLine is null
+                                ? "Nueva línea"
+                                : "Editar línea")
+                        </h3>
+                        <small class="field-guidance">
+                            @(lineEditor.IsLinkedToProduct
+                                ? "Vinculada a inventario"
+                                : "Línea manual")
+                        </small>
+                    </div>
+
+                    <div class="line-editor-actions">
+                        @if (lineEditor.IsLinkedToProduct)
+                        {
+                            <button type="button"
+                                    class="secondary-button"
+                                    @onclick="() => OpenProductSearch(lineEditor)">
+                                Cambiar producto
+                            </button>
+
+                            <button type="button"
+                                    class="secondary-button"
+                                    @onclick="() => UnlinkProduct(lineEditor)">
+                                Desvincular
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button"
+                                    class="secondary-button"
+                                    @onclick="() => OpenProductSearch(lineEditor)">
+                                Buscar en inventario
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                @if (ReferenceEquals(selectedProductLine, lineEditor))
+                {
+                    <section class="product-search-panel">
+                        <div class="page-header">
+                            <div>
+                                <h4>Buscar en inventario</h4>
+                                <p>
+                                    Selecciona un producto para cargar sus datos en esta línea.
+                                </p>
+                            </div>
+
+                            <button type="button"
+                                    class="secondary-button"
+                                    @onclick="CloseProductSearch">
+                                Cerrar
+                            </button>
+                        </div>
+
+                        <form class="search-form"
+                              @onsubmit="SearchProductsAsync"
+                              @onsubmit:preventDefault>
+                            <input type="search"
+                                   maxlength="150"
+                                   placeholder="Buscar por descripción o CABYS"
+                                   aria-label="Buscar producto por descripción o CABYS"
+                                   @bind="productSearchTerm" />
+
+                            <button type="submit"
+                                    class="primary-button"
+                                    disabled="@isSearchingProducts">
+                                @(isSearchingProducts ? "Buscando..." : "Buscar")
+                            </button>
+                        </form>
+
+                        @if (isSearchingProducts)
+                        {
+                            <p class="empty-state">Buscando productos...</p>
+                        }
+                        else if (hasSearchedProducts && productSearchResults.Count == 0)
+                        {
+                            <p class="empty-state">No se encontraron productos.</p>
+                        }
+                        else if (productSearchResults.Count > 0)
+                        {
+                            <div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Descripción</th>
+                                            <th>CABYS</th>
+                                            <th>Unidad</th>
+                                            <th>Precio</th>
+                                            <th>IVA</th>
+                                            <th>Stock</th>
+                                            <th>Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var product in productSearchResults)
+                                        {
+                                            <tr>
+                                                <td data-label="Descripción">@product.Description</td>
+                                                <td data-label="CABYS">
+                                                    @(string.IsNullOrWhiteSpace(product.CabysCode) ? "—" : product.CabysCode)
+                                                </td>
+                                                <td data-label="Unidad">@product.Unit</td>
+                                                <td data-label="Precio">@product.SalePrice.ToString("N2")</td>
+                                                <td data-label="IVA">@product.TaxRate.ToString("N0")%</td>
+                                                <td data-label="Stock">@product.StockQuantity.ToString("N2")</td>
+                                                <td data-label="Acción">
+                                                    <button type="button"
+                                                            class="secondary-button"
+                                                            @onclick="() => SelectProduct(product)">
+                                                        Seleccionar
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </section>
+                }
+
+                <div class="form-grid quotation-line-form-grid">
+                    <div class="form-group form-wide">
+                        <label>Descripción</label>
+                        <InputText @bind-Value="lineEditor.Description"
+                                   maxlength="500"
+                                   placeholder="Ej. Porcelanato 60x120" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>CABYS</label>
+                        <InputText @bind-Value="lineEditor.CabysCode"
+                                   maxlength="13"
+                                   inputmode="numeric"
+                                   placeholder="13 dígitos" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Unidad</label>
+                        <InputSelect @bind-Value="lineEditor.Unit"
+                                     disabled="@lineEditor.IsLinkedToProduct">
+                            <option value="">Seleccione una unidad</option>
+                            @if (lineEditor.IsLinkedToProduct &&
+                                 !string.IsNullOrWhiteSpace(lineEditor.Unit) &&
+                                 !QuotationUnitOptions.Contains(lineEditor.Unit))
+                            {
+                                <option value="@lineEditor.Unit">@lineEditor.Unit</option>
+                            }
+                            @foreach (var unit in QuotationUnitOptions)
+                            {
+                                <option value="@unit">@unit</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Cantidad</label>
+                        <InputNumber @bind-Value="lineEditor.Quantity"
+                                     min="0.01"
+                                     step="0.01" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Precio unitario</label>
+                        <InputNumber @bind-Value="lineEditor.UnitPrice"
+                                     min="0.01"
+                                     step="0.01"
+                                     disabled="@lineEditor.IsLinkedToProduct" />
+                        <small class="field-guidance">
+                            @(lineEditor.IsLinkedToProduct
+                                ? "Precio cargado desde inventario. Usa descuento para reducirlo."
+                                : "Precio final con IVA incluido.")
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Tipo de descuento</label>
+                        <InputSelect @bind-Value="lineEditor.DiscountType">
+                            <option value="">Sin descuento</option>
+                            <option value="@DiscountType.Percentage">Porcentaje</option>
+                            <option value="@DiscountType.FixedAmount">Monto fijo</option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Descuento</label>
+                        <InputNumber @bind-Value="lineEditor.DiscountValue"
+                                     min="0"
+                                     step="0.01"
+                                     disabled="@(lineEditor.DiscountType is null)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>IVA</label>
+                        <InputSelect @bind-Value="lineEditor.TaxRate"
+                                     disabled="@lineEditor.IsLinkedToProduct">
+                            <option value="13">13%</option>
+                            <option value="0">0%</option>
+                        </InputSelect>
+                        @if (lineEditor.IsLinkedToProduct)
+                        {
+                            <small class="field-guidance">
+                                IVA definido por el producto de inventario.
+                            </small>
+                        }
+                    </div>
+                </div>
+
+                <div class="quotation-line-summary">
+                    <span>Subtotal: <strong>@lineEditor.GrossAmount.ToString("N2")</strong></span>
+                    <span>Descuento: <strong>@lineEditor.DiscountAmount.ToString("N2")</strong></span>
+                    <span>IVA incluido: <strong>@lineEditor.TaxAmount.ToString("N2")</strong></span>
+                    <span>Total: <strong>@lineEditor.TotalAmount.ToString("N2")</strong></span>
+                </div>
+
+                <div class="form-actions line-confirm-actions">
+                    <button type="button"
+                            class="primary-button"
+                            @onclick="ConfirmQuotationLine">
+                        @(editingQuotationLine is null ? "Agregar línea" : "Guardar cambios")
+                    </button>
+                </div>
+            </section>
+        }
+
+        <div class="quotation-lines-summary-header">
+            <div>
+                <h3>Resumen de líneas</h3>
+                <small class="field-guidance">
+                    @quotationLines.Count línea(s) agregada(s)
+                </small>
+            </div>
+
+            @if (quotationLines.Count > 0 && !isLineEditorOpen)
+            {
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="StartNewQuotationLine">
+                    Nueva línea
+                </button>
+            }
+        </div>
+
+        @if (quotationLines.Count == 0)
+        {
+            <p class="empty-state">
+                Todavía no hay líneas agregadas a la cotización.
+            </p>
+        }
+        else
+        {
+            <div class="table-container quotation-lines-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Descripción</th>
+                            <th>Unidad</th>
+                            <th>Cant.</th>
+                            <th>Precio</th>
+                            <th>Desc.</th>
+                            <th>IVA</th>
+                            <th>Total</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in quotationLines)
+                        {
+                            <tr class="@(ReferenceEquals(editingQuotationLine, line) ? "line-being-edited" : null)">
+                                <td data-label="Descripción">
+                                    <strong>@line.Description</strong>
+                                    @if (!string.IsNullOrWhiteSpace(line.CabysCode))
+                                    {
+                                        <small class="table-secondary-text">CABYS @line.CabysCode</small>
+                                    }
+                                </td>
+                                <td data-label="Unidad">@line.Unit</td>
+                                <td data-label="Cant.">@line.Quantity.ToString("N2")</td>
+                                <td data-label="Precio">@line.UnitPrice.ToString("N2")</td>
+                                <td data-label="Desc.">@line.DiscountAmount.ToString("N2")</td>
+                                <td data-label="IVA">@line.TaxRate.ToString("N0")%</td>
+                                <td data-label="Total"><strong>@line.TotalAmount.ToString("N2")</strong></td>
+                                <td data-label="Acciones">
+                                    <div class="table-row-actions">
+                                        <button type="button"
+                                                class="secondary-button"
+                                                disabled="@isLineEditorOpen"
+                                                @onclick="() => EditQuotationLine(line)">
+                                            Editar
+                                        </button>
+                                        <button type="button"
+                                                class="secondary-button"
+                                                disabled="@isLineEditorOpen"
+                                                @onclick="() => RemoveQuotationLine(line)">
+                                            Eliminar
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="customer-card"
+             aria-labelledby="quotation-charges-title">
+        <div class="page-header">
+            <div>
+                <h2 id="quotation-charges-title">
+                    Cargos adicionales
+                </h2>
+                <p>
+                    Agrega transporte, instalación u otros cargos aplicables.
+                </p>
+            </div>
+
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="AddQuotationCharge">
+                Agregar cargo
+            </button>
+        </div>
+
+        @if (quotationCharges.Count == 0)
+        {
+            <p class="empty-state">
+                No hay cargos adicionales.
+            </p>
+        }
+
+        @for (var index = 0; index < quotationCharges.Count; index++)
+        {
+            var charge = quotationCharges[index];
+
+            <section class="quotation-line-card">
+                <div class="page-header">
+                    <div>
+                        <h3>Cargo @(index + 1)</h3>
+                    </div>
+
+                    <button type="button"
+                            class="secondary-button"
+                            @onclick="() => RemoveQuotationCharge(charge)">
+                        Eliminar
+                    </button>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Tipo</label>
+                        <InputSelect @bind-Value="charge.Type">
+                            <option value="@QuotationChargeType.Transport">
+                                Transporte
+                            </option>
+                            <option value="@QuotationChargeType.Installation">
+                                Instalación
+                            </option>
+                            <option value="@QuotationChargeType.Other">
+                                Otro
+                            </option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Monto</label>
+                        <InputNumber @bind-Value="charge.Amount"
+                                     min="0.01"
+                                     step="0.01" />
+                    </div>
+
+                    <div class="form-group form-wide">
+                        <label>Descripción</label>
+                        <InputText @bind-Value="charge.Description"
+                                   maxlength="500"
+                                   placeholder="Detalle opcional del cargo" />
+
+                        @if (charge.Type == QuotationChargeType.Other)
+                        {
+                            <small class="field-guidance">
+                                La descripción es obligatoria para cargos de tipo Otro.
+                            </small>
+                        }
+                    </div>
+                </div>
+            </section>
+        }
+    </section>
+
+    <section class="customer-card"
+             aria-labelledby="quotation-observations-title">
+        <h2 id="quotation-observations-title">
+            Observaciones
+        </h2>
+
+        <div class="form-group">
+            <InputTextArea @bind-Value="formModel.Observations"
+                           rows="5"
+                           maxlength="2000"
+                           placeholder="Agrega condiciones, notas o información adicional para el cliente." />
+            <small class="field-guidance">
+                Máximo 2000 caracteres.
+            </small>
+        </div>
+    </section>
+
+    <section class="customer-card"
+             aria-labelledby="quotation-totals-title">
+        <h2 id="quotation-totals-title">
+            Totales
+        </h2>
+
+        <div class="quotation-totals">
+            <p>
+                Subtotal bruto
+                <strong>
+                    @QuotationSubtotal.ToString("N2")
+                </strong>
+            </p>
+
+            <p>
+                Descuentos
+                <strong>
+                    @QuotationDiscountTotal.ToString("N2")
+                </strong>
+            </p>
+
+            <p>
+                IVA incluido
+                <strong>
+                    @QuotationTaxTotal.ToString("N2")
+                </strong>
+            </p>
+
+            <p>
+                Cargos adicionales
+                <strong>
+                    @QuotationChargeTotal.ToString("N2")
+                </strong>
+            </p>
+
+            <p>
+                Total
+                <strong>
+                    @QuotationTotal.ToString("N2")
+                </strong>
+            </p>
+        </div>
+    </section>
+
+    <section class="customer-card"
+             aria-labelledby="quotation-actions-title">
+        <h2 id="quotation-actions-title">
+            Acciones
+        </h2>
+
+        <div class="form-actions">
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@isSavingQuotation"
+                    @onclick="SaveDraftAsync">
+                @(isSavingQuotation ? "Guardando..." : "Guardar borrador")
+            </button>
+
+            @if (currentQuotationId.HasValue)
+            {
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@isDownloadingQuotationPdf"
+                        @onclick="DownloadQuotationPdfAsync">
+                    @(isDownloadingQuotationPdf
+                        ? "Descargando..."
+                        : "Descargar PDF")
+                </button>
+            }
+
+            <button type="button"
+                    class="primary-button"
+                    disabled="@isSavingQuotation"
+                    @onclick="IssueQuotationAsync">
+                @if (isSavingQuotation)
+                {
+                    <text>Procesando...</text>
+                }
+                else if (currentQuotationStatus == QuotationStatus.Issued)
+                {
+                    <text>Reemitir cotización</text>
+                }
+                else
+                {
+                    <text>Emitir cotización</text>
+                }
+            </button>
+        </div>
+    </section>
+</section>

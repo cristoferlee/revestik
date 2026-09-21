@@ -22,7 +22,7 @@ public sealed class QuotationCalculatorTests
     }
 
     [Fact]
-    public void CalculateLine_WithZeroTax_RemovesTaxFromPublicPrice()
+    public void CalculateLine_WithZeroTax_PreservesPublicPrice()
     {
         var line = CreateLine(
             quantity: 1m,
@@ -31,10 +31,10 @@ public sealed class QuotationCalculatorTests
 
         var result = QuotationCalculator.CalculateLine(line);
 
-        Assert.Equal(13274.34m, result.BaseAmount);
+        Assert.Equal(15000m, result.BaseAmount);
         Assert.Equal(0m, result.DiscountAmount);
         Assert.Equal(0m, result.TaxAmount);
-        Assert.Equal(13274.34m, result.TotalAmount);
+        Assert.Equal(15000m, result.TotalAmount);
     }
 
     [Fact]

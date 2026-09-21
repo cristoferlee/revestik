@@ -5,6 +5,8 @@ using Revestik.Client;
 using Revestik.Client.Services.Authentication;
 using Revestik.Client.Services.Customers;
 using Revestik.Client.Services.Locations;
+using Revestik.Client.Services.Products;
+using Revestik.Client.Services.Quotations;
 using Revestik.Client.Services.Taxpayers;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
@@ -76,6 +78,14 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     ICustomerApiService,
     CustomerApiService>();
+
+builder.Services.AddScoped<
+    IProductApiService,
+    ProductApiService>();
+
+builder.Services.AddScoped<
+    IQuotationApiService,
+    QuotationApiService>();
 
 builder.Services.AddScoped<
     ITaxpayerApiService,

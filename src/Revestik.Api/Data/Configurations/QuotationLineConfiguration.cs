@@ -14,12 +14,12 @@ public sealed class QuotationLineConfiguration : IEntityTypeConfiguration<Quotat
 
         builder.Property(line => line.CabysCode)
             .HasMaxLength(13)
-            .IsRequired();
+            .IsRequired(false);
 
         builder.Property(line => line.Description)
             .HasMaxLength(500)
             .IsRequired();
-            
+
         builder.Property(line => line.Unit)
             .HasMaxLength(50)
             .IsRequired();
@@ -29,15 +29,20 @@ public sealed class QuotationLineConfiguration : IEntityTypeConfiguration<Quotat
             .HasMaxLength(20);
 
         builder.Property(line => line.Quantity)
-            .HasPrecision(18, 5);
+            .HasPrecision(18, 2);
 
         builder.Property(line => line.UnitPrice)
-            .HasPrecision(18, 5);
+            .HasPrecision(18, 2);
 
         builder.Property(line => line.DiscountValue)
-            .HasPrecision(18, 5);
+            .HasPrecision(18, 2);
 
         builder.Property(line => line.TaxRate)
             .HasPrecision(5, 2);
+
+        builder.HasOne(line => line.Product)
+            .WithMany()
+            .HasForeignKey(line => line.ProductId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

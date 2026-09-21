@@ -1,4 +1,5 @@
 using Revestik.Shared.Quotations;
+
 namespace Revestik.Api.Models;
 
 public sealed class QuotationLine
@@ -11,9 +12,12 @@ public sealed class QuotationLine
 
     public int? ProductId { get; set; }
 
-    public string CabysCode { get; set; } = string.Empty;
+    public Product? Product { get; set; }
+
+    public string? CabysCode { get; set; }
 
     public string Description { get; set; } = string.Empty;
+
     public string Unit { get; set; } = string.Empty;
 
     public decimal Quantity { get; set; }

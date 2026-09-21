@@ -14,6 +14,9 @@ public sealed class RevestikDbContext(
         string>(options)
 {
     public DbSet<Customer> Customers => Set<Customer>();
+
+    public DbSet<Product> Products => Set<Product>();
+
     public DbSet<Quotation> Quotations => Set<Quotation>();
 
     public DbSet<QuotationLine> QuotationLines => Set<QuotationLine>();
@@ -26,7 +29,7 @@ public sealed class RevestikDbContext(
 
         modelBuilder.HasSequence<long>("QuotationNumberSequence")
             .StartsAt(1);
+
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(RevestikDbContext).Assembly);
     }
-
 }

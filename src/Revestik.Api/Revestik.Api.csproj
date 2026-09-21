@@ -17,11 +17,19 @@
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
     <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
+    <PackageReference Include="QuestPDF" Version="2025.7.4" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Revestik.Client\Revestik.Client.csproj" />
     <ProjectReference Include="..\Revestik.Shared\Revestik.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Revestik.Client\wwwroot\assets\logo\revestik.svg"
+             Link="Assets\revestik.svg"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

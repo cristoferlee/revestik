@@ -27,7 +27,7 @@ public static class QuotationCalculator
         var baseAmount = line.TaxRate switch
         {
             13m => amountAfterDiscount / 1.13m,
-            0m => amountAfterDiscount / 1.13m,
+            0m => amountAfterDiscount,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(line),
                 "Tax rate must be 0% or 13%.")

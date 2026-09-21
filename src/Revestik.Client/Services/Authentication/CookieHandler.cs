@@ -8,6 +8,9 @@ public sealed class CookieHandler : DelegatingHandler
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
+        Console.WriteLine(
+            $"CookieHandler: {request.Method} {request.RequestUri}");
+
         // The API uses an HttpOnly authentication cookie.
         // Browser credentials must be included in requests
         // sent from the Blazor client to the API.

@@ -46,13 +46,27 @@ public sealed class QuotationRequestValidationTests
             result => result.MemberNames.Contains(
                 nameof(QuotationLineRequest.Unit)));
     }
+
     [Theory]
     [InlineData("")]
+    [InlineData("   ")]
+    public void QuotationLine_WithEmptyCabys_IsValid(string cabysCode)
+    {
+        var request = CreateValidLine();
+        request.CabysCode = cabysCode;
+
+        var validationResults = Validate(request);
+
+        Assert.Empty(validationResults);
+    }
+
+    [Theory]
     [InlineData("123")]
     [InlineData("123456789012")]
     [InlineData("12345678901234")]
     [InlineData("123456789012A")]
-    public void QuotationLine_WithInvalidCabys_IsInvalid(string cabysCode)
+    public void QuotationLine_WithInvalidNonEmptyCabys_IsInvalid(
+        string cabysCode)
     {
         var request = CreateValidLine();
         request.CabysCode = cabysCode;
@@ -96,6 +110,20 @@ public sealed class QuotationRequestValidationTests
                 nameof(QuotationLineRequest.Quantity)));
     }
 
+    [Fact]
+    public void QuotationLine_WithQuantityAboveTwoDecimals_IsInvalid()
+    {
+        var request = CreateValidLine();
+        request.Quantity = 1.234m;
+
+        var validationResults = Validate(request);
+
+        Assert.Contains(
+            validationResults,
+            result => result.MemberNames.Contains(
+                nameof(QuotationLineRequest.Quantity)));
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-15000)]
@@ -104,6 +132,20 @@ public sealed class QuotationRequestValidationTests
     {
         var request = CreateValidLine();
         request.UnitPrice = unitPrice;
+
+        var validationResults = Validate(request);
+
+        Assert.Contains(
+            validationResults,
+            result => result.MemberNames.Contains(
+                nameof(QuotationLineRequest.UnitPrice)));
+    }
+
+    [Fact]
+    public void QuotationLine_WithUnitPriceAboveTwoDecimals_IsInvalid()
+    {
+        var request = CreateValidLine();
+        request.UnitPrice = 15000.123m;
 
         var validationResults = Validate(request);
 
@@ -152,6 +194,21 @@ public sealed class QuotationRequestValidationTests
     {
         var request = CreateValidLine();
         request.DiscountValue = -1m;
+
+        var validationResults = Validate(request);
+
+        Assert.Contains(
+            validationResults,
+            result => result.MemberNames.Contains(
+                nameof(QuotationLineRequest.DiscountValue)));
+    }
+
+    [Fact]
+    public void QuotationLine_WithDiscountAboveTwoDecimals_IsInvalid()
+    {
+        var request = CreateValidLine();
+        request.DiscountType = DiscountType.FixedAmount;
+        request.DiscountValue = 1000.123m;
 
         var validationResults = Validate(request);
 
@@ -275,10 +332,26 @@ public sealed class QuotationRequestValidationTests
         Assert.Empty(validationResults);
     }
 
-    [Fact]
-    public void QuotationCharge_WithMissingDescription_IsInvalid()
+    [Theory]
+    [InlineData(QuotationChargeType.Transport)]
+    [InlineData(QuotationChargeType.Installation)]
+    public void QuotationCharge_WithStandardTypeAndEmptyDescription_IsValid(
+        QuotationChargeType type)
     {
         var request = CreateValidCharge();
+        request.Type = type;
+        request.Description = string.Empty;
+
+        var validationResults = Validate(request);
+
+        Assert.Empty(validationResults);
+    }
+
+    [Fact]
+    public void QuotationCharge_WithOtherTypeAndMissingDescription_IsInvalid()
+    {
+        var request = CreateValidCharge();
+        request.Type = QuotationChargeType.Other;
         request.Description = string.Empty;
 
         var validationResults = Validate(request);
@@ -320,37 +393,18 @@ public sealed class QuotationRequestValidationTests
                 nameof(QuotationChargeRequest.Amount)));
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(13)]
-    public void QuotationCharge_WithSupportedTaxRate_IsValid(
-        decimal taxRate)
+    [Fact]
+    public void QuotationCharge_WithAmountAboveTwoDecimals_IsInvalid()
     {
         var request = CreateValidCharge();
-        request.TaxRate = taxRate;
-
-        var validationResults = Validate(request);
-
-        Assert.Empty(validationResults);
-    }
-
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(1)]
-    [InlineData(5)]
-    [InlineData(14)]
-    public void QuotationCharge_WithUnsupportedTaxRate_IsInvalid(
-        decimal taxRate)
-    {
-        var request = CreateValidCharge();
-        request.TaxRate = taxRate;
+        request.Amount = 25000.123m;
 
         var validationResults = Validate(request);
 
         Assert.Contains(
             validationResults,
             result => result.MemberNames.Contains(
-                nameof(QuotationChargeRequest.TaxRate)));
+                nameof(QuotationChargeRequest.Amount)));
     }
 
     [Fact]
@@ -438,17 +492,14 @@ public sealed class QuotationRequestValidationTests
     }
 
     [Fact]
-    public void Quotation_WithPastValidityDate_IsInvalid()
+    public void Quotation_WithPastValidityDate_IsValid()
     {
         var request = CreateValidQuotation();
         request.ValidUntilUtc = DateTime.UtcNow.AddDays(-1);
 
         var validationResults = Validate(request);
 
-        Assert.Contains(
-            validationResults,
-            result => result.MemberNames.Contains(
-                nameof(QuotationUpsertRequest.ValidUntilUtc)));
+        Assert.Empty(validationResults);
     }
 
     [Fact]
@@ -471,6 +522,20 @@ public sealed class QuotationRequestValidationTests
         var validationResults = Validate(request);
 
         Assert.Empty(validationResults);
+    }
+
+    [Fact]
+    public void Quotation_WithObservationsAboveMaximumLength_IsInvalid()
+    {
+        var request = CreateValidQuotation();
+        request.Observations = new string('A', 2001);
+
+        var validationResults = Validate(request);
+
+        Assert.Contains(
+            validationResults,
+            result => result.MemberNames.Contains(
+                nameof(QuotationUpsertRequest.Observations)));
     }
 
     // -------------------------------------------------------------------------
@@ -498,8 +563,7 @@ public sealed class QuotationRequestValidationTests
         {
             Type = QuotationChargeType.Transport,
             Description = "Delivery to project",
-            Amount = 25000m,
-            TaxRate = 13m
+            Amount = 25000m
         };
     }
 
@@ -510,6 +574,7 @@ public sealed class QuotationRequestValidationTests
             CustomerId = 1,
             Currency = Currency.CRC,
             ValidUntilUtc = DateTime.UtcNow.AddDays(30),
+            Observations = string.Empty,
             Lines =
             [
                 CreateValidLine()
