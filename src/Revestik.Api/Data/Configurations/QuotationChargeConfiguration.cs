@@ -22,9 +22,6 @@ public sealed class QuotationChargeConfiguration : IEntityTypeConfiguration<Quot
             .IsRequired();
 
         builder.Property(charge => charge.Amount)
-            .HasPrecision(18, 5);
-
-        builder.Property(charge => charge.TaxRate)
-            .HasPrecision(5, 2);
+            .HasPrecision(18, 2);
     }
 }

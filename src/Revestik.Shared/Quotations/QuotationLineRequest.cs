@@ -6,10 +6,6 @@ public sealed class QuotationLineRequest : IValidatableObject
 {
     public int? ProductId { get; set; }
 
-    [Required(ErrorMessage = "El código CABYS es obligatorio.")]
-    [RegularExpression(
-        "^\\d{13}$",
-        ErrorMessage = "El código CABYS debe contener exactamente 13 dígitos.")]
     public string CabysCode { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "La descripción es obligatoria.")]
@@ -26,15 +22,15 @@ public sealed class QuotationLineRequest : IValidatableObject
 
     [Range(
         typeof(decimal),
-        "0.00001",
-        "9999999999999.99999",
+        "0.01",
+        "9999999999999.99",
         ErrorMessage = "La cantidad debe ser mayor que cero.")]
     public decimal Quantity { get; set; }
 
     [Range(
         typeof(decimal),
-        "0.00001",
-        "9999999999999.99999",
+        "0.01",
+        "9999999999999.99",
         ErrorMessage = "El precio unitario debe ser mayor que cero.")]
     public decimal UnitPrice { get; set; }
 
@@ -43,7 +39,7 @@ public sealed class QuotationLineRequest : IValidatableObject
     [Range(
         typeof(decimal),
         "0",
-        "9999999999999.99999",
+        "9999999999999.99",
         ErrorMessage = "El descuento no puede ser negativo.")]
     public decimal DiscountValue { get; set; }
 
@@ -52,6 +48,35 @@ public sealed class QuotationLineRequest : IValidatableObject
     public IEnumerable<ValidationResult> Validate(
         ValidationContext validationContext)
     {
+        if (!string.IsNullOrWhiteSpace(CabysCode) &&
+            !IsValidCabysCode(CabysCode))
+        {
+            yield return new ValidationResult(
+                "El código CABYS debe contener exactamente 13 dígitos.",
+                [nameof(CabysCode)]);
+        }
+
+        if (HasMoreThanTwoDecimalPlaces(Quantity))
+        {
+            yield return new ValidationResult(
+                "La cantidad no puede tener más de 2 decimales.",
+                [nameof(Quantity)]);
+        }
+
+        if (HasMoreThanTwoDecimalPlaces(UnitPrice))
+        {
+            yield return new ValidationResult(
+                "El precio unitario no puede tener más de 2 decimales.",
+                [nameof(UnitPrice)]);
+        }
+
+        if (HasMoreThanTwoDecimalPlaces(DiscountValue))
+        {
+            yield return new ValidationResult(
+                "El descuento no puede tener más de 2 decimales.",
+                [nameof(DiscountValue)]);
+        }
+
         if (TaxRate is not 0m and not 13m)
         {
             yield return new ValidationResult(
@@ -92,5 +117,18 @@ public sealed class QuotationLineRequest : IValidatableObject
                     [nameof(DiscountValue)]);
             }
         }
+    }
+
+    private static bool IsValidCabysCode(string cabysCode)
+    {
+        var normalizedCabysCode = cabysCode.Trim();
+
+        return normalizedCabysCode.Length == 13 &&
+               normalizedCabysCode.All(char.IsDigit);
+    }
+
+    private static bool HasMoreThanTwoDecimalPlaces(decimal value)
+    {
+        return decimal.Round(value, 2) != value;
     }
 }

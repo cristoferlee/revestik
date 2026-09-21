@@ -1,17 +1,26 @@
 using Microsoft.EntityFrameworkCore;
+using QuestPDF.Infrastructure;
+using Revestik.Api.Configuration;
 using Revestik.Api.Data;
 using Revestik.Api.Endpoints;
 using Revestik.Api.Extensions;
 using Revestik.Api.Integrations.Hacienda;
 using Revestik.Api.Integrations.Locations;
 using Revestik.Api.Services.Customers;
+using Revestik.Api.Services.Products;
 using Revestik.Api.Services.Quotations;
+using Revestik.Api.Services.Quotations.Pdf;
 
 const string ClientCorsPolicy = "ClientCorsPolicy";
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+
+builder.Services.Configure<CompanyOptions>(
+    builder.Configuration.GetSection(CompanyOptions.SectionName));
 
 builder.Services.AddAntiforgery(options =>
 {
@@ -64,8 +73,10 @@ builder.Services.AddRevestikAuthentication(
     builder.Configuration);
 
 builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IQuotationService, QuotationService>();
 builder.Services.AddScoped<IQuotationNumberGenerator, SqlQuotationNumberGenerator>();
+builder.Services.AddSingleton<IQuotationPdfService, QuotationPdfService>();
 
 var haciendaBaseUrl =
     builder.Configuration["Hacienda:BaseUrl"]
@@ -161,6 +172,7 @@ app.MapGet(
     .AllowAnonymous();
 
 app.MapCustomerEndpoints();
+app.MapProductEndpoints();
 app.MapQuotationEndpoints();
 app.MapTaxpayerEndpoints();
 app.MapLocationEndpoints();

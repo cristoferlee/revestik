@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Data;
 using Revestik.Api.Models;
+using Revestik.Api.Models.Identity;
 using Revestik.Api.Services.Quotations;
 using Revestik.Shared.Quotations;
 
@@ -31,17 +32,22 @@ public sealed class QuotationServiceTests
         await using var dbContext = CreateDbContext();
 
         var customer = CreateCustomer();
+        var user = CreateUser();
 
         dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync();
 
         var quotation = new Quotation
         {
             QuotationNumber = "COT-000001",
             CustomerId = customer.Id,
+            CreatedByUserId = user.Id,
             Currency = Currency.CRC,
-            IssuedAtUtc = DateTime.UtcNow,
+            Status = QuotationStatus.Draft,
+            IssuedAtUtc = null,
             ValidUntilUtc = DateTime.UtcNow.AddDays(30),
+            Observations = "Condiciones de prueba",
             CreatedAtUtc = DateTime.UtcNow
         };
 
@@ -59,6 +65,15 @@ public sealed class QuotationServiceTests
         Assert.Equal("COT-000001", result.QuotationNumber);
         Assert.Equal(customer.Id, result.CustomerId);
         Assert.Equal(Currency.CRC, result.Currency);
+        Assert.Equal(QuotationStatus.Draft, result.Status);
+        Assert.Null(result.IssuedAtUtc);
+        Assert.Equal(
+            "Condiciones de prueba",
+            result.Observations);
+        Assert.Equal(user.Id, result.CreatedByUserId);
+        Assert.Equal(
+            "Seller Test",
+            result.CreatedByDisplayName);
     }
 
     [Fact]
@@ -67,16 +82,19 @@ public sealed class QuotationServiceTests
         await using var dbContext = CreateDbContext();
 
         var customer = CreateCustomer();
+        var user = CreateUser();
 
         dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync();
 
         var quotation = new Quotation
         {
             QuotationNumber = "COT-000001",
             CustomerId = customer.Id,
+            CreatedByUserId = user.Id,
             Currency = Currency.CRC,
-            IssuedAtUtc = DateTime.UtcNow,
+            Status = QuotationStatus.Draft,
             CreatedAtUtc = DateTime.UtcNow,
             Lines =
             [
@@ -84,6 +102,7 @@ public sealed class QuotationServiceTests
                 {
                     CabysCode = "1234567890123",
                     Description = "Porcelanato 60x120",
+                    Unit = "m²",
                     Quantity = 1m,
                     UnitPrice = 15000m,
                     DiscountValue = 0m,
@@ -123,16 +142,19 @@ public sealed class QuotationServiceTests
         await using var dbContext = CreateDbContext();
 
         var customer = CreateCustomer();
+        var user = CreateUser();
 
         dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync();
 
         var quotation = new Quotation
         {
             QuotationNumber = "COT-000001",
             CustomerId = customer.Id,
+            CreatedByUserId = user.Id,
             Currency = Currency.CRC,
-            IssuedAtUtc = DateTime.UtcNow,
+            Status = QuotationStatus.Draft,
             CreatedAtUtc = DateTime.UtcNow,
             Lines =
             [
@@ -140,6 +162,7 @@ public sealed class QuotationServiceTests
                 {
                     CabysCode = "1234567890123",
                     Description = "Porcelanato 60x120",
+                    Unit = "m²",
                     Quantity = 1m,
                     UnitPrice = 15000m,
                     DiscountType = DiscountType.Percentage,
@@ -153,8 +176,7 @@ public sealed class QuotationServiceTests
                 {
                     Type = QuotationChargeType.Transport,
                     Description = "Delivery to project",
-                    Amount = 25000m,
-                    TaxRate = 13m
+                    Amount = 25000m
                 }
             ]
         };
@@ -187,7 +209,6 @@ public sealed class QuotationServiceTests
             charge.Description);
 
         Assert.Equal(25000m, charge.Amount);
-        Assert.Equal(13m, charge.TaxRate);
     }
 
     // -------------------------------------------------------------------------
@@ -198,6 +219,12 @@ public sealed class QuotationServiceTests
     public async Task CreateAsync_WhenCustomerDoesNotExist_Throws()
     {
         await using var dbContext = CreateDbContext();
+
+        var user = CreateUser();
+
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+
         var service = CreateService(dbContext);
 
         var request = CreateValidQuotationRequest(
@@ -207,6 +234,7 @@ public sealed class QuotationServiceTests
             await Assert.ThrowsAsync<InvalidOperationException>(
                 () => service.CreateAsync(
                     request,
+                    user.Id,
                     CancellationToken.None));
 
         Assert.Equal(
@@ -224,7 +252,10 @@ public sealed class QuotationServiceTests
         var customer = CreateCustomer();
         customer.IsActive = false;
 
+        var user = CreateUser();
+
         dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync();
 
         var service = CreateService(dbContext);
@@ -235,19 +266,78 @@ public sealed class QuotationServiceTests
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => service.CreateAsync(
                 request,
+                user.Id,
                 CancellationToken.None));
 
         Assert.Empty(dbContext.Quotations);
     }
 
     [Fact]
-    public async Task CreateAsync_WithActiveCustomer_PersistsQuotation()
+    public async Task CreateAsync_WhenCreatorDoesNotExist_Throws()
     {
         await using var dbContext = CreateDbContext();
 
         var customer = CreateCustomer();
 
         dbContext.Customers.Add(customer);
+        await dbContext.SaveChangesAsync();
+
+        var service = CreateService(dbContext);
+
+        var request =
+            CreateValidQuotationRequest(customer.Id);
+
+        var exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.CreateAsync(
+                    request,
+                    "missing-user-id",
+                    CancellationToken.None));
+
+        Assert.Equal(
+            "The creator user does not exist or is inactive.",
+            exception.Message);
+
+        Assert.Empty(dbContext.Quotations);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenCreatorIsInactive_Throws()
+    {
+        await using var dbContext = CreateDbContext();
+
+        var customer = CreateCustomer();
+        var user = CreateUser();
+        user.IsActive = false;
+
+        dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+
+        var service = CreateService(dbContext);
+
+        var request =
+            CreateValidQuotationRequest(customer.Id);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.CreateAsync(
+                request,
+                user.Id,
+                CancellationToken.None));
+
+        Assert.Empty(dbContext.Quotations);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithActiveCustomerAndCreator_PersistsDraft()
+    {
+        await using var dbContext = CreateDbContext();
+
+        var customer = CreateCustomer();
+        var user = CreateUser();
+
+        dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync();
 
         var service = CreateService(
@@ -259,12 +349,19 @@ public sealed class QuotationServiceTests
 
         var result = await service.CreateAsync(
             request,
+            user.Id,
             CancellationToken.None);
 
         Assert.True(result.Id > 0);
         Assert.Equal("COT-000123", result.QuotationNumber);
         Assert.Equal(customer.Id, result.CustomerId);
         Assert.Equal(Currency.CRC, result.Currency);
+        Assert.Equal(QuotationStatus.Draft, result.Status);
+        Assert.Null(result.IssuedAtUtc);
+        Assert.Equal(user.Id, result.CreatedByUserId);
+        Assert.Equal(
+            "Seller Test",
+            result.CreatedByDisplayName);
 
         var persistedQuotation =
             await dbContext.Quotations
@@ -282,6 +379,16 @@ public sealed class QuotationServiceTests
         Assert.Equal(
             customer.Id,
             persistedQuotation.CustomerId);
+
+        Assert.Equal(
+            user.Id,
+            persistedQuotation.CreatedByUserId);
+
+        Assert.Equal(
+            QuotationStatus.Draft,
+            persistedQuotation.Status);
+
+        Assert.Null(persistedQuotation.IssuedAtUtc);
     }
 
     [Fact]
@@ -290,8 +397,10 @@ public sealed class QuotationServiceTests
         await using var dbContext = CreateDbContext();
 
         var customer = CreateCustomer();
+        var user = CreateUser();
 
         dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync();
 
         var service = CreateService(dbContext);
@@ -301,6 +410,7 @@ public sealed class QuotationServiceTests
 
         var result = await service.CreateAsync(
             request,
+            user.Id,
             CancellationToken.None);
 
         var persistedLine =
@@ -320,6 +430,7 @@ public sealed class QuotationServiceTests
             "Porcelanato 60x120",
             persistedLine.Description);
 
+        Assert.Equal("m²", persistedLine.Unit);
         Assert.Equal(2m, persistedLine.Quantity);
         Assert.Equal(15000m, persistedLine.UnitPrice);
 
@@ -337,13 +448,53 @@ public sealed class QuotationServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_WithEmptyCabys_PersistsNullCabys()
+    {
+        await using var dbContext = CreateDbContext();
+
+        var customer = CreateCustomer();
+        var user = CreateUser();
+
+        dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+
+        var service = CreateService(dbContext);
+
+        var request =
+            CreateValidQuotationRequest(customer.Id);
+
+        request.Lines[0].CabysCode = "   ";
+
+        var result = await service.CreateAsync(
+            request,
+            user.Id,
+            CancellationToken.None);
+
+        var persistedLine =
+            await dbContext.QuotationLines
+                .AsNoTracking()
+                .SingleAsync();
+
+        Assert.Null(persistedLine.CabysCode);
+
+        var responseLine = Assert.Single(result.Lines);
+
+        Assert.Equal(
+            string.Empty,
+            responseLine.CabysCode);
+    }
+
+    [Fact]
     public async Task CreateAsync_PersistsCharges()
     {
         await using var dbContext = CreateDbContext();
 
         var customer = CreateCustomer();
+        var user = CreateUser();
 
         dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync();
 
         var service = CreateService(dbContext);
@@ -353,6 +504,7 @@ public sealed class QuotationServiceTests
 
         var result = await service.CreateAsync(
             request,
+            user.Id,
             CancellationToken.None);
 
         var persistedCharge =
@@ -375,20 +527,18 @@ public sealed class QuotationServiceTests
         Assert.Equal(
             25000m,
             persistedCharge.Amount);
-
-        Assert.Equal(
-            13m,
-            persistedCharge.TaxRate);
     }
 
     [Fact]
-    public async Task CreateAsync_TrimsLineAndChargeText()
+    public async Task CreateAsync_TrimsText()
     {
         await using var dbContext = CreateDbContext();
 
         var customer = CreateCustomer();
+        var user = CreateUser();
 
         dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync();
 
         var service = CreateService(dbContext);
@@ -396,17 +546,24 @@ public sealed class QuotationServiceTests
         var request =
             CreateValidQuotationRequest(customer.Id);
 
+        request.Observations =
+            "  Condiciones especiales  ";
+
         request.Lines[0].CabysCode =
             "  1234567890123  ";
 
         request.Lines[0].Description =
             "  Porcelanato 60x120  ";
 
+        request.Lines[0].Unit =
+            "  m²  ";
+
         request.Charges[0].Description =
             "  Delivery to project  ";
 
-        await service.CreateAsync(
+        var result = await service.CreateAsync(
             request,
+            user.Id,
             CancellationToken.None);
 
         var line =
@@ -419,6 +576,11 @@ public sealed class QuotationServiceTests
                 .AsNoTracking()
                 .SingleAsync();
 
+        var quotation =
+            await dbContext.Quotations
+                .AsNoTracking()
+                .SingleAsync();
+
         Assert.Equal(
             "1234567890123",
             line.CabysCode);
@@ -427,9 +589,19 @@ public sealed class QuotationServiceTests
             "Porcelanato 60x120",
             line.Description);
 
+        Assert.Equal("m²", line.Unit);
+
         Assert.Equal(
             "Delivery to project",
             charge.Description);
+
+        Assert.Equal(
+            "Condiciones especiales",
+            quotation.Observations);
+
+        Assert.Equal(
+            "Condiciones especiales",
+            result.Observations);
     }
 
     [Fact]
@@ -438,8 +610,10 @@ public sealed class QuotationServiceTests
         await using var dbContext = CreateDbContext();
 
         var customer = CreateCustomer();
+        var user = CreateUser();
 
         dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync();
 
         var service = CreateService(dbContext);
@@ -449,6 +623,7 @@ public sealed class QuotationServiceTests
 
         var result = await service.CreateAsync(
             request,
+            user.Id,
             CancellationToken.None);
 
         var line = Assert.Single(result.Lines);
@@ -491,13 +666,15 @@ public sealed class QuotationServiceTests
     }
 
     [Fact]
-    public async Task CreateAsync_PreservesValidityDate()
+    public async Task CreateAsync_PreservesValidityDateAndObservations()
     {
         await using var dbContext = CreateDbContext();
 
         var customer = CreateCustomer();
+        var user = CreateUser();
 
         dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync();
 
         var service = CreateService(dbContext);
@@ -509,14 +686,177 @@ public sealed class QuotationServiceTests
             CreateValidQuotationRequest(customer.Id);
 
         request.ValidUntilUtc = validUntil;
+        request.Observations = "Oferta válida según condiciones.";
 
         var result = await service.CreateAsync(
             request,
+            user.Id,
             CancellationToken.None);
 
         Assert.Equal(
             validUntil,
             result.ValidUntilUtc);
+
+        Assert.Equal(
+            "Oferta válida según condiciones.",
+            result.Observations);
+    }
+
+
+    // -------------------------------------------------------------------------
+    // IssueAsync
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task IssueAsync_WhenQuotationDoesNotExist_ReturnsNull()
+    {
+        await using var dbContext = CreateDbContext();
+
+        var customer = CreateCustomer();
+        dbContext.Customers.Add(customer);
+        await dbContext.SaveChangesAsync();
+
+        var service = CreateService(dbContext);
+        var request = CreateValidQuotationRequest(customer.Id);
+
+        var result = await service.IssueAsync(
+            999,
+            request,
+            CancellationToken.None);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task IssueAsync_WhenCustomerDoesNotExist_Throws()
+    {
+        await using var dbContext = CreateDbContext();
+
+        var customer = CreateCustomer();
+        var user = CreateUser();
+
+        dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+
+        var service = CreateService(dbContext, "COT-000777");
+        var createRequest = CreateValidQuotationRequest(customer.Id);
+
+        var created = await service.CreateAsync(
+            createRequest,
+            user.Id,
+            CancellationToken.None);
+
+        var issueRequest = CreateValidQuotationRequest(999);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.IssueAsync(
+                created.Id,
+                issueRequest,
+                CancellationToken.None));
+
+        Assert.Equal(
+            "The customer does not exist or is inactive.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task IssueAsync_WhenQuotationExists_TransitionsDraftToIssued()
+    {
+        await using var dbContext = CreateDbContext();
+
+        var customer = CreateCustomer();
+        var user = CreateUser();
+
+        dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+
+        var service = CreateService(dbContext, "COT-000777");
+        var request = CreateValidQuotationRequest(customer.Id);
+
+        var created = await service.CreateAsync(
+            request,
+            user.Id,
+            CancellationToken.None);
+
+        var beforeIssue = DateTime.UtcNow;
+
+        var result = await service.IssueAsync(
+            created.Id,
+            request,
+            CancellationToken.None);
+
+        var afterIssue = DateTime.UtcNow;
+
+        Assert.NotNull(result);
+        Assert.Equal(created.Id, result.Id);
+        Assert.Equal("COT-000777", result.QuotationNumber);
+        Assert.Equal(QuotationStatus.Issued, result.Status);
+        Assert.NotNull(result.IssuedAtUtc);
+        Assert.InRange(result.IssuedAtUtc.Value, beforeIssue, afterIssue);
+        Assert.Equal(user.Id, result.CreatedByUserId);
+
+        var persistedQuotation = await dbContext.Quotations
+            .AsNoTracking()
+            .SingleAsync(quotation => quotation.Id == created.Id);
+
+        Assert.Equal(QuotationStatus.Issued, persistedQuotation.Status);
+        Assert.NotNull(persistedQuotation.IssuedAtUtc);
+        Assert.Equal("COT-000777", persistedQuotation.QuotationNumber);
+        Assert.Equal(user.Id, persistedQuotation.CreatedByUserId);
+    }
+
+    [Fact]
+    public async Task IssueAsync_UpdatesQuotationContentBeforeIssuing()
+    {
+        await using var dbContext = CreateDbContext();
+
+        var customer = CreateCustomer();
+        var user = CreateUser();
+
+        dbContext.Customers.Add(customer);
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+
+        var service = CreateService(dbContext, "COT-000888");
+        var createRequest = CreateValidQuotationRequest(customer.Id);
+
+        var created = await service.CreateAsync(
+            createRequest,
+            user.Id,
+            CancellationToken.None);
+
+        var issueRequest = CreateValidQuotationRequest(customer.Id);
+        issueRequest.Currency = Currency.USD;
+        issueRequest.Observations = "  Condiciones finales de emisión  ";
+        issueRequest.Lines[0].Description = "Porcelanato actualizado";
+        issueRequest.Lines[0].Quantity = 3m;
+        issueRequest.Charges[0].Type = QuotationChargeType.Installation;
+        issueRequest.Charges[0].Description = "  Instalación proyecto  ";
+        issueRequest.Charges[0].Amount = 30000m;
+
+        var result = await service.IssueAsync(
+            created.Id,
+            issueRequest,
+            CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(created.Id, result.Id);
+        Assert.Equal("COT-000888", result.QuotationNumber);
+        Assert.Equal(user.Id, result.CreatedByUserId);
+        Assert.Equal(QuotationStatus.Issued, result.Status);
+        Assert.Equal(Currency.USD, result.Currency);
+        Assert.Equal("Condiciones finales de emisión", result.Observations);
+
+        var line = Assert.Single(result.Lines);
+        Assert.Equal("Porcelanato actualizado", line.Description);
+        Assert.Equal(3m, line.Quantity);
+
+        var charge = Assert.Single(result.Charges);
+        Assert.Equal(QuotationChargeType.Installation, charge.Type);
+        Assert.Equal("Instalación proyecto", charge.Description);
+        Assert.Equal(30000m, charge.Amount);
     }
 
     // -------------------------------------------------------------------------
@@ -564,6 +904,20 @@ public sealed class QuotationServiceTests
         };
     }
 
+    private static ApplicationUser CreateUser()
+    {
+        return new ApplicationUser
+        {
+            Id = Guid.NewGuid().ToString(),
+            UserName = "seller@test.com",
+            Email = "seller@test.com",
+            EmailConfirmed = true,
+            DisplayName = "Seller Test",
+            IsActive = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+    }
+
     private static QuotationUpsertRequest
         CreateValidQuotationRequest(int customerId)
     {
@@ -573,6 +927,7 @@ public sealed class QuotationServiceTests
             Currency = Currency.CRC,
             ValidUntilUtc =
                 DateTime.UtcNow.AddDays(30),
+            Observations = string.Empty,
 
             Lines =
             [
@@ -580,6 +935,7 @@ public sealed class QuotationServiceTests
                 {
                     CabysCode = "1234567890123",
                     Description = "Porcelanato 60x120",
+                    Unit = "m²",
                     Quantity = 2m,
                     UnitPrice = 15000m,
                     DiscountType =
@@ -599,8 +955,7 @@ public sealed class QuotationServiceTests
                     Description =
                         "Delivery to project",
 
-                    Amount = 25000m,
-                    TaxRate = 13m
+                    Amount = 25000m
                 }
             ]
         };

@@ -22,9 +22,34 @@ public sealed class QuotationService(
                 Id = quotation.Id,
                 QuotationNumber = quotation.QuotationNumber,
                 CustomerId = quotation.CustomerId,
+                CustomerName =
+                    quotation.Status == QuotationStatus.Issued &&
+                    quotation.CustomerNameSnapshot != string.Empty
+                        ? quotation.CustomerNameSnapshot
+                        : quotation.Customer.Name,
+                CustomerIdentificationNumber =
+                    quotation.Status == QuotationStatus.Issued &&
+                    quotation.CustomerIdentificationNumberSnapshot != string.Empty
+                        ? quotation.CustomerIdentificationNumberSnapshot
+                        : quotation.Customer.IdentificationNumber,
+                CustomerEmail =
+                    quotation.Status == QuotationStatus.Issued &&
+                    quotation.CustomerEmailSnapshot != string.Empty
+                        ? quotation.CustomerEmailSnapshot
+                        : quotation.Customer.Email,
+                CustomerPhoneNumber =
+                    quotation.Status == QuotationStatus.Issued &&
+                    quotation.CustomerPhoneNumberSnapshot != string.Empty
+                        ? quotation.CustomerPhoneNumberSnapshot
+                        : quotation.Customer.PhoneNumber,
                 Currency = quotation.Currency,
+                Status = quotation.Status,
                 IssuedAtUtc = quotation.IssuedAtUtc,
                 ValidUntilUtc = quotation.ValidUntilUtc,
+                Observations = quotation.Observations,
+                CreatedByUserId = quotation.CreatedByUserId,
+                CreatedByDisplayName =
+                    quotation.CreatedByUser.DisplayName,
                 CreatedAtUtc = quotation.CreatedAtUtc,
                 UpdatedAtUtc = quotation.UpdatedAtUtc,
 
@@ -34,7 +59,7 @@ public sealed class QuotationService(
                     {
                         Id = line.Id,
                         ProductId = line.ProductId,
-                        CabysCode = line.CabysCode,
+                        CabysCode = line.CabysCode ?? string.Empty,
                         Description = line.Description,
                         Unit = line.Unit,
                         Quantity = line.Quantity,
@@ -52,8 +77,7 @@ public sealed class QuotationService(
                         Id = charge.Id,
                         Type = charge.Type,
                         Description = charge.Description,
-                        Amount = charge.Amount,
-                        TaxRate = charge.TaxRate
+                        Amount = charge.Amount
                     })
                     .ToList()
             })
@@ -71,9 +95,17 @@ public sealed class QuotationService(
 
     public async Task<QuotationResponse> CreateAsync(
         QuotationUpsertRequest request,
+        string createdByUserId,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (string.IsNullOrWhiteSpace(createdByUserId))
+        {
+            throw new ArgumentException(
+                "The creator user ID is required.",
+                nameof(createdByUserId));
+        }
 
         var customerExists = await dbContext.Customers
             .AsNoTracking()
@@ -89,6 +121,20 @@ public sealed class QuotationService(
                 "The customer does not exist or is inactive.");
         }
 
+        var creatorExists = await dbContext.Users
+            .AsNoTracking()
+            .AnyAsync(
+                user =>
+                    user.Id == createdByUserId &&
+                    user.IsActive,
+                cancellationToken);
+
+        if (!creatorExists)
+        {
+            throw new InvalidOperationException(
+                "The creator user does not exist or is inactive.");
+        }
+
         var quotationNumber =
             await quotationNumberGenerator.GenerateAsync(
                 cancellationToken);
@@ -99,16 +145,20 @@ public sealed class QuotationService(
         {
             QuotationNumber = quotationNumber,
             CustomerId = request.CustomerId,
+            CreatedByUserId = createdByUserId,
             Currency = request.Currency,
-            IssuedAtUtc = now,
+            Status = QuotationStatus.Draft,
+            IssuedAtUtc = null,
             ValidUntilUtc = request.ValidUntilUtc,
+            Observations = request.Observations.Trim(),
             CreatedAtUtc = now,
 
             Lines = request.Lines
                 .Select(line => new QuotationLine
                 {
                     ProductId = line.ProductId,
-                    CabysCode = line.CabysCode.Trim(),
+                    CabysCode = NormalizeCabysCode(
+                        line.CabysCode),
                     Description = line.Description.Trim(),
                     Unit = line.Unit.Trim(),
                     Quantity = line.Quantity,
@@ -124,8 +174,7 @@ public sealed class QuotationService(
                 {
                     Type = charge.Type,
                     Description = charge.Description.Trim(),
-                    Amount = charge.Amount,
-                    TaxRate = charge.TaxRate
+                    Amount = charge.Amount
                 })
                 .ToList()
         };
@@ -161,15 +210,75 @@ public sealed class QuotationService(
             return null;
         }
 
-        var customerExists = await dbContext.Customers
+        await ApplyRequestAsync(
+            quotation,
+            request,
+            cancellationToken);
+
+        await dbContext.SaveChangesAsync(
+            cancellationToken);
+
+        return await GetByIdAsync(
+            quotation.Id,
+            cancellationToken);
+    }
+
+    public async Task<QuotationResponse?> IssueAsync(
+        int id,
+        QuotationUpsertRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var quotation = await dbContext.Quotations
+            .Include(quotation => quotation.Lines)
+            .Include(quotation => quotation.Charges)
+            .SingleOrDefaultAsync(
+                quotation => quotation.Id == id,
+                cancellationToken);
+
+        if (quotation is null)
+        {
+            return null;
+        }
+
+        var customer = await ApplyRequestAsync(
+            quotation,
+            request,
+            cancellationToken);
+
+        quotation.CustomerNameSnapshot = customer.Name;
+        quotation.CustomerIdentificationNumberSnapshot =
+            customer.IdentificationNumber;
+        quotation.CustomerEmailSnapshot = customer.Email;
+        quotation.CustomerPhoneNumberSnapshot = customer.PhoneNumber;
+
+        quotation.Status = QuotationStatus.Issued;
+        quotation.IssuedAtUtc = DateTime.UtcNow;
+        quotation.UpdatedAtUtc = quotation.IssuedAtUtc;
+
+        await dbContext.SaveChangesAsync(
+            cancellationToken);
+
+        return await GetByIdAsync(
+            quotation.Id,
+            cancellationToken);
+    }
+
+    private async Task<Customer> ApplyRequestAsync(
+        Quotation quotation,
+        QuotationUpsertRequest request,
+        CancellationToken cancellationToken)
+    {
+        var customer = await dbContext.Customers
             .AsNoTracking()
-            .AnyAsync(
+            .SingleOrDefaultAsync(
                 customer =>
                     customer.Id == request.CustomerId &&
                     customer.IsActive,
                 cancellationToken);
 
-        if (!customerExists)
+        if (customer is null)
         {
             throw new InvalidOperationException(
                 "The customer does not exist or is inactive.");
@@ -178,6 +287,7 @@ public sealed class QuotationService(
         quotation.CustomerId = request.CustomerId;
         quotation.Currency = request.Currency;
         quotation.ValidUntilUtc = request.ValidUntilUtc;
+        quotation.Observations = request.Observations.Trim();
         quotation.UpdatedAtUtc = DateTime.UtcNow;
 
         dbContext.QuotationLines.RemoveRange(
@@ -190,7 +300,8 @@ public sealed class QuotationService(
             .Select(line => new QuotationLine
             {
                 ProductId = line.ProductId,
-                CabysCode = line.CabysCode.Trim(),
+                CabysCode = NormalizeCabysCode(
+                    line.CabysCode),
                 Description = line.Description.Trim(),
                 Unit = line.Unit.Trim(),
                 Quantity = line.Quantity,
@@ -206,17 +317,11 @@ public sealed class QuotationService(
             {
                 Type = charge.Type,
                 Description = charge.Description.Trim(),
-                Amount = charge.Amount,
-                TaxRate = charge.TaxRate
+                Amount = charge.Amount
             })
             .ToList();
 
-        await dbContext.SaveChangesAsync(
-            cancellationToken);
-
-        return await GetByIdAsync(
-            quotation.Id,
-            cancellationToken);
+        return customer;
     }
 
     private static void PopulateCalculatedTotals(
@@ -265,6 +370,17 @@ public sealed class QuotationService(
         quotation.Total = Round(
             quotation.Lines.Sum(line => line.TotalAmount) +
             chargeTotal);
+    }
+
+    private static string? NormalizeCabysCode(
+        string? cabysCode)
+    {
+        if (string.IsNullOrWhiteSpace(cabysCode))
+        {
+            return null;
+        }
+
+        return cabysCode.Trim();
     }
 
     private static decimal Round(decimal value)

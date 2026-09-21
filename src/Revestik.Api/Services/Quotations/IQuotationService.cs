@@ -10,9 +10,15 @@ public interface IQuotationService
 
     Task<QuotationResponse> CreateAsync(
         QuotationUpsertRequest request,
+        string createdByUserId,
         CancellationToken cancellationToken);
 
     Task<QuotationResponse?> UpdateAsync(
+        int id,
+        QuotationUpsertRequest request,
+        CancellationToken cancellationToken);
+
+    Task<QuotationResponse?> IssueAsync(
         int id,
         QuotationUpsertRequest request,
         CancellationToken cancellationToken);

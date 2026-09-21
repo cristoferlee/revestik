@@ -14,6 +14,11 @@ public sealed class QuotationUpsertRequest : IValidatableObject
 
     public DateTime? ValidUntilUtc { get; set; }
 
+    [MaxLength(
+        2000,
+        ErrorMessage = "Las observaciones no pueden exceder 2000 caracteres.")]
+    public string Observations { get; set; } = string.Empty;
+
     [MinLength(
         1,
         ErrorMessage = "La cotización debe contener al menos una línea.")]
@@ -29,14 +34,6 @@ public sealed class QuotationUpsertRequest : IValidatableObject
             yield return new ValidationResult(
                 "La moneda no es válida.",
                 [nameof(Currency)]);
-        }
-
-        if (ValidUntilUtc.HasValue &&
-            ValidUntilUtc.Value <= DateTime.UtcNow)
-        {
-            yield return new ValidationResult(
-                "La fecha de validez debe ser posterior a la fecha actual.",
-                [nameof(ValidUntilUtc)]);
         }
 
         for (var index = 0; index < Lines.Count; index++)

@@ -1,6 +1,8 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 using Revestik.Api.Authorization;
 using Revestik.Api.Services.Quotations;
+using Revestik.Api.Services.Quotations.Pdf;
 using Revestik.Shared.Quotations;
 
 namespace Revestik.Api.Endpoints;
@@ -32,10 +34,36 @@ public static class QuotationEndpoints
             })
             .WithName("GetQuotationById");
 
+        group.MapGet(
+            "/{id:int}/pdf",
+            async (
+                int id,
+                IQuotationService quotationService,
+                IQuotationPdfService quotationPdfService,
+                CancellationToken cancellationToken) =>
+            {
+                var quotation = await quotationService.GetByIdAsync(
+                    id,
+                    cancellationToken);
+
+                if (quotation is null)
+                    return Results.NotFound();
+
+                var pdf = quotationPdfService.Generate(quotation);
+                var fileName = $"{quotation.QuotationNumber}.pdf";
+
+                return Results.File(
+                    pdf,
+                    contentType: "application/pdf",
+                    fileDownloadName: fileName);
+            })
+            .WithName("DownloadQuotationPdf");
+
         group.MapPost(
             "/",
             async (
                 QuotationUpsertRequest request,
+                ClaimsPrincipal user,
                 IQuotationService quotationService,
                 CancellationToken cancellationToken) =>
             {
@@ -46,10 +74,23 @@ public static class QuotationEndpoints
                     return Results.ValidationProblem(validationErrors);
                 }
 
+                var createdByUserId =
+                    user.FindFirstValue(ClaimTypes.NameIdentifier);
+
+                if (string.IsNullOrWhiteSpace(createdByUserId))
+                {
+                    return Results.Problem(
+                        title: "Invalid authenticated user.",
+                        detail:
+                            "The authenticated user identifier is not available.",
+                        statusCode: StatusCodes.Status401Unauthorized);
+                }
+
                 try
                 {
                     var quotation = await quotationService.CreateAsync(
                         request,
+                        createdByUserId,
                         cancellationToken);
 
                     return Results.Created(
@@ -65,6 +106,16 @@ public static class QuotationEndpoints
                         detail:
                             "The customer does not exist or is inactive.",
                         statusCode: StatusCodes.Status400BadRequest);
+                }
+                catch (InvalidOperationException exception)
+                    when (exception.Message ==
+                        "The creator user does not exist or is inactive.")
+                {
+                    return Results.Problem(
+                        title: "Invalid authenticated user.",
+                        detail:
+                            "The authenticated user does not exist or is inactive.",
+                        statusCode: StatusCodes.Status401Unauthorized);
                 }
             })
             .AddEndpointFilter<AntiforgeryValidationFilter>()
@@ -109,6 +160,46 @@ public static class QuotationEndpoints
             })
             .AddEndpointFilter<AntiforgeryValidationFilter>()
             .WithName("UpdateQuotation");
+
+        group.MapPost(
+            "/{id:int}/issue",
+            async (
+                int id,
+                QuotationUpsertRequest request,
+                IQuotationService quotationService,
+                CancellationToken cancellationToken) =>
+            {
+                var validationErrors = ValidateRequest(request);
+
+                if (validationErrors.Count > 0)
+                {
+                    return Results.ValidationProblem(validationErrors);
+                }
+
+                try
+                {
+                    var quotation = await quotationService.IssueAsync(
+                        id,
+                        request,
+                        cancellationToken);
+
+                    return quotation is null
+                        ? Results.NotFound()
+                        : Results.Ok(quotation);
+                }
+                catch (InvalidOperationException exception)
+                    when (exception.Message ==
+                        "The customer does not exist or is inactive.")
+                {
+                    return Results.Problem(
+                        title: "Invalid customer.",
+                        detail:
+                            "The customer does not exist or is inactive.",
+                        statusCode: StatusCodes.Status400BadRequest);
+                }
+            })
+            .AddEndpointFilter<AntiforgeryValidationFilter>()
+            .WithName("IssueQuotation");
 
         return endpoints;
     }

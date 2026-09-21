@@ -6,7 +6,6 @@ public sealed class QuotationChargeRequest : IValidatableObject
 {
     public QuotationChargeType Type { get; set; }
 
-    [Required(ErrorMessage = "La descripción del cargo es obligatoria.")]
     [StringLength(
         500,
         ErrorMessage = "La descripción del cargo no puede superar los 500 caracteres.")]
@@ -14,12 +13,10 @@ public sealed class QuotationChargeRequest : IValidatableObject
 
     [Range(
         typeof(decimal),
-        "0.00001",
-        "9999999999999.99999",
+        "0.01",
+        "9999999999999.99",
         ErrorMessage = "El monto del cargo debe ser mayor que cero.")]
     public decimal Amount { get; set; }
-
-    public decimal TaxRate { get; set; } = 13m;
 
     public IEnumerable<ValidationResult> Validate(
         ValidationContext validationContext)
@@ -31,11 +28,24 @@ public sealed class QuotationChargeRequest : IValidatableObject
                 [nameof(Type)]);
         }
 
-        if (TaxRate is not 0m and not 13m)
+        if (Type == QuotationChargeType.Other &&
+            string.IsNullOrWhiteSpace(Description))
         {
             yield return new ValidationResult(
-                "El IVA debe ser 0% o 13%.",
-                [nameof(TaxRate)]);
+                "La descripción es obligatoria para cargos de tipo Otro.",
+                [nameof(Description)]);
         }
+
+        if (HasMoreThanTwoDecimalPlaces(Amount))
+        {
+            yield return new ValidationResult(
+                "El monto del cargo no puede tener más de 2 decimales.",
+                [nameof(Amount)]);
+        }
+    }
+
+    private static bool HasMoreThanTwoDecimalPlaces(decimal value)
+    {
+        return decimal.Round(value, 2) != value;
     }
 }

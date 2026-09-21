@@ -1,4 +1,5 @@
 using Revestik.Shared.Quotations;
+
 namespace Revestik.Api.Models;
 
 public sealed class QuotationCharge
@@ -14,6 +15,4 @@ public sealed class QuotationCharge
     public string Description { get; set; } = string.Empty;
 
     public decimal Amount { get; set; }
-
-    public decimal TaxRate { get; set; } = 13m;
 }

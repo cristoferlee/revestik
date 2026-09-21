@@ -19,14 +19,48 @@ public sealed class QuotationConfiguration : IEntityTypeConfiguration<Quotation>
         builder.HasIndex(quotation => quotation.QuotationNumber)
             .IsUnique();
 
+        builder.Property(quotation => quotation.CustomerNameSnapshot)
+            .HasMaxLength(150)
+            .IsRequired();
+
+        builder.Property(quotation => quotation.CustomerIdentificationNumberSnapshot)
+            .HasMaxLength(12)
+            .IsRequired();
+
+        builder.Property(quotation => quotation.CustomerEmailSnapshot)
+            .HasMaxLength(254)
+            .IsRequired();
+
+        builder.Property(quotation => quotation.CustomerPhoneNumberSnapshot)
+            .HasMaxLength(20)
+            .IsRequired();
+
         builder.Property(quotation => quotation.Currency)
             .HasConversion<string>()
             .HasMaxLength(3)
             .IsRequired();
 
+        builder.Property(quotation => quotation.Status)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(quotation => quotation.Observations)
+            .HasMaxLength(2000)
+            .IsRequired();
+
+        builder.Property(quotation => quotation.CreatedByUserId)
+            .HasMaxLength(450)
+            .IsRequired();
+
         builder.HasOne(quotation => quotation.Customer)
             .WithMany()
             .HasForeignKey(quotation => quotation.CustomerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(quotation => quotation.CreatedByUser)
+            .WithMany()
+            .HasForeignKey(quotation => quotation.CreatedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(quotation => quotation.Lines)
