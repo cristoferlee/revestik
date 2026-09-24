@@ -18,6 +18,7 @@ The primary security areas currently include:
 * Transport security.
 * External authentication.
 * Server-side trust boundaries.
+* Financial-operation authorization and history preservation.
 
 This document describes implemented behavior. Future security requirements should not be represented as existing protections until they are implemented and verified.
 
@@ -74,8 +75,6 @@ Revestik follows a protected-by-default authorization model.
 
 Server endpoints require authenticated access unless anonymous access is explicitly configured.
 
-Conceptually:
-
 ```text
 Endpoint
    │
@@ -88,9 +87,7 @@ Endpoint
       Authentication required
 ```
 
-This reduces the possibility of accidentally exposing a new endpoint because authorization was forgotten during implementation.
-
-Anonymous access should therefore be treated as an explicit security decision.
+Anonymous access should be treated as an explicit security decision.
 
 ## 5. Anonymous Endpoints
 
@@ -104,17 +101,15 @@ Anonymous endpoints must not expose sensitive business information merely becaus
 
 Authentication and authorization are separate concerns.
 
-Authentication determines:
+Authentication determines who the user is.
 
-> Who is the user?
+Authorization determines whether that user may perform the operation.
 
-Authorization determines:
+Revestik supports role and policy-based authorization for privileged operations.
 
-> Is this user allowed to perform this operation?
+Current commercial policies include protected quotation and sale management.
 
-Revestik supports role and policy-based authorization for operations requiring elevated privileges.
-
-Authorization decisions must be enforced by the server.
+Authorization decisions are enforced by the server.
 
 Hiding a button or page in the Blazor client is not considered authorization because client-side behavior can be bypassed.
 
@@ -127,10 +122,6 @@ Security-relevant cookie behavior includes protections such as:
 * `HttpOnly`.
 * `Secure`.
 * Appropriate SameSite behavior.
-
-`HttpOnly` reduces direct JavaScript access to the authentication cookie.
-
-`Secure` requires the cookie to be transmitted through HTTPS where applicable.
 
 Cookie configuration must be reviewed when deployment topology or authentication flows change.
 
@@ -154,24 +145,20 @@ sequenceDiagram
     Client->>API: Start authentication
     API->>Google: Authentication challenge
     Google-->>API: External authentication callback
-
     API->>Identity: Resolve application user
     Identity-->>API: User + roles
-
     API-->>User: Secure authentication cookie
 
     Client->>API: Request CSRF token
     API-->>Client: CSRF request token
 
     User->>Client: Perform protected operation
-
-    Client->>API: POST / PUT / DELETE<br/>Auth cookie + CSRF token
-
+    Client->>API: POST / PUT / PATCH / DELETE + auth cookie + CSRF token
     API->>API: Authenticate
     API->>API: Authorize
     API->>API: Validate CSRF
-
     API-->>Client: Protected response
+```
 
 A request with a required missing or invalid antiforgery token must be rejected before the protected business operation executes.
 
@@ -187,101 +174,105 @@ Revestik exposes an authenticated mechanism for obtaining the antiforgery reques
 
 The antiforgery cookie and request token are intentionally handled differently.
 
-The browser can send the relevant cookie automatically, while the Blazor client obtains the request token and sends it using the configured antiforgery request header.
+The browser sends the relevant cookie automatically, while the Blazor client obtains the request token and sends it using the configured antiforgery request header.
+
+The shared client-side HTTP handler applies the token to protected mutable API requests.
 
 Antiforgery responses should not be cached as reusable public application data.
 
-## 10. Request Validation
+## 10. Protected Mutable Commercial Endpoints
+
+Mutable Quotation and Sales operations use antiforgery validation.
+
+Examples include:
+
+* Creating or updating quotations.
+* Issuing quotations.
+* Creating or updating sales.
+* Creating sales from quotations.
+* Issuing sales.
+* Voiding sales.
+* Creating replacement sales.
+* Registering payments.
+* Voiding payments.
+
+Automated CSRF regression tests protect these boundaries.
+
+## 11. Request Validation
 
 All information received from the client must be treated as untrusted input.
 
 Revestik applies server-side validation to incoming business requests.
 
-Examples in the customer domain include validation of:
+Examples include:
 
 * Required values.
 * Maximum lengths.
-* Email format.
-* Identification format.
-* Costa Rican location codes.
-* Identification type.
+* Identification formats.
+* Pagination bounds.
+* Commercial quantities and prices.
+* Discount consistency.
+* Tax-rate constraints.
+* Payment amount/reference constraints.
+* Required void reasons.
 
-Client-side validation may mirror these rules to improve user experience, but bypassing the client must not bypass authoritative validation.
+Client-side validation may mirror these rules for usability, but bypassing the client must not bypass authoritative validation.
 
-## 11. Database Integrity
+## 12. Database Integrity
 
 Security and data integrity continue beyond request validation.
 
-Revestik uses EF Core configuration and SQL Server constraints/indexes to protect important invariants.
+Revestik uses EF Core configuration and SQL Server constraints/indexes/sequences to protect important invariants.
 
 Examples include:
 
 * Required database fields.
 * Maximum column lengths.
-* Supported identification values.
 * Unique customer identification.
+* Commercial relationships.
+* Sequence-backed document numbering.
 
-This provides an additional protection layer if invalid data reaches the persistence boundary.
+Expected persistence conflicts should be translated into application behavior rather than exposing database internals.
 
-Database exceptions that represent expected business conflicts should be translated into application-level behavior rather than exposing database implementation details directly to the client.
-
-## 12. SQL Injection
+## 13. SQL Injection
 
 Revestik uses Entity Framework Core for application persistence.
 
-Application queries should continue to use EF Core parameterized query mechanisms rather than constructing SQL commands by concatenating untrusted user input.
-
-Using EF Core does not eliminate the need for secure coding practices if raw SQL is introduced later.
+Application queries should continue to use parameterized EF Core mechanisms rather than concatenating untrusted user input into SQL.
 
 Any future raw SQL must use parameterized values and receive additional security review.
 
-## 13. Cross-Origin Resource Sharing
+## 14. Cross-Origin Resource Sharing
 
 CORS controls which browser origins may make permitted cross-origin requests to the API.
 
-CORS is not an authentication mechanism and must not be treated as one.
+CORS is not an authentication mechanism.
 
-Development may require a separate client origin because the Blazor development server and API can run independently.
+Development requires explicit local origins because Client and API run separately.
 
 Production uses the hosted application model, reducing the need for broad cross-origin access.
 
-CORS configuration should remain as restrictive as practical.
+## 15. HTTPS
 
-Wildcard production origins should not be introduced simply to resolve client connectivity problems.
-
-## 14. HTTPS
-
-HTTPS protects application traffic while it is transmitted between the browser and server.
-
-Revestik uses HTTPS-oriented hosting and secure-cookie behavior.
-
-Production deployments must terminate HTTPS through the application hosting platform or an appropriately configured trusted reverse proxy.
+Production Revestik must be served through HTTPS.
 
 Sensitive authentication or business traffic must not intentionally be exposed over plaintext HTTP.
 
-## 15. External Authentication
+## 16. External Authentication
 
 Revestik supports Google as an external authentication provider.
 
-The external provider verifies the external identity, but Revestik still controls application authorization.
+The external provider verifies external identity, while Revestik still controls application authorization and account status.
 
-The current authentication flow verifies that the external authentication information is valid and that the resulting account is allowed to use the application.
+A disabled Revestik account must not receive normal application access merely because external authentication succeeded.
 
-Application account status must continue to be checked independently from the external provider.
+## 17. Redirect Safety
 
-An externally authenticated user whose Revestik account is disabled must not receive normal application access.
-
-## 16. Redirect Safety
-
-Authentication flows may contain return paths used to redirect users after successful authentication.
-
-Return paths must be constrained to safe application-local paths.
+Return paths used by authentication flows must be constrained to safe application-local destinations.
 
 External or protocol-relative redirect destinations must not be accepted simply because they were supplied by the client.
 
-This reduces open-redirect risk in authentication workflows.
-
-## 17. Secrets and Configuration
+## 18. Secrets and Configuration
 
 Credentials and secrets must not be committed to source control.
 
@@ -293,79 +284,55 @@ Examples include:
 * Production administrative credentials.
 * Signing or service secrets.
 
-Secrets should be supplied through environment-specific secure configuration mechanisms.
+Any future fiscal signing key or certificate must remain server-side and outside Blazor WebAssembly assets.
 
-Development configuration and production secret management should remain separate.
+## 19. Error Handling and Information Exposure
 
-Documentation may describe the name and purpose of a required secret, but should never contain its actual value.
+Client-facing errors should provide enough information for correct application behavior without unnecessarily exposing implementation details.
 
-## 18. Error Handling and Information Exposure
+Sensitive details must not be intentionally returned to users, including internal stack traces, credentials, connection data, or secrets.
 
-Client-facing errors should provide enough information for the client to respond correctly without unnecessarily exposing implementation details.
-
-Sensitive details that should not be intentionally returned to users include:
-
-* Database connection information.
-* SQL statements containing sensitive values.
-* Internal stack traces.
-* Authentication secrets.
-* Provider credentials.
-* Internal exception details not required by the client.
-
-Expected business conflicts should use appropriate HTTP/application responses.
-
-Unexpected failures should be logged server-side and handled without exposing unnecessary internals.
-
-## 19. Logging
+## 20. Logging
 
 Security-relevant events may require server-side logging.
 
-Examples include:
+Logs must avoid recording secrets, cookies, antiforgery tokens, or unnecessary sensitive customer/payment information.
 
-* Failed authentication flows.
-* Disabled-account login attempts.
-* External authentication failures.
-* Identity management failures.
-* Unexpected application exceptions.
+## 21. Financial and Historical Data
 
-Logs must avoid recording secrets or unnecessary sensitive information.
+Commercial history should not be destroyed merely to correct a business operation.
 
-Logging should provide operational visibility without becoming another source of sensitive-data exposure.
+Current Sales behavior supports this principle through:
 
-## 20. Static Application Hosting
+* Payment voiding rather than payment deletion.
+* Sale voiding rather than destructive deletion.
+* Replacement sales linked to the original sale.
+* Quotation preservation after conversion to a sale.
+
+This improves traceability but is not presented as a complete enterprise audit-log implementation.
+
+## 22. Static Application Hosting
 
 The production ASP.NET Core host serves the compiled Blazor WebAssembly application.
 
-Static application assets are intentionally accessible to browsers.
+Blazor static files must never contain secrets because they are downloaded to the user's device.
 
-Blazor static files must never contain secrets because WebAssembly client assets are downloaded to the user's device.
+Unknown `/api/*` routes remain API responses rather than falling through to the SPA entry point.
 
-Any value that must remain secret belongs on the server.
+## 23. Security Testing
 
-Unknown API routes are kept separate from the Blazor SPA fallback so invalid `/api/*` requests do not accidentally receive the application's HTML entry point.
-
-## 21. Security Testing
-
-Automated tests currently verify important security behavior, including antiforgery handling and protected mutable endpoints.
-
-Hosting tests also verify relevant application behavior in development and production configurations.
-
-Security-sensitive behavior should receive automated regression coverage when practical.
-
-Examples include:
+Automated tests currently verify important security behavior, including:
 
 * Authentication requirements.
 * Authorization policies.
-* CSRF rejection.
-* Anonymous endpoint behavior.
-* Account status handling.
+* Missing/invalid CSRF rejection.
+* Protected mutable endpoints.
+* Account status behavior.
 * Security-sensitive hosting behavior.
 
-## 22. Defense in Depth
+Sales mutable endpoints are included in current CSRF regression coverage.
 
-Revestik does not rely on one security control.
-
-A typical protected mutable operation can pass through several independent controls:
+## 24. Defense in Depth
 
 ```text
 HTTPS
@@ -382,14 +349,14 @@ Business rules
   ↓
 EF Core
   ↓
-Database constraints
+Database constraints / sequences
 ```
 
 Each layer protects against a different class of problem.
 
 No individual layer should be assumed to make the others unnecessary.
 
-## 23. Security Review Triggers
+## 25. Security Review Triggers
 
 A security review should be performed when introducing or significantly changing:
 
@@ -408,11 +375,9 @@ A security review should be performed when introducing or significantly changing
 * Personally identifiable information.
 * Audit or financial records.
 
-## 24. Known Scope Limitations
+## 26. Known Scope Limitations
 
-This document describes the current application security foundation.
-
-It does not claim that Revestik has completed:
+This document does not claim that Revestik has completed:
 
 * Formal penetration testing.
 * Independent security certification.
@@ -421,11 +386,7 @@ It does not claim that Revestik has completed:
 * Complete audit logging.
 * Enterprise identity governance.
 
-Those capabilities should only be documented as implemented after they actually exist.
-
-## 25. Security Principle
-
-The core security principle for Revestik is:
+## 27. Security Principle
 
 > Never trust the client to enforce a rule that protects server-side business data.
 

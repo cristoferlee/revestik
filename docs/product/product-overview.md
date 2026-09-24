@@ -16,6 +16,7 @@ Typical information may be distributed between:
 
 * Customer records.
 * Quotations.
+* Sales records.
 * Inventory records.
 * Accounts receivable.
 * Supplier information.
@@ -24,15 +25,9 @@ Typical information may be distributed between:
 * Taxpayer information.
 * Spreadsheets and manually generated documents.
 
-This creates problems such as inconsistent data, limited visibility, manual reconciliation, difficulty tracking balances and stock, and increased possibility of human error.
-
-Revestik is intended to provide a centralized application for these workflows.
+This creates inconsistent data, limited visibility, manual reconciliation, difficulty tracking balances and stock, and increased possibility of human error.
 
 ## 3. Target Users
-
-Revestik is primarily designed for small and medium-sized businesses with operational and commercial workflows involving customers, products, quotations, sales, purchases, expenses, payments, and inventory.
-
-Potential users include:
 
 ### Administrators
 
@@ -40,15 +35,13 @@ Users responsible for system configuration, access control, and sensitive busine
 
 ### Commercial and administrative staff
 
-Users who manage customers, quotations, sales-related information, purchases, suppliers, and daily operational records.
+Users who manage customers, quotations, sales, payments, purchases, suppliers, and daily operational records.
 
 ### Management
 
-Users who require visibility into commercial activity, financial indicators, expenses, receivables, inventory, and operational performance.
+Users who require visibility into commercial activity, balances, expenses, receivables, inventory, and operational performance.
 
 ## 4. Product Goals
-
-The primary goals of Revestik are:
 
 * Centralize important business information.
 * Reduce dependence on disconnected spreadsheets and manual records.
@@ -57,29 +50,19 @@ The primary goals of Revestik are:
 * Improve visibility into business activity.
 * Support secure multi-user access.
 * Automate repetitive administrative processes where practical.
+* Preserve traceability of commercial operations.
 * Build a reliable production application before introducing high-risk integrations.
 * Provide a technical foundation that can grow with additional business modules.
 
 ## 5. Current Product Status
 
-Revestik is under active development.
+The application foundation, Customer domain, Quotations domain, and Sales domain are implemented and verified.
 
-Functionality uses four practical states:
-
-* **Implemented** — present and verified in the current application.
-* **In Progress** — actively being developed or integrated.
-* **Planned** — intended product functionality that has not started.
-* **Deferred** — intentionally postponed so it does not block the current product milestone.
-
-The application foundation, Customer domain, and Quotations domain are implemented and verified.
-
-The next active domain is **Sales**.
+The next major domain is **Inventory**.
 
 ## 6. Implemented Capabilities
 
 ### Authentication and Access Control
-
-Implemented capabilities include:
 
 * ASP.NET Core Identity.
 * Cookie-based authentication.
@@ -91,107 +74,102 @@ Implemented capabilities include:
 
 ### Customer Management
 
-Implemented capabilities include:
-
 * Customer creation, retrieval, editing, deactivation, and reactivation.
-* Pagination, filtering, and name-based search.
+* Pagination, filtering, and search.
 * Deterministic ordering.
 * Customer active/inactive state.
-* Validation of Costa Rican identification formats.
-* Unique customer identification enforcement.
-* Contact and Costa Rican location information.
-* Creation and modification timestamps.
+* Costa Rican identification validation.
+* Unique identification enforcement.
+* Contact and structured location information.
 * Layered server and database integrity protections.
 
 ### Quotations
 
-The Quotations domain is implemented end to end.
-
-Implemented capabilities include:
-
-* Blazor create/edit workflow.
-* Active-customer selection.
-* `Draft` and `Issued` quotation states.
+* Create/edit workflow.
+* `Draft` and `Issued` states.
 * Customer snapshot on issue/reissue.
-* Manual quotation lines.
-* Optional registered-product association.
-* Product-assisted line entry.
-* Optional CABYS for commercial quotation lines.
+* Manual and product-assisted lines.
+* Optional CABYS.
 * Unit of measure.
 * Decimal commercial quantities.
-* CRC and USD currency support.
-* IVA-inclusive price calculations.
-* 0% and 13% IVA handling.
+* CRC and USD.
+* IVA-inclusive calculations.
+* 0% and 13% IVA.
 * Percentage and fixed discounts.
 * Additional charges.
-* Immediate client-side total feedback.
 * Server-authoritative calculations.
-* Backend-generated `COT-000001`-style consecutive numbers.
-* SQL Server sequence-backed numbering.
-* Preservation of quotation identity and COT number during updates and reissue.
-* Confirmed-line workflow before save or issue.
-* Backend PDF generation with QuestPDF.
-* Authenticated PDF download from the Blazor client.
-* Server-side validation and authorization.
-* SQL Server persistence and concurrency verification.
+* `COT-xxxxxx` SQL Server sequence-backed numbering.
+* Backend PDF generation.
+* Authenticated PDF download.
+* History, filters, pagination, and detail view.
+* Conversion of issued quotations into Sale Drafts.
+* Preservation of the original quotation as historical source.
 
-Quotation operations do not reserve or deduct inventory.
-
-### Product Support for Quotations
-
-A focused product lookup capability supports quotation entry.
-
-It includes:
-
-* Product persistence.
-* Search and pagination.
-* Product-assisted quotation line entry.
-* Authorization and pagination verification.
-
-This capability supports Quotations but does not yet represent the complete Inventory domain.
-
-### Location and Taxpayer Integration Foundations
-
-The application includes:
-
-* Structured Costa Rican location data.
-* Costa Rican taxpayer lookup integration.
-* Server-side external-integration boundaries.
-* Caching for appropriate reference data.
-
-### Automated Quality Checks
-
-The project includes automated tests and continuous integration covering customers, quotations, products, security, SQL Server behavior, and hosting.
-
-Current baseline:
-
-**194 passing tests, 0 failed, 0 skipped.**
-
-## 7. Current Development Focus
+Quotations do not reserve or deduct inventory.
 
 ### Sales
 
-Sales is the next domain to investigate and implement.
+* Direct Sale Draft creation.
+* Sale Draft creation from an issued quotation.
+* `Draft`, `Issued`, and `Voided` states.
+* `VEN-xxxxxx` backend-generated numbering on issue.
+* Manual and product-assisted lines.
+* Optional CABYS.
+* CRC and USD.
+* IVA-inclusive monetary calculations.
+* Line and general discounts.
+* Additional charges.
+* Customer snapshot on issue.
+* Sale history with filters, pagination, summary cards, and detail view.
+* Internal sale PDF generation.
+* Partial and full payment registration.
+* Payment methods including Cash, Sinpe, Bank Transfer, International Transfer, Card, and Other.
+* Paid and outstanding balance tracking.
+* Payment history and payment voiding.
+* Sale voiding with reason.
+* Replacement/correction workflow with historical traceability.
+* Quotation-to-sale traceability.
+* Original-to-replacement sale traceability.
 
-The Sales domain will be separate from Quotations.
+### Product Support
 
-Expected design questions include:
+A focused Product model and paginated lookup support commercial line entry.
 
-* How a quotation becomes a sale.
-* Internal `VEN-xxxxxx` numbering.
-* Sale states and cancellation behavior.
-* Inventory movement timing.
-* Payment information.
-* Handling manual lines versus registered products.
-* Optional reference to externally issued fiscal documents.
+This is not yet the complete Inventory domain.
 
-The exact rules will be defined during the Sales investigation before implementation.
+### External Integration Foundations
 
-## 8. Planned Product Areas
+* Costa Rican taxpayer lookup.
+* Structured Costa Rican location data.
+* Server-side external-integration boundaries.
+* Appropriate caching of reference data.
+
+### Automated Quality Checks
+
+Current verified baseline:
+
+**257 passing tests, 0 failed.**
+
+Coverage includes customers, quotations, sales, products, security, SQL Server persistence/concurrency, PDFs, and hosting.
+
+## 7. Current Development Focus
 
 ### Inventory
 
-Planned capabilities include product/material catalog behavior, stock quantities, movements, adjustments, purchase-related increases, and sale-related decreases.
+The next major domain should define:
+
+* Product/material catalog evolution.
+* Stock quantities.
+* Inventory movements.
+* Stock adjustments.
+* Sale-related stock decreases.
+* Purchase-related stock increases.
+* Rules for insufficient stock.
+* Search/filtering and stock visibility.
+
+Inventory should be implemented only after explicit movement rules are agreed because incorrect stock transitions can corrupt operational data.
+
+## 8. Planned Product Areas
 
 ### Purchases and Suppliers
 
@@ -201,11 +179,11 @@ Planned capabilities include supplier records, purchase registration, purchased 
 
 Planned capabilities include structured capture of operating expenses and small card expenses.
 
-A later phase may use AI-assisted document understanding for vouchers received as PDF or image, but human confirmation should remain part of early automation.
+### Accounts Receivable Expansion
 
-### Accounts Receivable
+Sales already track payments and outstanding balances.
 
-Planned capabilities include balances, payments, partial payments, due dates, aging, history, and collection alerts.
+A broader accounts-receivable domain may be added later if requirements expand into aging, collection workflows, alerts, or cross-sale customer balances.
 
 ### Dashboard and Analytics
 
@@ -219,21 +197,21 @@ Planned administrative configuration may include company information, business p
 
 ### Direct Electronic Invoicing
 
-Direct integration with Costa Rica's Ministerio de Hacienda is intentionally deferred.
+Direct integration with Costa Rica's Ministerio de Hacienda remains deferred.
 
-Revestik currently treats quotations and internal commercial operations separately from fiscal electronic invoicing. Fiscal invoices can continue to be issued through the existing external invoicing provider.
+Revestik Sales are internal commercial documents and should not be confused with fiscal electronic invoices.
 
-Direct Hacienda integration may be revisited after the core application is production-proven.
+Fiscal invoices can continue to be issued through the existing external invoicing provider until direct integration is intentionally reopened.
 
 ### Automated Email and WhatsApp Distribution
 
-Automated distribution of quotations or documents through email and WhatsApp is deferred because manual PDF download already satisfies the current workflow.
+Automated distribution remains deferred because authenticated PDF download already supports the current manual workflow.
 
 ### AI-Assisted Expense Ingestion
 
 AI-assisted extraction and classification of purchase invoices, bank vouchers, PDFs, and images is a future capability.
 
-Where structured XML exists, deterministic parsing should be preferred. AI should be reserved for unstructured documents and classification tasks.
+Where structured XML exists, deterministic parsing should be preferred.
 
 ## 10. Product Principle
 

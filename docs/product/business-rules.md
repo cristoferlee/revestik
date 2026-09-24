@@ -18,174 +18,91 @@ Rule statuses:
 # 2. Customer Management
 
 ## CUS-001 — Customer name is required
-
 **Status:** Implemented
-
-Every customer must have a name with the supported maximum length.
 
 ## CUS-002 — Customer identification type is required
-
 **Status:** Implemented
 
-Supported identification types are:
-
-* `PhysicalPerson`
-* `LegalEntity`
-* `Dimex`
+Supported types are `PhysicalPerson`, `LegalEntity`, and `Dimex`.
 
 ## CUS-003 — Customer identification number is required
-
 **Status:** Implemented
-
-Identification numbers are validated according to the selected identification type.
 
 ## CUS-004 — Physical person identification format
-
 **Status:** Implemented
 
-A physical person identification number must contain exactly 9 digits and must not begin with `0`.
+Exactly 9 digits and must not begin with `0`.
 
 ## CUS-005 — Legal entity identification format
-
 **Status:** Implemented
 
-A legal entity identification number must contain exactly 10 digits.
+Exactly 10 digits.
 
 ## CUS-006 — DIMEX identification format
-
 **Status:** Implemented
 
-A DIMEX identification number must contain 11 or 12 digits and must not begin with `0`.
+11 or 12 digits and must not begin with `0`.
 
 ## CUS-007 — Customer identification must be unique
-
 **Status:** Implemented
 
-Two customer records cannot share the same identification number.
-
-Uniqueness is protected by the database and translated into an appropriate application/API conflict.
+Uniqueness is protected by the database and translated into application behavior.
 
 ## CUS-008 — Customer email is required
-
 **Status:** Implemented
-
-A valid customer email address is required.
 
 ## CUS-009 — Customer phone number is required
-
 **Status:** Implemented
-
-A customer phone number is required within the supported length constraints.
 
 ## CUS-010 — Customer structured location is required
-
 **Status:** Implemented
 
-Costa Rican customers require structured province, canton, and district information.
+Province, canton, district, and additional address information are required by the current customer contract.
 
-## CUS-011 — Additional address information is required
-
+## CUS-011 — Customers have an active state
 **Status:** Implemented
 
-Customers require additional address information (`OtherSigns`) within the supported length constraints.
-
-## CUS-012 — Customers have an active state
-
+## CUS-012 — Customer delete behavior is deactivation
 **Status:** Implemented
 
-Customer availability is controlled through `IsActive`.
+The persisted customer record is retained.
 
-## CUS-013 — Customer deletion currently behaves as deactivation
-
+## CUS-013 — Customer timestamps are server controlled
 **Status:** Implemented
 
-The current delete operation deactivates the customer rather than physically removing the persisted record.
-
-## CUS-014 — Customer creation timestamp
-
+## CUS-014 — Customer listings are paginated and deterministically ordered
 **Status:** Implemented
 
-Customer records maintain a server-controlled UTC creation timestamp.
-
-## CUS-015 — Customer modification timestamp
-
+## CUS-015 — Customer listings support implemented filters/search
 **Status:** Implemented
-
-Customer records maintain a server-controlled UTC modification timestamp.
-
-## CUS-016 — Customer lists are paginated
-
-**Status:** Implemented
-
-Customer list operations use bounded pagination.
-
-## CUS-017 — Customer page parameters are bounded
-
-**Status:** Implemented
-
-Invalid or unreasonable pagination parameters are rejected or normalized according to the API contract.
-
-## CUS-018 — Customers can be filtered by identification type
-
-**Status:** Implemented
-
-Customer listings support the implemented identification-type filters.
-
-## CUS-019 — Customer search currently uses the customer name
-
-**Status:** Implemented
-
-Customer search currently filters by customer name.
-
-## CUS-020 — Customer listing has deterministic ordering
-
-**Status:** Implemented
-
-Customer listings use deterministic ordering so pagination remains stable.
 
 ---
 
 # 3. Data Integrity
 
 ## DAT-001 — Frontend validation is not authoritative
-
 **Status:** Implemented
-
-Business-critical validation remains enforced by the server.
 
 ## DAT-002 — Database constraints protect critical invariants
-
 **Status:** Implemented
-
-Important persisted invariants are protected by EF Core configuration and SQL Server constraints/indexes where appropriate.
 
 ## DAT-003 — Persistence entities are not the public HTTP contract
-
 **Status:** Implemented
 
-Shared request/response models define the public client/API contract.
+Shared request/response models define the client/API contract.
 
 ---
 
 # 4. Authentication and Access
 
 ## AUTH-001 — Application access is protected by default
-
 **Status:** Implemented
-
-Endpoints require authenticated access unless anonymous access is explicitly allowed.
 
 ## AUTH-002 — Authorization restricts privileged operations
-
 **Status:** Implemented
-
-Roles and authorization policies restrict operations that require elevated permissions.
 
 ## AUTH-003 — Mutable authenticated requests require antiforgery protection
-
 **Status:** Implemented
-
-Applicable authenticated state-changing requests require antiforgery validation.
 
 ---
 
@@ -194,286 +111,290 @@ Applicable authenticated state-changing requests require antiforgery validation.
 The Quotations domain is **Implemented** end to end.
 
 ## QUO-001 — A quotation belongs to an existing active customer
-
 **Status:** Implemented
-
-Every quotation belongs to an existing customer through `CustomerId`.
-
-The customer must be active when the quotation is created or modified.
 
 ## QUO-002 — Quotation lines may use registered or manual products
-
 **Status:** Implemented
 
-A quotation line may optionally reference a registered product through `ProductId`.
-
-Manual lines are valid when they satisfy the quotation-line rules.
-
-## QUO-003 — Existing products may assist quotation entry
-
+## QUO-003 — Product values may assist commercial entry
 **Status:** Implemented
 
-Selecting an existing product may populate available product information for the active line editor.
+Product-provided values are starting values for the active commercial line and remain editable according to the workflow.
 
-Product-provided values are starting values for the quotation and remain editable according to the quotation workflow.
-
-## QUO-004 — Quotation quantities represent commercial quantities
-
+## QUO-004 — Quotation quantities may be decimal
 **Status:** Implemented
-
-Quotation quantities may be decimal.
-
-Quotations do not assume a universal packaging or box-to-area conversion.
 
 ## QUO-005 — Quotations do not modify inventory
-
 **Status:** Implemented
 
-Creating, modifying, issuing, or reissuing a quotation does not reserve, deduct, or otherwise modify inventory.
-
-A quotation is a commercial proposal rather than a confirmed stock movement.
+Creating, modifying, issuing, reissuing, or converting a quotation does not itself reserve or deduct inventory.
 
 ## QUO-006 — CABYS is optional in commercial quotations
-
 **Status:** Implemented
 
-A quotation line may contain a CABYS code, but CABYS is not required to save or issue a commercial quotation.
-
-Future fiscal documents may impose different requirements without changing this quotation rule.
-
-## QUO-007 — Quotation prices include IVA when enabled
-
+## QUO-007 — Quotation prices are IVA-inclusive when tax applies
 **Status:** Implemented
 
-The entered unit price represents the commercial final unit price.
+Supported rates are currently 0% and 13%.
 
-When the applicable tax rate is 13%, IVA is extracted from the IVA-inclusive amount rather than added again.
-
-The currently supported quotation tax rates are 0% and 13%.
-
-## QUO-008 — Monetary calculations use decimal arithmetic and defined rounding
-
+## QUO-008 — Server calculations are authoritative
 **Status:** Implemented
-
-Quotation monetary calculations use decimal arithmetic and the implemented rounding rules.
-
-The server is authoritative for persisted and returned totals.
-
-Client calculations exist for immediate feedback only.
 
 ## QUO-009 — Quotation lines support percentage or fixed discounts
-
 **Status:** Implemented
-
-A quotation line may receive a percentage or fixed monetary discount.
-
-A discount must not produce an invalid negative line amount.
 
 ## QUO-010 — Quotations support additional charges
-
 **Status:** Implemented
 
-A quotation may contain supported additional-charge types such as transport, installation, service/other applicable values defined by the current contract.
-
-Additional charges contribute to the quotation total.
-
-## QUO-011 — Quotation numbers are generated by the backend
-
+## QUO-011 — Quotation numbers are backend generated
 **Status:** Implemented
 
-Each quotation receives a backend-generated consecutive number in the commercial format:
+Format:
 
 ```text
 COT-000001
 ```
 
-The numeric portion is generated through a SQL Server sequence.
+The numeric portion is generated through SQL Server sequence infrastructure.
 
-## QUO-012 — Saved quotations preserve their identity
-
+## QUO-012 — Saved quotations preserve identity
 **Status:** Implemented
 
-Editing or reissuing a quotation preserves its quotation identifier and `COT` number.
-
-Updates do not create a new commercial quotation identity.
+Editing or reissuing preserves the quotation ID and COT number.
 
 ## QUO-013 — Quotations are persisted server-side
-
 **Status:** Implemented
 
-Quotations, quotation lines, and charges are persisted through ASP.NET Core, EF Core, and SQL Server.
-
-Browser-local state is not the authoritative store.
-
-## QUO-014 — Quotation PDF generation is implemented in the backend
-
+## QUO-014 — Quotation PDFs are generated by the backend
 **Status:** Implemented
 
-Commercial quotation PDFs are generated by the backend using QuestPDF.
-
-PDF generation is separate from quotation persistence.
-
-An authenticated API endpoint returns the PDF for an existing quotation.
-
-## QUO-015 — Projects are outside the Quotations domain
-
+## QUO-015 — Quotations support CRC and USD
 **Status:** Implemented
 
-Project-management concepts are not introduced into Quotations unless a future Projects domain creates a concrete requirement.
-
-## QUO-016 — Quotations support CRC and USD
-
+## QUO-016 — Quotations support Draft and Issued states
 **Status:** Implemented
 
-A quotation may use CRC or USD.
+No additional persisted quotation status should be assumed.
 
-Currency conversion and exchange-rate management are outside the current Quotations domain.
-
-## QUO-017 — Quotation totals recalculate in the user interface
-
+## QUO-017 — Issued quotations store a customer snapshot
 **Status:** Implemented
 
-The Blazor interface provides immediate calculation feedback while the server remains authoritative.
-
-## QUO-018 — Quotation workflows remain clearly separated in the UI
-
+## QUO-018 — Quotation history is searchable and paginated
 **Status:** Implemented
 
-The quotation UI separates line entry, confirmed lines, charges, totals, and document actions.
+History supports search and the implemented date/status/currency filters.
 
-## QUO-019 — Only one quotation line editor is active at a time
-
+## QUO-019 — Issued quotations may be converted into a Sale Draft
 **Status:** Implemented
 
-The quotation UI uses one active line editor for new or edited lines.
+Conversion creates a Sale linked by `SourceQuotationId`.
 
-Confirmed lines are represented separately in a compact summary.
-
-## QUO-020 — Lines must be confirmed before save or issue
-
+## QUO-020 — Converting a quotation does not delete it
 **Status:** Implemented
 
-A line being actively edited must be confirmed before the quotation can be saved or issued.
+The quotation remains historical after conversion.
 
-This prevents partially edited UI state from being silently persisted.
-
-## QUO-021 — Quotations support Draft and Issued states
-
-**Status:** Implemented
-
-The implemented quotation lifecycle contains:
-
-* `Draft`
-* `Issued`
-
-No additional quotation lifecycle such as Sent, Approved, Rejected, or Expired should be assumed until explicitly implemented.
-
-## QUO-022 — Issued quotations store a customer snapshot
-
-**Status:** Implemented
-
-When a quotation is issued or reissued, Revestik stores the customer data required by the current quotation document:
-
-* Customer name.
-* Identification number.
-* Email.
-* Phone number.
-
-The snapshot prevents a later customer edit from changing the customer information represented by the issued quotation.
-
-## QUO-023 — Reissuing preserves the quotation identity and COT number
-
-**Status:** Implemented
-
-Reissuing an existing quotation updates its issued representation while preserving the same quotation identifier and commercial `COT` number.
-
-## QUO-024 — PDF download uses the authenticated application flow
-
-**Status:** Implemented
-
-The Blazor client requests the quotation PDF through the authenticated `HttpClient` flow and downloads it through JavaScript Blob handling.
-
-The client does not generate the authoritative quotation document itself.
+Its converted presentation is derived from the linked Sale rather than from a separate persisted `Converted` quotation status.
 
 ---
 
-# 6. Product Support for Quotations
+# 6. Sales
 
-## PROD-001 — Products may support quotation entry without defining the full Inventory domain
+The Sales domain is **Implemented** end to end.
 
+## SAL-001 — A sale belongs to an existing customer
 **Status:** Implemented
 
-A focused product model and lookup service may be used to assist quotation entry.
+A Sale references a customer through `CustomerId`.
 
-This support does not imply that stock quantities, inventory movements, or complete Inventory rules are implemented.
+## SAL-002 — A sale may be created directly or from an issued quotation
+**Status:** Implemented
+
+`SourceQuotationId` is optional for direct sales and populated for quotation conversions.
+
+## SAL-003 — Sales support Draft, Issued, and Voided states
+**Status:** Implemented
+
+## SAL-004 — A Draft does not have an official VEN number
+**Status:** Implemented
+
+The Sale number may remain null while the Sale is Draft.
+
+## SAL-005 — VEN is assigned when the sale is issued
+**Status:** Implemented
+
+Format:
+
+```text
+VEN-000001
+```
+
+The number is generated by the backend through SQL Server-backed sequence infrastructure.
+
+## SAL-006 — VEN generation must remain unique under concurrency
+**Status:** Implemented
+
+Concurrent generation is protected by the SQL Server sequence and verified by integration tests.
+
+## SAL-007 — Issued sales store a customer snapshot
+**Status:** Implemented
+
+The issued document is not rewritten by later customer changes.
+
+## SAL-008 — Sales support manual and registered-product lines
+**Status:** Implemented
+
+`ProductId` is optional.
+
+## SAL-009 — CABYS is optional for the current internal sale workflow
+**Status:** Implemented
+
+Direct fiscal-document requirements are outside the current Sales scope.
+
+## SAL-010 — Sales support CRC and USD
+**Status:** Implemented
+
+## SAL-011 — Sale monetary calculations are server authoritative
+**Status:** Implemented
+
+## SAL-012 — Sale prices use the implemented IVA-inclusive calculation model
+**Status:** Implemented
+
+Supported tax rates are currently 0% and 13%.
+
+## SAL-013 — Sales support line discounts and general discounts
+**Status:** Implemented
+
+Discount rules prevent invalid values such as percentages over 100% or fixed line discounts exceeding the line gross amount.
+
+## SAL-014 — Sales support additional charges
+**Status:** Implemented
+
+## SAL-015 — Issued and voided sales may have an internal PDF
+**Status:** Implemented
+
+Draft sales do not expose the official internal sale document.
+
+## SAL-016 — Sales expose paid and outstanding balances
+**Status:** Implemented
+
+Balance states are:
+
+* `Pending`
+* `PartiallyPaid`
+* `Paid`
+
+## SAL-017 — Sales support partial and full payments
+**Status:** Implemented
+
+Supported methods currently include:
+
+* Cash
+* Sinpe
+* BankTransfer
+* InternationalTransfer
+* Card
+* Other
+
+## SAL-018 — Payment history is preserved
+**Status:** Implemented
+
+Voiding a payment does not physically delete its historical record.
+
+## SAL-019 — Payment voiding requires a reason
+**Status:** Implemented
+
+## SAL-020 — Sale voiding requires a reason
+**Status:** Implemented
+
+The sale remains historical as `Voided`.
+
+## SAL-021 — Direct sale voiding must respect active-payment rules
+**Status:** Implemented
+
+The workflow prevents a simple sale void while active payments remain unresolved.
+
+## SAL-022 — Corrections use replacement sales
+**Status:** Implemented
+
+A correction/replacement does not overwrite the original issued sale.
+
+The original sale is retained as historical and linked to a new replacement Draft.
+
+## SAL-023 — Replacement Drafts are editable
+**Status:** Implemented
+
+The new Draft may be reviewed and corrected before issue.
+
+## SAL-024 — A replacement receives a new VEN when issued
+**Status:** Implemented
+
+The replacement does not reuse the original VEN.
+
+## SAL-025 — Sales history is searchable and paginated
+**Status:** Implemented
+
+Current list behavior supports the implemented search, date, status, balance-status, and currency filters.
+
+## SAL-026 — Sales expose per-currency commercial summaries
+**Status:** Implemented
+
+Summary data includes sold, collected, outstanding totals, and sale counts.
+
+## SAL-027 — Sales are internal commercial documents, not fiscal electronic invoices
+**Status:** Implemented
+
+Revestik does not currently sign or submit Costa Rican electronic invoices.
+
+---
+
+# 7. Product Support
+
+## PROD-001 — Product lookup may support commercial entry without defining full Inventory
+**Status:** Implemented
 
 ## PROD-002 — Product lookup is paginated and authorized
-
 **Status:** Implemented
 
-Product lookup behavior uses the current pagination contract and protected API access.
-
 ---
 
-# 7. Planned Business Domains
-
-## Sales
-
-**Status:** Planned / next investigation block
-
-Sales will be a separate business domain from Quotations.
-
-Rules such as sale identity, `VEN-xxxxxx` numbering, inventory movement timing, payment state, cancellation, and quotation conversion must be defined before implementation.
+# 8. Planned Business Domains
 
 ## Inventory
-
 **Status:** Planned
 
-Future rules will cover stock, movements, adjustments, availability, and relationships with sales and purchases.
+Future rules will cover stock quantities, movements, adjustments, availability, purchase increases, and sale decreases.
 
 ## Purchases and Suppliers
-
 **Status:** Planned
 
-Future rules will cover supplier data, purchases, costs, purchased items, and stock increases.
+## Accounts Receivable Expansion
+**Status:** Planned / optional expansion
 
-## Accounts Receivable
+Current Sales already support payment and outstanding-balance tracking.
 
-**Status:** Planned
-
-Future rules will cover balances, payments, partial payments, due dates, aging, and collection alerts.
+A broader receivables domain may be introduced if business requirements expand into aging, collection workflows, or customer-level aggregation.
 
 ## Expenses
-
 **Status:** Planned
-
-Future rules will cover operating expenses and small card expenses.
-
-AI-assisted extraction from unstructured vouchers is a later enhancement rather than a prerequisite for basic expense recording.
 
 ---
 
-# 8. Deferred Integrations
+# 9. Deferred Integrations
 
 ## Electronic Invoicing
-
 **Status:** Deferred
 
 Direct integration with Costa Rica's Ministerio de Hacienda is intentionally postponed.
 
-Fiscal electronic invoices may continue to be generated through the existing external invoicing provider.
-
-Quotations and future internal sales must remain conceptually separate from fiscal electronic documents.
+Internal `VEN` documents remain separate from fiscal electronic documents.
 
 ## Automated Email and WhatsApp Distribution
-
 **Status:** Deferred
-
-Automated document distribution is not required for the current MVP because users can download the quotation PDF and distribute it manually.
 
 ---
 
-# 9. Rule Change Process
+# 10. Rule Change Process
 
 A business-rule change may require updates to:
 
@@ -491,7 +412,7 @@ Not every rule requires changes at every layer.
 
 ---
 
-# 10. Source of Truth
+# 11. Source of Truth
 
 This document describes expected business behavior.
 

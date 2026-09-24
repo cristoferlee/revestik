@@ -12,11 +12,7 @@ Status terminology:
 * **Under Evaluation** — being considered but not selected.
 * **Deferred** — intentionally postponed.
 
-A roadmap item should not be presented as implemented merely because it is planned.
-
 ## 2. Roadmap Principles
-
-Revestik development follows these principles:
 
 1. Complete business workflows vertically.
 2. Protect important rules on the server.
@@ -25,7 +21,8 @@ Revestik development follows these principles:
 5. Avoid unnecessary architectural complexity.
 6. Prioritize workflows that solve real operational needs.
 7. Treat security and data integrity as product requirements.
-8. Do not let high-risk integrations block a smaller useful production release.
+8. Preserve important business history instead of deleting it.
+9. Do not let high-risk integrations block a smaller useful production release.
 
 ## 3. Implemented Foundation
 
@@ -57,43 +54,48 @@ Customer management includes validation, persistence, active/inactive state, pag
 
 **Status: Implemented**
 
-The complete Quotations vertical workflow includes:
+Includes creation/editing, Draft/Issued lifecycle, customer snapshot, commercial lines, discounts, charges, COT numbering, PDFs, history/search/filtering, and conversion into linked Sale Drafts.
 
-* Create/edit workflow in Blazor.
-* Active-customer association.
-* `Draft` and `Issued` states.
-* Customer snapshot on issue/reissue.
-* Manual and product-assisted lines.
-* Optional product association.
-* Optional CABYS for commercial quotations.
-* Unit of measure and decimal quantities.
-* CRC and USD.
-* IVA-inclusive 0% / 13% calculations.
-* Percentage and fixed discounts.
-* Additional charges.
-* Client calculation feedback.
-* Server-authoritative totals.
-* SQL Server sequence-backed `COT-xxxxxx`.
-* Preservation of identity on edit/reissue.
-* Backend PDF generation with QuestPDF.
-* Authenticated PDF download.
+Quotations remain historical after conversion and do not modify inventory.
+
+### Sales Domain
+
+**Status: Implemented**
+
+Includes:
+
+* Direct Sales.
+* Sales from issued quotations.
+* Draft/Issued/Voided lifecycle.
+* SQL Server sequence-backed `VEN-xxxxxx`.
+* Customer snapshots.
+* Manual/product-assisted lines.
+* Discounts and charges.
+* IVA-inclusive calculations.
+* Internal PDFs.
+* Searchable/paginated history.
+* Per-currency summaries.
+* Partial/full payments.
+* Payment history and payment voids.
+* Outstanding-balance tracking.
+* Sale voiding.
+* Replacement/correction workflow.
+* Quotation-to-sale and sale-to-replacement traceability.
 * Authorization and antiforgery protection.
-* Automated unit, API, service, persistence, and concurrency verification.
+* Automated lifecycle, query, payment, PDF, validation, persistence, and concurrency tests.
 
-Quotations do not modify inventory.
-
-### Product Support for Quotations
+### Product Support for Commercial Entry
 
 **Status: Implemented as supporting capability**
 
-A focused Product model and paginated lookup support quotation entry.
+A focused Product model and paginated lookup support quotations and sales.
 
 This is not yet the complete Inventory domain.
 
 ### Engineering Foundation
 
 * Automated test project.
-* Unit/focused behavior tests.
+* Focused behavior tests.
 * Integration and hosting tests.
 * SQL Server Testcontainers coverage.
 * CI verification.
@@ -103,13 +105,13 @@ This is not yet the complete Inventory domain.
 * EF Core migrations.
 * Architecture, security, product, testing, and deployment documentation.
 
-Current automated test baseline:
+Current verified baseline:
 
-**194 passed, 0 failed, 0 skipped.**
+**257 passed, 0 failed.**
 
 ## 4. Current Development Phase
 
-Revestik has completed its first full transactional commercial workflow.
+The implemented platform now includes:
 
 ```text
 Engineering foundation
@@ -117,53 +119,34 @@ Engineering foundation
 Customers
         +
 Quotations
+        +
+Sales
         =
 Current implemented platform
 ```
 
-The next step is to investigate and implement **Sales** without prematurely redesigning Quotations into a generic transaction model.
+## 5. Current Focus — Inventory
 
-## 5. Current Focus — Sales
+**Status: Planned / next major domain**
 
-**Status: Planned / next investigation block**
-
-Sales must be treated as a separate business document from Quotations.
-
-The investigation should define:
-
-* Conversion from quotation to sale.
-* Internal `VEN-xxxxxx` numbering.
-* Sale states.
-* Cancellation/void behavior.
-* Payment information.
-* Manual versus registered-product lines.
-* Inventory movement timing.
-* Prevention of invalid negative stock.
-* Optional external fiscal-document reference.
-
-No Sales implementation should begin until these rules are planned and approved.
-
-## 6. Near-Term Domains
-
-### Inventory
-
-**Status: Planned**
-
-Expected areas:
+Inventory should define:
 
 * Product/material catalog evolution.
 * Stock quantities.
 * Inventory movements.
 * Stock adjustments.
-* Purchase-related stock increases.
-* Sale-related stock decreases.
+* Sale-related decreases.
+* Purchase-related increases.
+* Insufficient-stock behavior.
 * Search/filtering.
 * Stock visibility.
+* Traceability of stock-changing operations.
 
-Incorrect stock transitions can corrupt operational data, so movement rules must be explicit and tested.
+Incorrect inventory transitions can corrupt operational data, so movement rules must be explicit and tested before implementation.
+
+## 6. Near-Term Domains
 
 ### Purchases
-
 **Status: Planned**
 
 Expected areas:
@@ -173,97 +156,46 @@ Expected areas:
 * Purchased items.
 * Costs and totals.
 * Purchase history.
-* Inventory integration.
+* Inventory increases.
 
 ### Suppliers
-
 **Status: Planned**
-
-Expected areas:
-
-* Supplier identity.
-* Contact information.
-* Status.
-* Search/filtering.
-* Relationships with purchases and products.
 
 ### Expenses
-
 **Status: Planned**
 
-Expected areas:
+### Accounts Receivable Expansion
+**Status: Planned / conditional**
 
-* Small operating expenses.
-* Card expenses.
-* Categories.
-* Merchant/vendor information.
-* Date, amount, currency, and payment source.
-* Review and correction workflow.
+Sales already implement payment tracking and outstanding balances.
 
-A later enhancement may extract data from bank vouchers received as PDFs or images.
-
-### Accounts Receivable
-
-**Status: Planned**
-
-Expected areas:
-
-* Outstanding balances.
-* Payments.
-* Partial payments.
-* Paid/unpaid state.
-* Due dates.
-* Aging.
-* Payment history.
-* Collection alerts.
+A broader receivables domain should be introduced only if requirements expand into customer-level aging, collection alerts, or cross-sale views.
 
 ### Dashboard and Analytics
-
 **Status: Planned**
-
-Reporting should be built from structured server-side data and real management requirements.
-
-Potential indicators include sales, purchases, expenses, receivables, inventory, quotation activity, and business summaries.
 
 ### Application Configuration
-
 **Status: Planned**
-
-Potential areas include company information, business preferences, user administration, and roles.
 
 ## 7. Deferred Capabilities
 
 ### Direct Electronic Invoicing with Ministerio de Hacienda
-
 **Status: Deferred**
 
-Direct Costa Rican electronic invoicing is intentionally postponed.
+Internal `VEN` sales are not fiscal electronic invoices.
 
-The current business can continue generating fiscal electronic invoices through its existing external provider while Revestik manages internal operational workflows.
-
-Revestik should revisit direct Hacienda integration only after the core application is production-proven and the regulatory/integration scope is intentionally reopened.
+The business may continue using its external invoicing provider until direct Hacienda integration is intentionally reopened.
 
 ### Automated Email Distribution
-
 **Status: Deferred**
-
-Manual PDF download currently satisfies the quotation-distribution need.
 
 ### WhatsApp Distribution
-
 **Status: Deferred**
 
-Direct WhatsApp integration is not an MVP requirement.
-
 ### AI-Assisted Expense Ingestion
-
 **Status: Deferred enhancement**
 
-Future expense workflows may use document AI/LLM-assisted extraction and classification for unstructured PDFs or images.
-
-Structured XML should use deterministic parsing when available.
-
-Early automation should include human confirmation before persisted expense creation.
+Structured XML should use deterministic parsing where available.
 
 ## 8. Production Infrastructure
 
@@ -302,41 +234,31 @@ Manage users
 Manage configuration
 ```
 
-Permissions should reflect real roles rather than arbitrary technical groupings.
-
 ## 10. Auditability
 
-Financial and operational domains may require stronger audit information, including:
+Sales already preserve important operational history through voiding and replacement relationships.
 
-* Who performed an action.
-* What changed.
-* When it changed.
-* Relevant previous state.
-* Relevant resulting state.
+Future financial and operational domains may require broader audit information such as before/after values or centralized event history.
 
 Audit infrastructure should be introduced when domain requirements justify it.
 
 ## 11. Testing Expansion
 
-Each critical domain should introduce tests with implementation.
-
 Upcoming priorities include:
 
-1. Sales state and conversion rules.
-2. Inventory movement and stock invariants.
-3. Purchase-to-stock behavior.
-4. Accounts receivable/payment transitions.
+1. Inventory movement and stock invariants.
+2. Purchase-to-stock behavior.
+3. Expanded receivables behavior if introduced.
+4. Expense classification/storage.
 5. Expanded authorization coverage.
 6. Database migration verification.
-7. Critical browser workflows where automation is justified.
+7. Critical browser automation where justified.
 
 ## 12. Performance and Background Processing
 
-Performance work should be driven by measurements.
+Performance work should be measurement-driven.
 
-Background infrastructure should only be added when a concrete asynchronous requirement exists.
-
-Potential future cases include large report generation, scheduled alerts, or retryable external integrations.
+Background infrastructure should only be added for concrete asynchronous requirements.
 
 ## 13. Definition of Done for New Domains
 

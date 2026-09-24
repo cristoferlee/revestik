@@ -30,10 +30,11 @@ Responsibilities include:
 * Rendering the user interface.
 * Managing navigation and UI state.
 * Client-side form validation and calculation feedback.
-* Communicating with the API through HTTP services.
+* Communicating with the API through typed HTTP services.
 * Managing client authentication state.
 * Obtaining/sending antiforgery tokens for protected mutable requests.
-* Downloading server-generated documents through authenticated HTTP flows and JavaScript interop where required.
+* Downloading server-generated documents through authenticated HTTP flows and JavaScript interop.
+* Reusing commercial UI components such as customer and product selectors.
 
 The client does not access SQL Server directly and is not a trusted security boundary.
 
@@ -54,22 +55,11 @@ Responsibilities include:
 * Hosting the published Blazor WebAssembly application.
 * Health checks and production-host configuration.
 
-Internal organization includes responsibilities such as:
-
-```text
-Endpoints
-Services
-Data
-Models
-Authorization
-Integrations
-```
-
 ### Revestik.Shared
 
 `Revestik.Shared` contains request/response contracts shared between the client and API.
 
-Current contract areas include authentication, customers, quotations, products, locations, taxpayer information, and common response structures such as pagination.
+Current contract areas include authentication, customers, quotations, sales, products, locations, taxpayer information, and common response structures such as pagination.
 
 Persistence entities remain server-side.
 
@@ -77,7 +67,7 @@ Persistence entities remain server-side.
 
 `Revestik.Api.Tests` contains automated verification for server behavior, persistence, security, and hosting.
 
-Current areas include customers, products, quotations, authentication/CSRF, SQL Server integration, concurrency, and hosting.
+Current areas include customers, products, quotations, sales, authentication/CSRF, SQL Server integration, concurrency, PDF behavior, and hosting.
 
 ## 3. High-Level Architecture
 
@@ -147,14 +137,16 @@ Data integrity is enforced at multiple levels where appropriate:
 3. EF Core configuration.
 4. SQL Server constraints/indexes.
 
-## 6. Quotations Architecture
+SQL Server sequences are used where commercial consecutive generation must remain safe under concurrency.
 
-Quotations extend the existing Client/API/Shared structure without introducing a new architectural layer.
+## 6. Commercial Architecture
 
-The current flow is conceptually:
+Quotations and Sales use the same Client/API/Shared architectural pattern while remaining separate business documents.
+
+### Quotations
 
 ```text
-Quotes.razor / Quotes.razor.cs
+Quotes.razor / QuotesHistory.razor
         ↓
 IQuotationApiService
         ↓
@@ -166,7 +158,6 @@ IQuotationService
         ↓
 QuotationService
         ├── QuotationCalculator
-        ├── product lookup/support
         └── QuotationPdfService
         ↓
 Entity Framework Core
@@ -174,51 +165,113 @@ Entity Framework Core
 SQL Server
 ```
 
-Quotation request/response contracts live in `Revestik.Shared`.
+Quotations use `COT-xxxxxx` identifiers, support Draft/Issued states, preserve issued customer snapshots, and remain non-inventory commercial proposals.
 
-The server remains authoritative for monetary calculations and persisted state.
-
-### Consecutive Number Generation
-
-Quotation numbers are generated through SQL Server-backed sequence infrastructure.
-
-Current commercial format:
+### Sales
 
 ```text
-COT-000001
+Sales.razor / SalesHistory.razor
+        ↓
+ISaleApiService
+        ↓
+SaleApiService
+        ↓
+SaleEndpoints
+        ↓
+ISaleService
+        ↓
+SaleService
+        ├── SaleCalculator
+        ├── SqlSaleNumberGenerator
+        └── SalePdfService
+        ↓
+Entity Framework Core
+        ↓
+SQL Server
 ```
 
-The number is generated when the quotation is created and preserved when the quotation is edited or reissued.
+Sales support Draft/Issued/Voided states, payments, replacement relationships, history queries, summaries, and internal PDF generation.
 
-Concurrent sequence behavior is verified against SQL Server.
+### Shared Commercial Calculation
 
-### Customer Snapshot
+Commercial calculations are kept server-authoritative.
 
-When a quotation is issued or reissued, customer information required by the quotation document is persisted as a snapshot.
+Reusable commercial calculation behavior is centralized where practical so Quotations and Sales do not silently diverge on common monetary rules.
 
-This allows the commercial document to remain stable if the Customer record changes later.
+Client-side calculations exist for immediate feedback only.
 
-### Product-Assisted Lines
+## 7. Quotation-to-Sale Conversion
 
-Quotation lines may reference a registered product or remain manual.
+An issued quotation may become the source of a Sale Draft.
 
-Product lookup is a supporting capability and does not imply that the complete Inventory domain or stock-movement model has been implemented.
+Conceptually:
 
-### PDF Generation
+```mermaid
+flowchart LR
+    Q[Issued Quotation<br/>COT-xxxxxx]
+    S[Sale Draft<br/>no VEN yet]
+    I[Issued Sale<br/>VEN-xxxxxx]
 
-Commercial quotation PDFs are generated exclusively in the backend through `QuotationPdfService` using QuestPDF.
+    Q -->|Create from quotation| S
+    S -->|Review / edit / issue| I
+```
 
-The client requests the document from the authenticated API and downloads the returned bytes through JavaScript Blob handling.
+The quotation remains persisted and historical after conversion.
 
-The browser does not hold PDF-generation authority.
+The Sale stores the quotation relationship through `SourceQuotationId`.
 
-## 7. Authentication and Authorization
+Quotation history can therefore display that a quotation was converted without introducing a separate persisted `Converted` quotation status.
+
+## 8. Sale Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Draft
+    Draft --> Issued: Issue
+    Issued --> Voided: Void
+    Issued --> Voided: Create replacement
+    Voided --> Draft: Linked replacement created
+```
+
+A Draft does not have an official `VEN` number.
+
+The VEN is generated when the sale is issued.
+
+A replacement does not overwrite the original sale. The original remains historical and the new linked Draft may be corrected and issued with a different VEN.
+
+## 9. Payment Architecture
+
+Payments belong to Sales.
+
+A Sale may have zero or more payment records.
+
+The current balance model exposes:
+
+* `Pending`
+* `PartiallyPaid`
+* `Paid`
+
+Payments may be voided while preserving their history.
+
+The Sale response exposes authoritative paid and outstanding totals.
+
+Broader accounts-receivable behavior may evolve later if business requirements exceed this sale-centered model.
+
+## 10. Commercial PDF Generation
+
+Quotation and Sale PDFs are generated in the backend using QuestPDF.
+
+The browser requests the authenticated document endpoint and downloads the returned bytes.
+
+Draft Sales do not have an official sale PDF because they do not yet have a VEN.
+
+## 11. Authentication and Authorization
 
 Revestik uses ASP.NET Core Identity with cookie-based authentication.
 
 The application follows a protected-by-default model.
 
-Roles/policies restrict privileged operations.
+Roles/policies restrict privileged operations, including quotation and sale management.
 
 Applicable mutable authenticated requests are protected with antiforgery validation.
 
@@ -228,35 +281,39 @@ Detailed behavior is documented in:
 docs/security/security-overview.md
 ```
 
-## 8. Hosted Application Model
+## 12. Hosted Application Model
 
-During local development, Client and API may run on separate development origins.
+During local development, Client and API run on separate development origins.
 
 For the published application, ASP.NET Core serves the compiled Blazor WebAssembly application and the API.
 
 Blazor routes use SPA fallback behavior while unknown `/api/*` routes remain API responses rather than returning `index.html`.
 
-## 9. External Integrations
+## 13. External Integrations
 
 External systems are kept behind server-side boundaries.
-
-This prevents secrets or privileged external communication from being exposed to Blazor WebAssembly.
 
 Current integrations include taxpayer/location-related services.
 
 Future integrations should use the same server-side trust boundary.
 
-## 10. Deferred Electronic Invoicing Boundary
+## 14. Deferred Electronic Invoicing Boundary
 
 Direct Costa Rican electronic invoicing is not part of the current architecture.
 
-If revisited, fiscal signing credentials, API credentials, signing operations, and Ministerio de Hacienda communication must remain exclusively server-side.
+Internal Sales (`VEN`) are not fiscal electronic invoices.
 
-The current architecture intentionally avoids introducing that regulatory integration before the core application is production-proven.
+If electronic invoicing is revisited, fiscal signing credentials, API credentials, signing operations, and Ministerio de Hacienda communication must remain exclusively server-side.
 
-## 11. Testing and Continuous Integration
+## 15. Testing and Continuous Integration
 
 Automated tests are maintained in `Revestik.Api.Tests`.
+
+Current coverage includes Customers, Products, Quotations, Sales, authentication/CSRF, SQL Server integration, concurrency, PDFs, and hosting.
+
+Current local verified baseline:
+
+**257 passed, 0 failed.**
 
 Current CI:
 
@@ -266,11 +323,7 @@ Current CI:
 4. Publishes the hosted application.
 5. Verifies required Blazor/runtime/static assets.
 
-Current local verified baseline:
-
-**194 passed, 0 failed, 0 skipped.**
-
-## 12. Architectural Principles
+## 16. Architectural Principles
 
 ### Separation of concerns
 
@@ -288,6 +341,10 @@ Critical invariants can be protected through validation, application logic, EF c
 
 Client/API communication uses shared contracts rather than persistence entities.
 
+### Traceability over destructive mutation
+
+Historical commercial documents are preserved. Conversion, voiding, payment correction, and sale replacement retain traceable relationships instead of deleting or overwriting important history.
+
 ### Incremental complexity
 
 New infrastructure and abstractions should solve concrete requirements rather than exist only to imitate a reference architecture.
@@ -296,7 +353,7 @@ New infrastructure and abstractions should solve concrete requirements rather th
 
 Deferred integrations should not delay completion and production hardening of the core business application.
 
-## 13. Current Architectural Classification
+## 17. Current Architectural Classification
 
 Revestik is a modular full-stack .NET application with:
 
@@ -307,7 +364,8 @@ Revestik is a modular full-stack .NET application with:
 * EF Core and SQL Server persistence.
 * ASP.NET Core Identity.
 * Backend-generated commercial PDFs.
-* Automated server, persistence, security, and hosting tests.
+* SQL Server-backed commercial numbering.
+* Automated server, persistence, security, concurrency, and hosting tests.
 
 It is intentionally not implemented as independently deployable microservices.
 
