@@ -1,0 +1,819 @@
+@page "/sales"
+@using Revestik.Client.Components.Commercial
+@using Revestik.Shared.Customers
+@using Revestik.Shared.Sales
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales")]
+
+<PageTitle>Ventas | Revestik</PageTitle>
+
+<section class="quotations-page">
+    <header class="page-header">
+        <div>
+            <h1>Ventas</h1>
+            <p>
+                Registra ventas directas y conserva el historial comercial.
+            </p>
+        </div>
+
+        <a class="secondary-button"
+           href="/sales/history">
+            Historial de ventas
+        </a>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message"
+             role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="status-message" role="status">
+            @successMessage
+        </div>
+    }
+
+    <section class="customer-card"
+             aria-labelledby="sale-form-title">
+        <h2 id="sale-form-title">
+            @(currentSaleId.HasValue
+                ? "Venta"
+                : "Nueva venta")
+        </h2>
+
+        @if (currentSaleId.HasValue)
+        {
+            <p class="field-guidance">
+                @if (!string.IsNullOrWhiteSpace(currentSaleNumber))
+                {
+                    <strong>@currentSaleNumber</strong>
+                    <text> · </text>
+                }
+
+                @GetSaleStatusLabel(currentSaleStatus)
+            </p>
+        }
+
+        @if (currentSale?.ReplacesSaleId is int replacedSaleId)
+        {
+            <div class="replacement-draft-banner">
+                <strong>Borrador de reemplazo</strong>
+                <span>
+                    Corrige la venta anterior #@replacedSaleId.
+                    Revisa cliente, líneas, descuentos y cargos antes de emitir.
+                </span>
+            </div>
+        }
+
+        <div class="form-grid">
+            <CustomerSelector SelectedCustomer="selectedCustomer"
+                              SelectedCustomerChanged="OnSelectedCustomerChanged"
+                              Disabled="@IsReadOnly" />
+
+            <div class="form-group">
+                <label for="sale-currency">
+                    Moneda
+                </label>
+
+                <InputSelect id="sale-currency"
+                             @bind-Value="formModel.Currency"
+                             disabled="@IsReadOnly">
+                    <option value="@Currency.CRC">
+                        CRC
+                    </option>
+
+                    <option value="@Currency.USD">
+                        USD
+                    </option>
+                </InputSelect>
+            </div>
+        </div>
+    </section>
+
+    <section class="customer-card"
+             aria-labelledby="sale-lines-title">
+        <div class="page-header">
+            <div>
+                <h2 id="sale-lines-title">
+                    Productos y servicios
+                </h2>
+                <p>
+                    Agrega las líneas que forman parte de la venta.
+                </p>
+            </div>
+
+        </div>
+
+        @if (isLineEditorOpen && !IsReadOnly)
+        {
+            <section class="quotation-line-card quotation-line-editor">
+                <div class="page-header">
+                    <div>
+                        <h3>
+                            @(editingSaleLine is null
+                                ? "Nueva línea"
+                                : "Editar línea")
+                        </h3>
+
+                        <small class="field-guidance">
+                            @(lineEditor.IsLinkedToProduct
+                                ? "Vinculada a inventario"
+                                : "Línea manual")
+                        </small>
+                    </div>
+
+                    <div class="line-editor-actions">
+                        @if (lineEditor.IsLinkedToProduct)
+                        {
+                            <button type="button"
+                                    class="secondary-button"
+                                    @onclick="OpenProductSearch">
+                                Cambiar producto
+                            </button>
+
+                            <button type="button"
+                                    class="secondary-button"
+                                    @onclick="UnlinkProduct">
+                                Desvincular
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button"
+                                    class="secondary-button"
+                                    @onclick="OpenProductSearch">
+                                Buscar en inventario
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                @if (isProductSearchOpen)
+                {
+                    <ProductSelector ProductSelected="SelectProduct"
+                                     OnClose="CloseProductSearch" />
+                }
+
+                <div class="form-grid quotation-line-form-grid">
+                    <div class="form-group form-wide">
+                        <label>Descripción</label>
+                        <InputText @bind-Value="lineEditor.Description"
+                                   maxlength="500"
+                                   placeholder="Ej. Porcelanato 60x120" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>CABYS</label>
+                        <InputText @bind-Value="lineEditor.CabysCode"
+                                   maxlength="13"
+                                   inputmode="numeric"
+                                   placeholder="13 dígitos" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Unidad</label>
+                        <InputSelect @bind-Value="lineEditor.Unit"
+                                     disabled="@lineEditor.IsLinkedToProduct">
+                            <option value="">
+                                Seleccione una unidad
+                            </option>
+
+                            @if (lineEditor.IsLinkedToProduct &&
+                                 !string.IsNullOrWhiteSpace(lineEditor.Unit) &&
+                                 !SaleUnitOptions.Contains(lineEditor.Unit))
+                            {
+                                <option value="@lineEditor.Unit">
+                                    @lineEditor.Unit
+                                </option>
+                            }
+
+                            @foreach (var unit in SaleUnitOptions)
+                            {
+                                <option value="@unit">
+                                    @unit
+                                </option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Cantidad</label>
+                        <InputNumber @bind-Value="lineEditor.Quantity"
+                                     min="0.01"
+                                     step="0.01" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Precio unitario</label>
+                        <InputNumber @bind-Value="lineEditor.UnitPrice"
+                                     min="0.01"
+                                     step="0.01"
+                                     disabled="@lineEditor.IsLinkedToProduct" />
+
+                        <small class="field-guidance">
+                            @(lineEditor.IsLinkedToProduct
+                                ? "Precio cargado desde inventario. Usa descuento para reducirlo."
+                                : "Precio final con IVA incluido.")
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Tipo de descuento</label>
+                        <InputSelect @bind-Value="lineEditor.DiscountType">
+                            <option value="">
+                                Sin descuento
+                            </option>
+                            <option value="@DiscountType.Percentage">
+                                Porcentaje
+                            </option>
+                            <option value="@DiscountType.FixedAmount">
+                                Monto fijo
+                            </option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Descuento</label>
+                        <InputNumber @bind-Value="lineEditor.DiscountValue"
+                                     min="0"
+                                     step="0.01"
+                                     disabled="@(lineEditor.DiscountType is null)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>IVA</label>
+                        <InputSelect @bind-Value="lineEditor.TaxRate"
+                                     disabled="@lineEditor.IsLinkedToProduct">
+                            <option value="13">
+                                13%
+                            </option>
+                            <option value="0">
+                                0%
+                            </option>
+                        </InputSelect>
+                    </div>
+                </div>
+
+                <div class="quotation-line-summary">
+                    <span>
+                        Subtotal:
+                        <strong>@lineEditor.GrossAmount.ToString("N2")</strong>
+                    </span>
+                    <span>
+                        Descuento:
+                        <strong>@lineEditor.DiscountAmount.ToString("N2")</strong>
+                    </span>
+                    <span>
+                        IVA incluido:
+                        <strong>@lineEditor.TaxAmount.ToString("N2")</strong>
+                    </span>
+                    <span>
+                        Total:
+                        <strong>@lineEditor.TotalAmount.ToString("N2")</strong>
+                    </span>
+                </div>
+
+                <div class="form-actions line-confirm-actions">
+                    <button type="button"
+                            class="secondary-button"
+                            @onclick="CancelLineEditor">
+                        Cancelar
+                    </button>
+
+                    <button type="button"
+                            class="primary-button"
+                            @onclick="ConfirmSaleLine">
+                        @(editingSaleLine is null
+                            ? "Agregar línea"
+                            : "Guardar cambios")
+                    </button>
+                </div>
+            </section>
+        }
+
+        <div class="quotation-lines-summary-header">
+            <div>
+                <h3>Resumen de líneas</h3>
+                <small class="field-guidance">
+                    @saleLines.Count línea(s) agregada(s)
+                </small>
+            </div>
+
+            @if (saleLines.Count > 0 &&
+                 !isLineEditorOpen &&
+                 !IsReadOnly)
+            {
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="StartNewSaleLine">
+                    Nueva línea
+                </button>
+            }
+        </div>
+
+        @if (saleLines.Count == 0)
+        {
+            <p class="empty-state">
+                Todavía no hay líneas agregadas a la venta.
+            </p>
+        }
+        else
+        {
+            <div class="table-container quotation-lines-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Descripción</th>
+                            <th>Unidad</th>
+                            <th>Cant.</th>
+                            <th>Precio</th>
+                            <th>Desc.</th>
+                            <th>IVA</th>
+                            <th>Total</th>
+                            @if (!IsReadOnly)
+                            {
+                                <th>Acciones</th>
+                            }
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var line in saleLines)
+                        {
+                            <tr class="@(ReferenceEquals(
+                                                editingSaleLine,
+                                                line)
+                                            ? "line-being-edited"
+                                            : null)">
+                                <td data-label="Descripción">
+                                    <strong>@line.Description</strong>
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                            line.CabysCode))
+                                    {
+                                        <small class="table-secondary-text">
+                                            CABYS @line.CabysCode
+                                        </small>
+                                    }
+                                </td>
+
+                                <td data-label="Unidad">
+                                    @line.Unit
+                                </td>
+
+                                <td data-label="Cant.">
+                                    @line.Quantity.ToString("N2")
+                                </td>
+
+                                <td data-label="Precio">
+                                    @line.UnitPrice.ToString("N2")
+                                </td>
+
+                                <td data-label="Desc.">
+                                    @line.DiscountAmount.ToString("N2")
+                                </td>
+
+                                <td data-label="IVA">
+                                    @line.TaxRate.ToString("N0")%
+                                </td>
+
+                                <td data-label="Total">
+                                    <strong>
+                                        @line.TotalAmount.ToString("N2")
+                                    </strong>
+                                </td>
+
+                                @if (!IsReadOnly)
+                                {
+                                    <td data-label="Acciones">
+                                        <div class="table-row-actions">
+                                            <button type="button"
+                                                    class="secondary-button"
+                                                    disabled="@isLineEditorOpen"
+                                                    @onclick="() => EditSaleLine(line)">
+                                                Editar
+                                            </button>
+
+                                            <button type="button"
+                                                    class="secondary-button"
+                                                    disabled="@isLineEditorOpen"
+                                                    @onclick="() => RemoveSaleLine(line)">
+                                                Eliminar
+                                            </button>
+                                        </div>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="customer-card"
+             aria-labelledby="sale-general-discount-title">
+        <h2 id="sale-general-discount-title">
+            Descuento general
+        </h2>
+
+        <p class="field-guidance">
+            El descuento general se aplica a las líneas de la venta.
+            No descuenta los cargos adicionales.
+        </p>
+
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Tipo</label>
+
+                <InputSelect @bind-Value="formModel.GeneralDiscountType"
+                             disabled="@IsReadOnly">
+                    <option value="">
+                        Sin descuento general
+                    </option>
+                    <option value="@DiscountType.Percentage">
+                        Porcentaje
+                    </option>
+                    <option value="@DiscountType.FixedAmount">
+                        Monto fijo
+                    </option>
+                </InputSelect>
+            </div>
+
+            <div class="form-group">
+                <label>Valor</label>
+
+                <InputNumber @bind-Value="formModel.GeneralDiscountValue"
+                             min="0"
+                             step="0.01"
+                             disabled="@(IsReadOnly ||
+                                         formModel.GeneralDiscountType is null)" />
+            </div>
+        </div>
+    </section>
+
+    <section class="customer-card"
+             aria-labelledby="sale-charges-title">
+        <div class="page-header">
+            <div>
+                <h2 id="sale-charges-title">
+                    Cargos adicionales
+                </h2>
+                <p>
+                    Agrega transporte, instalación, servicio u otros cargos.
+                </p>
+            </div>
+
+            @if (!IsReadOnly)
+            {
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="AddSaleCharge">
+                    Agregar cargo
+                </button>
+            }
+        </div>
+
+        @if (saleCharges.Count == 0)
+        {
+            <p class="empty-state">
+                No hay cargos adicionales.
+            </p>
+        }
+
+        @for (var index = 0; index < saleCharges.Count; index++)
+        {
+            var charge = saleCharges[index];
+
+            <section class="quotation-line-card">
+                <div class="page-header">
+                    <h3>Cargo @(index + 1)</h3>
+
+                    @if (!IsReadOnly)
+                    {
+                        <button type="button"
+                                class="secondary-button"
+                                @onclick="() => RemoveSaleCharge(charge)">
+                            Eliminar
+                        </button>
+                    }
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Tipo</label>
+
+                        <InputSelect @bind-Value="charge.Type"
+                                     disabled="@IsReadOnly">
+                            <option value="@SaleChargeType.Service">
+                                Servicio
+                            </option>
+                            <option value="@SaleChargeType.Transport">
+                                Transporte
+                            </option>
+                            <option value="@SaleChargeType.Installation">
+                                Instalación
+                            </option>
+                            <option value="@SaleChargeType.Other">
+                                Otro
+                            </option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Monto</label>
+
+                        <InputNumber @bind-Value="charge.Amount"
+                                     min="0.01"
+                                     step="0.01"
+                                     disabled="@IsReadOnly" />
+                    </div>
+
+                    <div class="form-group form-wide">
+                        <label>Descripción</label>
+
+                        <InputText @bind-Value="charge.Description"
+                                   maxlength="500"
+                                   placeholder="Detalle opcional del cargo"
+                                   disabled="@IsReadOnly" />
+
+                        @if (charge.Type == SaleChargeType.Other)
+                        {
+                            <small class="field-guidance">
+                                La descripción es obligatoria para cargos de tipo Otro.
+                            </small>
+                        }
+                    </div>
+                </div>
+            </section>
+        }
+    </section>
+
+    <section class="customer-card"
+             aria-labelledby="sale-observations-title">
+        <h2 id="sale-observations-title">
+            Observaciones
+        </h2>
+
+        <div class="form-group">
+            <InputTextArea @bind-Value="formModel.Observations"
+                           rows="5"
+                           maxlength="2000"
+                           placeholder="Agrega notas o información adicional de la venta."
+                           disabled="@IsReadOnly" />
+
+            <small class="field-guidance">
+                Máximo 2000 caracteres.
+            </small>
+        </div>
+    </section>
+
+    <section class="customer-card"
+             aria-labelledby="sale-totals-title">
+        <h2 id="sale-totals-title">
+            Totales
+        </h2>
+
+        <div class="quotation-totals">
+            <p>
+                Subtotal bruto
+                <strong>@SaleSubtotal.ToString("N2")</strong>
+            </p>
+
+            <p>
+                Descuentos de línea
+                <strong>@SaleLineDiscountTotal.ToString("N2")</strong>
+            </p>
+
+            <p>
+                Descuento general
+                <strong>@SaleGeneralDiscountTotal.ToString("N2")</strong>
+            </p>
+
+            <p>
+                IVA incluido estimado
+                <strong>@SaleTaxTotal.ToString("N2")</strong>
+            </p>
+
+            <p>
+                Cargos adicionales
+                <strong>@SaleChargeTotal.ToString("N2")</strong>
+            </p>
+
+            <p>
+                Total estimado
+                <strong>@SaleTotal.ToString("N2")</strong>
+            </p>
+        </div>
+
+        <small class="field-guidance">
+            El servidor recalcula y valida los importes al guardar o emitir.
+        </small>
+    </section>
+
+    <section class="customer-card"
+             aria-labelledby="sale-actions-title">
+        <h2 id="sale-actions-title">
+            Acciones
+        </h2>
+
+        <div class="form-actions">
+            @if (!IsReadOnly)
+            {
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@isSavingSale"
+                        @onclick="SaveDraftAsync">
+                    @(isSavingSale
+                        ? "Guardando..."
+                        : "Guardar borrador")
+                </button>
+
+                <button type="button"
+                        class="primary-button"
+                        disabled="@isSavingSale"
+                        @onclick="IssueSaleAsync">
+                    @(isSavingSale
+                        ? "Procesando..."
+                        : "Emitir venta")
+                </button>
+            }
+            else if (currentSaleStatus == SaleStatus.Issued &&
+                     currentSale is not null)
+            {
+                <div class="post-issue-actions">
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@isDownloadingSalePdf"
+                            @onclick="DownloadCurrentSalePdfAsync">
+                        @(isDownloadingSalePdf
+                            ? "Descargando..."
+                            : "Descargar PDF")
+                    </button>
+
+                    @if (currentSale.OutstandingAmount > 0m)
+                    {
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@isRegisteringPostIssuePayment"
+                                @onclick="OpenPostIssuePartialPayment">
+                            Pago parcial
+                        </button>
+
+                        <button type="button"
+                                class="primary-button"
+                                disabled="@isRegisteringPostIssuePayment"
+                                @onclick="OpenPostIssueFullPayment">
+                            Pagar saldo total
+                        </button>
+                    }
+
+                    <a class="secondary-button"
+                       href="/sales/history">
+                        Ver historial
+                    </a>
+                </div>
+
+                <div class="post-issue-balance">
+                    <span>
+                        Total
+                        <strong>@currentSale.Total.ToString("N2")</strong>
+                    </span>
+
+                    <span>
+                        Pagado
+                        <strong>@currentSale.PaidTotal.ToString("N2")</strong>
+                    </span>
+
+                    <span>
+                        Saldo
+                        <strong>@currentSale.OutstandingAmount.ToString("N2")</strong>
+                    </span>
+                </div>
+
+                @if (currentSale.OutstandingAmount == 0m)
+                {
+                    <div class="status-message post-issue-paid-message">
+                        Venta cancelada. No tiene saldo pendiente.
+                    </div>
+                }
+
+                @if (isPostIssuePaymentOpen)
+                {
+                    <section class="post-issue-payment-form">
+                        <div class="page-header">
+                            <div>
+                                <h3>
+                                    @(isPostIssueFullPayment
+                                        ? "Pago total"
+                                        : "Pago parcial")
+                                </h3>
+
+                                <p>
+                                    Registra el pago de @currentSaleNumber sin salir de la venta.
+                                </p>
+                            </div>
+
+                            <button type="button"
+                                    class="secondary-button"
+                                    disabled="@isRegisteringPostIssuePayment"
+                                    @onclick="ClosePostIssuePayment">
+                                Cerrar
+                            </button>
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Monto</label>
+
+                                <InputNumber
+                                    @bind-Value="postIssuePaymentRequest.Amount"
+                                    min="0.01"
+                                    step="0.01"
+                                    disabled="@isPostIssueFullPayment" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Método</label>
+
+                                <InputSelect
+                                    @bind-Value="postIssuePaymentRequest.PaymentMethod">
+                                    <option value="@PaymentMethod.Cash">
+                                        Efectivo
+                                    </option>
+                                    <option value="@PaymentMethod.Sinpe">
+                                        SINPE
+                                    </option>
+                                    <option value="@PaymentMethod.BankTransfer">
+                                        Transferencia bancaria
+                                    </option>
+                                    <option value="@PaymentMethod.InternationalTransfer">
+                                        Transferencia internacional
+                                    </option>
+                                    <option value="@PaymentMethod.Card">
+                                        Tarjeta
+                                    </option>
+                                    <option value="@PaymentMethod.Other">
+                                        Otro
+                                    </option>
+                                </InputSelect>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Fecha</label>
+
+                                <InputDate
+                                    @bind-Value="postIssuePaymentDate" />
+                            </div>
+
+                            <div class="form-group">
+                                <label>Referencia</label>
+
+                                <InputText
+                                    @bind-Value="postIssuePaymentRequest.Reference"
+                                    maxlength="200"
+                                    placeholder="SINPE, transferencia, voucher..." />
+                            </div>
+
+                            <div class="form-group form-wide">
+                                <label>Notas</label>
+
+                                <InputTextArea
+                                    @bind-Value="postIssuePaymentRequest.Notes"
+                                    rows="3"
+                                    maxlength="1000" />
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button"
+                                    class="secondary-button"
+                                    disabled="@isRegisteringPostIssuePayment"
+                                    @onclick="ClosePostIssuePayment">
+                                Cancelar
+                            </button>
+
+                            <button type="button"
+                                    class="primary-button"
+                                    disabled="@isRegisteringPostIssuePayment"
+                                    @onclick="RegisterPostIssuePaymentAsync">
+                                @(isRegisteringPostIssuePayment
+                                    ? "Registrando..."
+                                    : "Registrar pago")
+                            </button>
+                        </div>
+                    </section>
+                }
+            }
+            else
+            {
+                <p class="field-guidance">
+                    La venta anulada es histórica y no se edita en esta pantalla.
+                </p>
+            }
+        </div>
+    </section>
+</section>

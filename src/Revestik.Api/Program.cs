@@ -10,6 +10,8 @@ using Revestik.Api.Services.Customers;
 using Revestik.Api.Services.Products;
 using Revestik.Api.Services.Quotations;
 using Revestik.Api.Services.Quotations.Pdf;
+using Revestik.Api.Services.Sales;
+using Revestik.Api.Services.Sales.Pdf;
 
 const string ClientCorsPolicy = "ClientCorsPolicy";
 
@@ -77,6 +79,9 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IQuotationService, QuotationService>();
 builder.Services.AddScoped<IQuotationNumberGenerator, SqlQuotationNumberGenerator>();
 builder.Services.AddSingleton<IQuotationPdfService, QuotationPdfService>();
+builder.Services.AddScoped<ISaleService, SaleService>();
+builder.Services.AddScoped<ISaleNumberGenerator, SqlSaleNumberGenerator>();
+builder.Services.AddSingleton<ISalePdfService, SalePdfService>();
 
 var haciendaBaseUrl =
     builder.Configuration["Hacienda:BaseUrl"]
@@ -174,6 +179,7 @@ app.MapGet(
 app.MapCustomerEndpoints();
 app.MapProductEndpoints();
 app.MapQuotationEndpoints();
+app.MapSaleEndpoints();
 app.MapTaxpayerEndpoints();
 app.MapLocationEndpoints();
 app.MapAuthenticationEndpoints();

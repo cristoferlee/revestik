@@ -1,0 +1,513 @@
+@page "/quotes/history"
+@using Revestik.Shared.Quotations
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales")]
+
+<PageTitle>Historial de cotizaciones | Revestik</PageTitle>
+
+<section class="quotes-history-page">
+    <header class="page-header">
+        <div>
+            <h1>Historial de cotizaciones</h1>
+            <p>
+                Consulta cotizaciones y conviértelas en ventas cuando correspondan.
+            </p>
+        </div>
+
+        <a class="primary-button"
+           href="/quotes">
+            Nueva cotización
+        </a>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message"
+             role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="status-message success-message"
+             role="status">
+            @successMessage
+        </div>
+    }
+
+    <section class="history-card">
+        <div class="section-heading">
+            <div>
+                <h2>Cotizaciones</h2>
+                <p>
+                    Busca por COT, cliente o identificación.
+                </p>
+            </div>
+        </div>
+
+        <div class="filters-grid">
+            <div class="form-group filter-wide">
+                <label for="quotation-search">
+                    Buscar
+                </label>
+
+                <input id="quotation-search"
+                       type="search"
+                       maxlength="150"
+                       placeholder="COT, cliente o identificación"
+                       @bind="listRequest.Search" />
+            </div>
+
+            <div class="form-group">
+                <label for="quotation-date-from">
+                    Desde
+                </label>
+
+                <InputDate id="quotation-date-from"
+                           @bind-Value="dateFrom" />
+            </div>
+
+            <div class="form-group">
+                <label for="quotation-date-to">
+                    Hasta
+                </label>
+
+                <InputDate id="quotation-date-to"
+                           @bind-Value="dateTo" />
+            </div>
+
+            <div class="form-group">
+                <label for="quotation-status">
+                    Estado
+                </label>
+
+                <InputSelect id="quotation-status"
+                             @bind-Value="listRequest.Status">
+                    <option value="">Todos</option>
+                    <option value="@QuotationStatus.Draft">
+                        Borrador
+                    </option>
+                    <option value="@QuotationStatus.Issued">
+                        Emitida
+                    </option>
+                </InputSelect>
+            </div>
+
+            <div class="form-group">
+                <label for="quotation-currency">
+                    Moneda
+                </label>
+
+                <InputSelect id="quotation-currency"
+                             @bind-Value="listRequest.Currency">
+                    <option value="">Todas</option>
+                    <option value="@Currency.CRC">CRC</option>
+                    <option value="@Currency.USD">USD</option>
+                </InputSelect>
+            </div>
+        </div>
+
+        <div class="filter-actions">
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@isLoadingList"
+                    @onclick="ClearFiltersAsync">
+                Limpiar
+            </button>
+
+            <button type="button"
+                    class="primary-button"
+                    disabled="@isLoadingList"
+                    @onclick="SearchAsync">
+                @(isLoadingList
+                    ? "Buscando..."
+                    : "Aplicar filtros")
+            </button>
+        </div>
+
+        @if (isLoadingList &&
+             quotations.Count == 0)
+        {
+            <p class="empty-state">
+                Cargando cotizaciones...
+            </p>
+        }
+        else if (quotations.Count == 0)
+        {
+            <p class="empty-state">
+                No se encontraron cotizaciones.
+            </p>
+        }
+        else
+        {
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Cotización</th>
+                            <th>Fecha</th>
+                            <th>Cliente</th>
+                            <th>Válida hasta</th>
+                            <th>Moneda</th>
+                            <th>Total</th>
+                            <th>Estado</th>
+                            <th>Venta</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var quotation in quotations)
+                        {
+                            <tr>
+                                <td data-label="Cotización">
+                                    <strong>
+                                        @quotation.QuotationNumber
+                                    </strong>
+                                </td>
+
+                                <td data-label="Fecha">
+                                    @FormatDate(
+                                        quotation.IssuedAtUtc ??
+                                        quotation.CreatedAtUtc)
+                                </td>
+
+                                <td data-label="Cliente">
+                                    <strong>
+                                        @quotation.CustomerName
+                                    </strong>
+                                    <small>
+                                        @quotation.CustomerIdentificationNumber
+                                    </small>
+                                </td>
+
+                                <td data-label="Válida hasta">
+                                    @(quotation.ValidUntilUtc.HasValue
+                                        ? FormatDate(
+                                            quotation.ValidUntilUtc.Value)
+                                        : "—")
+                                </td>
+
+                                <td data-label="Moneda">
+                                    @quotation.Currency
+                                </td>
+
+                                <td data-label="Total">
+                                    @quotation.Total.ToString("N2")
+                                </td>
+
+                                <td data-label="Estado">
+                                    <span class="@GetStatusCssClass(
+                                        quotation)">
+                                        @GetStatusLabel(
+                                            quotation)
+                                    </span>
+                                </td>
+
+                                <td data-label="Venta">
+                                    @if (quotation.ConvertedSaleId.HasValue)
+                                    {
+                                        <span>
+                                            @(string.IsNullOrWhiteSpace(
+                                                quotation.ConvertedSaleNumber)
+                                                ? $"Borrador #{quotation.ConvertedSaleId.Value}"
+                                                : quotation.ConvertedSaleNumber)
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span>—</span>
+                                    }
+                                </td>
+
+                                <td data-label="Acción">
+                                    <button type="button"
+                                            class="secondary-button"
+                                            disabled="@isLoadingDetail"
+                                            @onclick="() =>
+                                                OpenQuotationAsync(
+                                                    quotation.Id)">
+                                        Ver detalle
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination-controls">
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@(!CanGoPrevious)"
+                        @onclick="GoPreviousAsync">
+                    Anterior
+                </button>
+
+                <span>
+                    Página @listRequest.Page de @totalPages
+                </span>
+
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@(!CanGoNext)"
+                        @onclick="GoNextAsync">
+                    Siguiente
+                </button>
+            </div>
+        }
+    </section>
+
+    @if (selectedQuotation is not null)
+    {
+        <section class="history-card detail-card">
+            <div class="section-heading">
+                <div>
+                    <h2>
+                        @selectedQuotation.QuotationNumber
+                    </h2>
+
+                    <p>
+                        @selectedQuotation.CustomerName ·
+                        @selectedQuotation.CustomerIdentificationNumber
+                    </p>
+                </div>
+
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="CloseDetail">
+                    Cerrar detalle
+                </button>
+            </div>
+
+            <div class="detail-meta-grid">
+                <div>
+                    <span>Estado</span>
+                    <strong>
+                        @GetSelectedStatusLabel()
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Moneda</span>
+                    <strong>
+                        @selectedQuotation.Currency
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Emitida</span>
+                    <strong>
+                        @(selectedQuotation.IssuedAtUtc.HasValue
+                            ? FormatDateTime(
+                                selectedQuotation.IssuedAtUtc.Value)
+                            : "—")
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Válida hasta</span>
+                    <strong>
+                        @(selectedQuotation.ValidUntilUtc.HasValue
+                            ? FormatDate(
+                                selectedQuotation.ValidUntilUtc.Value)
+                            : "—")
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Creada por</span>
+                    <strong>
+                        @selectedQuotation.CreatedByDisplayName
+                    </strong>
+                </div>
+            </div>
+
+            <div class="detail-actions">
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@isDownloadingPdf"
+                        @onclick="DownloadPdfAsync">
+                    @(isDownloadingPdf
+                        ? "Descargando..."
+                        : "Descargar PDF")
+                </button>
+
+                @if (selectedListItem?.ConvertedSaleId is int saleId)
+                {
+                    <a class="primary-button"
+                       href="@GetConvertedSaleHref(saleId)">
+                        @(string.IsNullOrWhiteSpace(
+                            selectedListItem.ConvertedSaleNumber)
+                            ? "Abrir venta borrador"
+                            : "Ver venta")
+                    </a>
+                }
+                else if (selectedQuotation.Status ==
+                         QuotationStatus.Issued)
+                {
+                    <button type="button"
+                            class="primary-button"
+                            disabled="@isConverting"
+                            @onclick="ConvertToSaleAsync">
+                        @(isConverting
+                            ? "Convirtiendo..."
+                            : "Convertir en venta")
+                    </button>
+                }
+            </div>
+
+            <h3>Líneas</h3>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Descripción</th>
+                            <th>Unidad</th>
+                            <th>Cantidad</th>
+                            <th>Precio</th>
+                            <th>Descuento</th>
+                            <th>IVA</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var line in selectedQuotation.Lines)
+                        {
+                            <tr>
+                                <td data-label="Descripción">
+                                    <strong>
+                                        @line.Description
+                                    </strong>
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                            line.CabysCode))
+                                    {
+                                        <small>
+                                            CABYS @line.CabysCode
+                                        </small>
+                                    }
+                                </td>
+
+                                <td data-label="Unidad">
+                                    @line.Unit
+                                </td>
+
+                                <td data-label="Cantidad">
+                                    @line.Quantity.ToString("N2")
+                                </td>
+
+                                <td data-label="Precio">
+                                    @line.UnitPrice.ToString("N2")
+                                </td>
+
+                                <td data-label="Descuento">
+                                    @line.DiscountAmount.ToString("N2")
+                                </td>
+
+                                <td data-label="IVA">
+                                    @line.TaxAmount.ToString("N2")
+                                </td>
+
+                                <td data-label="Total">
+                                    <strong>
+                                        @line.TotalAmount.ToString("N2")
+                                    </strong>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (selectedQuotation.Charges.Count > 0)
+            {
+                <h3>Cargos</h3>
+
+                <div class="table-container compact-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Descripción</th>
+                                <th>Monto</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var charge in selectedQuotation.Charges)
+                            {
+                                <tr>
+                                    <td data-label="Tipo">
+                                        @charge.Type
+                                    </td>
+
+                                    <td data-label="Descripción">
+                                        @(string.IsNullOrWhiteSpace(
+                                            charge.Description)
+                                            ? "—"
+                                            : charge.Description)
+                                    </td>
+
+                                    <td data-label="Monto">
+                                        @charge.Amount.ToString("N2")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <div class="totals-panel">
+                <p>
+                    <span>Subtotal</span>
+                    <strong>
+                        @selectedQuotation.Subtotal.ToString("N2")
+                    </strong>
+                </p>
+
+                <p>
+                    <span>Descuento</span>
+                    <strong>
+                        @selectedQuotation.DiscountTotal.ToString("N2")
+                    </strong>
+                </p>
+
+                <p>
+                    <span>IVA incluido</span>
+                    <strong>
+                        @selectedQuotation.TaxTotal.ToString("N2")
+                    </strong>
+                </p>
+
+                <p>
+                    <span>Cargos</span>
+                    <strong>
+                        @selectedQuotation.ChargeTotal.ToString("N2")
+                    </strong>
+                </p>
+
+                <p>
+                    <span>Total</span>
+                    <strong>
+                        @selectedQuotation.Total.ToString("N2")
+                    </strong>
+                </p>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(
+                    selectedQuotation.Observations))
+            {
+                <section class="observations">
+                    <h3>Observaciones</h3>
+                    <p>
+                        @selectedQuotation.Observations
+                    </p>
+                </section>
+            }
+        </section>
+    }
+</section>

@@ -1,0 +1,993 @@
+@page "/sales/history"
+@using Revestik.Shared.Sales
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales")]
+
+<PageTitle>Historial de ventas | Revestik</PageTitle>
+
+<section class="sales-history-page">
+    <header class="page-header">
+        <div>
+            <h1>Historial de ventas</h1>
+            <p>
+                Consulta ventas, saldos, pagos y documentos internos.
+            </p>
+        </div>
+
+        <a class="primary-button"
+           href="/sales">
+            Nueva venta
+        </a>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message"
+             role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="status-message success-message"
+             role="status">
+            @successMessage
+        </div>
+    }
+
+    <section class="history-card">
+        <div class="section-heading">
+            <div>
+                <h2>Resumen</h2>
+                <p>
+                    Solo incluye ventas emitidas activas.
+                </p>
+            </div>
+
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@isLoadingSummary"
+                    @onclick="LoadSummaryAsync">
+                @(isLoadingSummary
+                    ? "Actualizando..."
+                    : "Actualizar")
+            </button>
+        </div>
+
+        @if (isLoadingSummary &&
+             summaryCurrencies.Count == 0)
+        {
+            <p class="empty-state">
+                Cargando resumen...
+            </p>
+        }
+        else if (summaryCurrencies.Count == 0)
+        {
+            <p class="empty-state">
+                No hay ventas emitidas para resumir.
+            </p>
+        }
+        else
+        {
+            @foreach (var summary in summaryCurrencies)
+            {
+                <section class="currency-summary">
+                    <div class="currency-heading">
+                        <strong>@summary.Currency</strong>
+                    </div>
+
+                    <div class="summary-grid">
+                        <article class="summary-card">
+                            <span>Ventas</span>
+                            <strong>@summary.SaleCount</strong>
+                        </article>
+
+                        <article class="summary-card">
+                            <span>Vendido</span>
+                            <strong>@summary.SoldTotal.ToString("N2")</strong>
+                        </article>
+
+                        <article class="summary-card">
+                            <span>Cobrado</span>
+                            <strong>@summary.CollectedTotal.ToString("N2")</strong>
+                        </article>
+
+                        <article class="summary-card">
+                            <span>Pendiente</span>
+                            <strong>@summary.OutstandingTotal.ToString("N2")</strong>
+                        </article>
+                    </div>
+                </section>
+            }
+        }
+    </section>
+
+    <section class="history-card">
+        <div class="section-heading">
+            <div>
+                <h2>Ventas</h2>
+                <p>
+                    Busca por VEN, COT o cliente y filtra el historial.
+                </p>
+            </div>
+        </div>
+
+        <div class="filters-grid">
+            <div class="form-group filter-wide">
+                <label for="sale-search">
+                    Buscar
+                </label>
+
+                <input id="sale-search"
+                       type="search"
+                       maxlength="150"
+                       placeholder="VEN, COT, cliente o identificación"
+                       @bind="listRequest.Search" />
+            </div>
+
+            <div class="form-group">
+                <label for="sale-date-from">
+                    Desde
+                </label>
+
+                <InputDate id="sale-date-from"
+                           @bind-Value="dateFrom" />
+            </div>
+
+            <div class="form-group">
+                <label for="sale-date-to">
+                    Hasta
+                </label>
+
+                <InputDate id="sale-date-to"
+                           @bind-Value="dateTo" />
+            </div>
+
+            <div class="form-group">
+                <label for="sale-status">
+                    Estado
+                </label>
+
+                <InputSelect id="sale-status"
+                             @bind-Value="listRequest.Status">
+                    <option value="">Todos</option>
+                    <option value="@SaleStatus.Draft">Borrador</option>
+                    <option value="@SaleStatus.Issued">Emitida</option>
+                    <option value="@SaleStatus.Voided">Anulada</option>
+                </InputSelect>
+            </div>
+
+            <div class="form-group">
+                <label for="sale-balance-status">
+                    Estado de pago
+                </label>
+
+                <InputSelect id="sale-balance-status"
+                             @bind-Value="listRequest.BalanceStatus">
+                    <option value="">Todos</option>
+                    <option value="@SaleBalanceStatus.Pending">
+                        Pendiente
+                    </option>
+                    <option value="@SaleBalanceStatus.PartiallyPaid">
+                        Abonada parcialmente
+                    </option>
+                    <option value="@SaleBalanceStatus.Paid">
+                        Cancelada
+                    </option>
+                </InputSelect>
+            </div>
+
+            <div class="form-group">
+                <label for="sale-currency-filter">
+                    Moneda
+                </label>
+
+                <InputSelect id="sale-currency-filter"
+                             @bind-Value="listRequest.Currency">
+                    <option value="">Todas</option>
+                    <option value="@Currency.CRC">CRC</option>
+                    <option value="@Currency.USD">USD</option>
+                </InputSelect>
+            </div>
+        </div>
+
+        <div class="filter-actions">
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@isLoadingSales"
+                    @onclick="ClearFiltersAsync">
+                Limpiar
+            </button>
+
+            <button type="button"
+                    class="primary-button"
+                    disabled="@isLoadingSales"
+                    @onclick="SearchAsync">
+                @(isLoadingSales
+                    ? "Buscando..."
+                    : "Aplicar filtros")
+            </button>
+        </div>
+
+        @if (isLoadingSales &&
+             sales.Count == 0)
+        {
+            <p class="empty-state">
+                Cargando ventas...
+            </p>
+        }
+        else if (sales.Count == 0)
+        {
+            <p class="empty-state">
+                No se encontraron ventas.
+            </p>
+        }
+        else
+        {
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Venta</th>
+                            <th>Fecha</th>
+                            <th>Cliente</th>
+                            <th>Origen</th>
+                            <th>Moneda</th>
+                            <th>Total</th>
+                            <th>Pagado</th>
+                            <th>Saldo</th>
+                            <th>Estado</th>
+                            <th>Pago</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var sale in sales)
+                        {
+                            <tr>
+                                <td data-label="Venta">
+                                    <strong>
+                                        @(string.IsNullOrWhiteSpace(
+                                            sale.SaleNumber)
+                                            ? $"Borrador #{sale.Id}"
+                                            : sale.SaleNumber)
+                                    </strong>
+                                </td>
+
+                                <td data-label="Fecha">
+                                    @(sale.IssuedAtUtc.HasValue
+                                        ? FormatDate(
+                                            sale.IssuedAtUtc.Value)
+                                        : "—")
+                                </td>
+
+                                <td data-label="Cliente">
+                                    @sale.CustomerName
+                                </td>
+
+                                <td data-label="Origen">
+                                    @(string.IsNullOrWhiteSpace(
+                                        sale.SourceQuotationNumber)
+                                        ? "Directa"
+                                        : sale.SourceQuotationNumber)
+                                </td>
+
+                                <td data-label="Moneda">
+                                    @sale.Currency
+                                </td>
+
+                                <td data-label="Total">
+                                    @sale.Total.ToString("N2")
+                                </td>
+
+                                <td data-label="Pagado">
+                                    @sale.PaidTotal.ToString("N2")
+                                </td>
+
+                                <td data-label="Saldo">
+                                    @sale.OutstandingAmount.ToString("N2")
+                                </td>
+
+                                <td data-label="Estado">
+                                    <span class="@GetSaleStatusCssClass(
+                                        sale.Status)">
+                                        @GetSaleStatusLabel(sale.Status)
+                                    </span>
+                                </td>
+
+                                <td data-label="Pago">
+                                    <span class="@GetBalanceStatusCssClass(
+                                        sale.BalanceStatus)">
+                                        @GetBalanceStatusLabel(
+                                            sale.BalanceStatus)
+                                    </span>
+                                </td>
+
+                                <td data-label="Acción">
+                                    <button type="button"
+                                            class="secondary-button"
+                                            disabled="@isLoadingDetail"
+                                            @onclick="() => OpenSaleAsync(
+                                                sale.Id)">
+                                        Ver detalle
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination-controls">
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@(!CanGoPrevious)"
+                        @onclick="GoPreviousAsync">
+                    Anterior
+                </button>
+
+                <span>
+                    Página @listRequest.Page de @totalPages
+                </span>
+
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@(!CanGoNext)"
+                        @onclick="GoNextAsync">
+                    Siguiente
+                </button>
+            </div>
+        }
+    </section>
+
+    @if (selectedSale is not null)
+    {
+        <section class="history-card sale-detail-card"
+                 id="sale-detail">
+            <div class="section-heading">
+                <div>
+                    <h2>
+                        @(string.IsNullOrWhiteSpace(
+                            selectedSale.SaleNumber)
+                            ? $"Borrador #{selectedSale.Id}"
+                            : selectedSale.SaleNumber)
+                    </h2>
+
+                    <p>
+                        @selectedSale.CustomerName ·
+                        @selectedSale.CustomerIdentificationNumber
+                    </p>
+                </div>
+
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="CloseDetail">
+                    Cerrar detalle
+                </button>
+            </div>
+
+            <div class="detail-meta-grid">
+                <div>
+                    <span>Estado</span>
+                    <strong>
+                        @GetSaleStatusLabel(selectedSale.Status)
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Pago</span>
+                    <strong>
+                        @GetBalanceStatusLabel(
+                            selectedSale.BalanceStatus)
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Moneda</span>
+                    <strong>@selectedSale.Currency</strong>
+                </div>
+
+                <div>
+                    <span>Origen</span>
+                    <strong>
+                        @(string.IsNullOrWhiteSpace(
+                            selectedSale.SourceQuotationNumber)
+                            ? "Venta directa"
+                            : selectedSale.SourceQuotationNumber)
+                    </strong>
+                </div>
+
+                @if (selectedSale.ReplacesSaleId.HasValue)
+                {
+                    <div>
+                        <span>Reemplaza venta</span>
+                        <strong>
+                            #@selectedSale.ReplacesSaleId.Value
+                        </strong>
+                    </div>
+                }
+
+                @if (selectedSale.ReplacementSaleId.HasValue)
+                {
+                    <div>
+                        <span>Reemplazada por</span>
+                        <strong>
+                            #@selectedSale.ReplacementSaleId.Value
+                        </strong>
+                    </div>
+                }
+
+                <div>
+                    <span>Emitida</span>
+                    <strong>
+                        @(selectedSale.IssuedAtUtc.HasValue
+                            ? FormatDateTime(
+                                selectedSale.IssuedAtUtc.Value)
+                            : "—")
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Próximo seguimiento</span>
+                    <strong>
+                        @(selectedSale.NextPaymentDueAtUtc.HasValue
+                            ? FormatDate(
+                                selectedSale.NextPaymentDueAtUtc.Value)
+                            : "—")
+                    </strong>
+                </div>
+            </div>
+
+            @if (selectedSale.Status != SaleStatus.Draft)
+            {
+                <div class="detail-actions">
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@isDownloadingPdf"
+                            @onclick="DownloadPdfAsync">
+                        @(isDownloadingPdf
+                            ? "Descargando..."
+                            : "Descargar PDF")
+                    </button>
+
+                    @if (selectedSale.Status == SaleStatus.Issued)
+                    {
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@HasActivePayments"
+                                @onclick="OpenVoidSalePanel">
+                            Anular venta
+                        </button>
+
+                        <button type="button"
+                                class="primary-button"
+                                @onclick="OpenReplacementPanel">
+                            Corregir / reemplazar
+                        </button>
+                    }
+                </div>
+
+                @if (selectedSale.Status == SaleStatus.Issued &&
+                     HasActivePayments)
+                {
+                    <p class="field-guidance lifecycle-guidance">
+                        Para anular la venta directamente, primero deben resolverse
+                        sus pagos activos. La corrección/reemplazo conserva la
+                        trazabilidad del documento original.
+                    </p>
+                }
+
+                @if (lifecycleAction is not null)
+                {
+                    <section class="lifecycle-panel">
+                        <div class="section-heading">
+                            <div>
+                                <h3>
+                                    @(lifecycleAction == SaleLifecycleAction.Void
+                                        ? "Anular venta"
+                                        : "Corregir y reemplazar")
+                                </h3>
+
+                                <p>
+                                    @(lifecycleAction == SaleLifecycleAction.Void
+                                        ? "La venta permanecerá visible como anulada."
+                                        : "La venta original quedará anulada y se creará un nuevo borrador editable.")
+                                </p>
+                            </div>
+
+                            <button type="button"
+                                    class="secondary-button"
+                                    disabled="@isProcessingLifecycle"
+                                    @onclick="CloseLifecyclePanel">
+                                Cerrar
+                            </button>
+                        </div>
+
+                        <div class="form-group lifecycle-reason">
+                            <label for="sale-lifecycle-reason">
+                                Motivo
+                            </label>
+
+                            <InputTextArea id="sale-lifecycle-reason"
+                                           @bind-Value="lifecycleReason"
+                                           rows="4"
+                                           maxlength="1000"
+                                           placeholder="Explique el motivo de la anulación o corrección." />
+
+                            <small class="field-guidance">
+                                Obligatorio. Entre 3 y 1000 caracteres.
+                            </small>
+                        </div>
+
+                        <div class="filter-actions">
+                            <button type="button"
+                                    class="secondary-button"
+                                    disabled="@isProcessingLifecycle"
+                                    @onclick="CloseLifecyclePanel">
+                                Cancelar
+                            </button>
+
+                            <button type="button"
+                                    class="@(lifecycleAction == SaleLifecycleAction.Void
+                                        ? "danger-button"
+                                        : "primary-button")"
+                                    disabled="@isProcessingLifecycle"
+                                    @onclick="ConfirmLifecycleAsync">
+                                @(isProcessingLifecycle
+                                    ? "Procesando..."
+                                    : lifecycleAction == SaleLifecycleAction.Void
+                                        ? "Confirmar anulación"
+                                        : "Crear reemplazo")
+                            </button>
+                        </div>
+                    </section>
+                }
+            }
+
+            @if (selectedSale.Status == SaleStatus.Voided)
+            {
+                <div class="voided-sale-banner">
+                    <strong>Venta anulada</strong>
+                    <span>
+                        @(string.IsNullOrWhiteSpace(selectedSale.VoidReason)
+                            ? "Sin motivo disponible."
+                            : selectedSale.VoidReason)
+                    </span>
+                </div>
+            }
+
+            <h3>Líneas</h3>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Descripción</th>
+                            <th>Unidad</th>
+                            <th>Cant.</th>
+                            <th>Precio</th>
+                            <th>Desc. línea</th>
+                            <th>Desc. general</th>
+                            <th>IVA</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var line in selectedSale.Lines)
+                        {
+                            <tr>
+                                <td data-label="Descripción">
+                                    <strong>
+                                        @line.Description
+                                    </strong>
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                            line.CabysCode))
+                                    {
+                                        <small>
+                                            CABYS @line.CabysCode
+                                        </small>
+                                    }
+                                </td>
+
+                                <td data-label="Unidad">
+                                    @line.Unit
+                                </td>
+
+                                <td data-label="Cant.">
+                                    @line.Quantity.ToString("N2")
+                                </td>
+
+                                <td data-label="Precio">
+                                    @line.UnitPrice.ToString("N2")
+                                </td>
+
+                                <td data-label="Desc. línea">
+                                    @line.LineDiscountAmount.ToString("N2")
+                                </td>
+
+                                <td data-label="Desc. general">
+                                    @line.GeneralDiscountAmount.ToString("N2")
+                                </td>
+
+                                <td data-label="IVA">
+                                    @line.TaxAmount.ToString("N2")
+                                </td>
+
+                                <td data-label="Total">
+                                    <strong>
+                                        @line.TotalAmount.ToString("N2")
+                                    </strong>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (selectedSale.Charges.Count > 0)
+            {
+                <h3>Cargos</h3>
+
+                <div class="table-container compact-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Descripción</th>
+                                <th>Monto</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var charge in selectedSale.Charges)
+                            {
+                                <tr>
+                                    <td data-label="Tipo">
+                                        @GetChargeTypeLabel(charge.Type)
+                                    </td>
+
+                                    <td data-label="Descripción">
+                                        @(string.IsNullOrWhiteSpace(
+                                            charge.Description)
+                                            ? "—"
+                                            : charge.Description)
+                                    </td>
+
+                                    <td data-label="Monto">
+                                        @charge.Amount.ToString("N2")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <div class="totals-panel">
+                <p>
+                    <span>Subtotal</span>
+                    <strong>
+                        @selectedSale.Subtotal.ToString("N2")
+                    </strong>
+                </p>
+
+                <p>
+                    <span>Descuento líneas</span>
+                    <strong>
+                        @selectedSale.LineDiscountTotal.ToString("N2")
+                    </strong>
+                </p>
+
+                <p>
+                    <span>Descuento general</span>
+                    <strong>
+                        @selectedSale.GeneralDiscountTotal.ToString("N2")
+                    </strong>
+                </p>
+
+                <p>
+                    <span>IVA incluido</span>
+                    <strong>
+                        @selectedSale.TaxTotal.ToString("N2")
+                    </strong>
+                </p>
+
+                <p>
+                    <span>Cargos</span>
+                    <strong>
+                        @selectedSale.ChargeTotal.ToString("N2")
+                    </strong>
+                </p>
+
+                <p>
+                    <span>Total</span>
+                    <strong>
+                        @selectedSale.Total.ToString("N2")
+                    </strong>
+                </p>
+
+                <p>
+                    <span>Pagado</span>
+                    <strong>
+                        @selectedSale.PaidTotal.ToString("N2")
+                    </strong>
+                </p>
+
+                <p>
+                    <span>Saldo</span>
+                    <strong>
+                        @selectedSale.OutstandingAmount.ToString("N2")
+                    </strong>
+                </p>
+            </div>
+
+            @if (selectedSale.Status == SaleStatus.Issued)
+            {
+                <section class="payments-section">
+                    <div class="section-heading">
+                        <div>
+                            <h3>Pagos</h3>
+                            <p>
+                                Registra abonos o cancela el saldo pendiente.
+                            </p>
+                        </div>
+                    </div>
+
+                    @if (selectedSale.OutstandingAmount > 0m)
+                    {
+                        <div class="payment-quick-actions">
+                            <button type="button"
+                                    class="secondary-button"
+                                    disabled="@isRegisteringPayment"
+                                    @onclick="OpenPartialPayment">
+                                Pago parcial
+                            </button>
+
+                            <button type="button"
+                                    class="primary-button"
+                                    disabled="@isRegisteringPayment"
+                                    @onclick="OpenFullPayment">
+                                Pagar saldo total
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="paid-banner">
+                            Venta cancelada. No tiene saldo pendiente.
+                        </div>
+                    }
+
+                    @if (isPaymentFormOpen)
+                    {
+                        <section class="payment-form-card">
+                            <div class="section-heading">
+                                <div>
+                                    <h4>
+                                        @(isFullPayment
+                                            ? "Registrar pago total"
+                                            : "Registrar pago parcial")
+                                    </h4>
+
+                                    <p>
+                                        Moneda: @selectedSale.Currency
+                                    </p>
+                                </div>
+
+                                <button type="button"
+                                        class="secondary-button"
+                                        disabled="@isRegisteringPayment"
+                                        @onclick="ClosePaymentForm">
+                                    Cerrar
+                                </button>
+                            </div>
+
+                            <div class="filters-grid">
+                                <div class="form-group">
+                                    <label>Monto</label>
+
+                                    <InputNumber
+                                        @bind-Value="paymentRequest.Amount"
+                                        min="0.01"
+                                        step="0.01"
+                                        disabled="@isFullPayment" />
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Método</label>
+
+                                    <InputSelect
+                                        @bind-Value="paymentRequest.PaymentMethod">
+                                        <option value="@PaymentMethod.Cash">
+                                            Efectivo
+                                        </option>
+                                        <option value="@PaymentMethod.Sinpe">
+                                            SINPE
+                                        </option>
+                                        <option value="@PaymentMethod.BankTransfer">
+                                            Transferencia bancaria
+                                        </option>
+                                        <option value="@PaymentMethod.InternationalTransfer">
+                                            Transferencia internacional
+                                        </option>
+                                        <option value="@PaymentMethod.Card">
+                                            Tarjeta
+                                        </option>
+                                        <option value="@PaymentMethod.Other">
+                                            Otro
+                                        </option>
+                                    </InputSelect>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Fecha</label>
+
+                                    <InputDate
+                                        @bind-Value="paymentDate" />
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Referencia</label>
+
+                                    <InputText
+                                        @bind-Value="paymentRequest.Reference"
+                                        maxlength="200"
+                                        placeholder="SINPE, transferencia, voucher..." />
+                                </div>
+
+                                <div class="form-group filter-wide">
+                                    <label>Notas</label>
+
+                                    <InputTextArea
+                                        @bind-Value="paymentRequest.Notes"
+                                        rows="3"
+                                        maxlength="1000" />
+                                </div>
+                            </div>
+
+                            <div class="filter-actions">
+                                <button type="button"
+                                        class="secondary-button"
+                                        disabled="@isRegisteringPayment"
+                                        @onclick="ClosePaymentForm">
+                                    Cancelar
+                                </button>
+
+                                <button type="button"
+                                        class="primary-button"
+                                        disabled="@isRegisteringPayment"
+                                        @onclick="RegisterPaymentAsync">
+                                    @(isRegisteringPayment
+                                        ? "Registrando..."
+                                        : "Registrar pago")
+                                </button>
+                            </div>
+                        </section>
+                    }
+
+                    @if (selectedSale.Payments.Count == 0)
+                    {
+                        <p class="empty-state">
+                            No hay pagos registrados.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="table-container payment-history">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Método</th>
+                                        <th>Monto</th>
+                                        <th>Referencia</th>
+                                        <th>Estado</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    @foreach (var payment in selectedSale.Payments
+                                        .OrderByDescending(
+                                            payment => payment.PaidAtUtc))
+                                    {
+                                        <tr>
+                                            <td data-label="Fecha">
+                                                @FormatDate(payment.PaidAtUtc)
+                                            </td>
+
+                                            <td data-label="Método">
+                                                @GetPaymentMethodLabel(
+                                                    payment.PaymentMethod)
+                                            </td>
+
+                                            <td data-label="Monto">
+                                                @payment.Amount.ToString("N2")
+                                            </td>
+
+                                            <td data-label="Referencia">
+                                                @(string.IsNullOrWhiteSpace(
+                                                    payment.Reference)
+                                                    ? "—"
+                                                    : payment.Reference)
+                                            </td>
+
+                                            <td data-label="Estado">
+                                                @(payment.Status ==
+                                                    SalePaymentStatus.Active
+                                                    ? "Activo"
+                                                    : "Anulado")
+                                            </td>
+
+                                            <td data-label="Acción">
+                                                @if (payment.Status ==
+                                                     SalePaymentStatus.Active)
+                                                {
+                                                    <button type="button"
+                                                            class="danger-button"
+                                                            disabled="@isVoidingPayment"
+                                                            @onclick="() =>
+                                                                RequestVoidPayment(
+                                                                    payment.Id)">
+                                                        Anular pago
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <small>
+                                                        @payment.VoidReason
+                                                    </small>
+                                                }
+                                            </td>
+                                        </tr>
+
+                                        @if (paymentPendingVoidId ==
+                                             payment.Id)
+                                        {
+                                            <tr class="void-payment-row">
+                                                <td colspan="6">
+                                                    <div class="void-payment-panel">
+                                                        <label>
+                                                            Motivo de anulación
+                                                        </label>
+
+                                                        <InputTextArea
+                                                            @bind-Value="voidPaymentReason"
+                                                            rows="3"
+                                                            maxlength="1000"
+                                                            placeholder="Explique por qué se corrige este pago." />
+
+                                                        <div class="filter-actions">
+                                                            <button type="button"
+                                                                    class="secondary-button"
+                                                                    disabled="@isVoidingPayment"
+                                                                    @onclick="CancelVoidPayment">
+                                                                Cancelar
+                                                            </button>
+
+                                                            <button type="button"
+                                                                    class="danger-button"
+                                                                    disabled="@isVoidingPayment"
+                                                                    @onclick="VoidPaymentAsync">
+                                                                @(isVoidingPayment
+                                                                    ? "Anulando..."
+                                                                    : "Confirmar anulación")
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </section>
+            }
+        </section>
+    }
+</section>

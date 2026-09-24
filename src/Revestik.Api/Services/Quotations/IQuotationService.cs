@@ -1,9 +1,14 @@
+using Revestik.Shared.Common;
 using Revestik.Shared.Quotations;
 
 namespace Revestik.Api.Services.Quotations;
 
 public interface IQuotationService
 {
+    Task<PaginatedResponse<QuotationListItemResponse>> GetPageAsync(
+        QuotationListRequest request,
+        CancellationToken cancellationToken);
+
     Task<QuotationResponse?> GetByIdAsync(
         int id,
         CancellationToken cancellationToken);
