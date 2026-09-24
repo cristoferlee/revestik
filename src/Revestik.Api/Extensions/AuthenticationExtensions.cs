@@ -99,7 +99,7 @@ public static class AuthenticationExtensions
                     RoleNames.Sales,
                     RoleNames.Warehouse))
             .AddPolicy(
-                PolicyNames.ManageInvoices,
+                PolicyNames.ManageSales,
                 policy => policy.RequireRole(
                     RoleNames.Administrator,
                     RoleNames.Accountant,

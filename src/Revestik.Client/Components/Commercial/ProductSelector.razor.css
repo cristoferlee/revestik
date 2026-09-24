@@ -1,0 +1,138 @@
+.product-search-panel {
+    margin-bottom: 18px;
+    padding: 18px;
+    border: 1px solid #fed7aa;
+    border-radius: 12px;
+    background-color: var(--color-primary-light);
+}
+
+.page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+}
+
+.page-header h4 {
+    margin-bottom: 5px;
+}
+
+.page-header p {
+    margin-bottom: 0;
+    color: var(--color-text-secondary);
+}
+
+.search-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.search-form input {
+    width: min(420px, 100%);
+    min-height: 40px;
+    flex: 1 1 260px;
+    padding: 9px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+    background-color: var(--color-surface);
+}
+
+.search-form input:focus {
+    border-color: var(--color-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(245 158 11 / 15%);
+}
+
+.primary-button,
+.secondary-button {
+    min-height: 40px;
+    padding: 9px 16px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.primary-button {
+    background-color: var(--color-primary);
+    color: #111827;
+}
+
+.secondary-button {
+    border-color: var(--color-border);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+}
+
+.table-container {
+    width: 100%;
+    margin-top: 16px;
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 11px;
+    background-color: var(--color-surface);
+}
+
+table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+}
+
+th,
+td {
+    padding: 12px;
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+    vertical-align: middle;
+}
+
+th {
+    background-color: var(--color-navigation);
+    color: #fff;
+    font-size: 0.84rem;
+}
+
+tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+tbody tr:hover {
+    background-color: #fff7ed;
+}
+
+.empty-state {
+    margin: 16px 0 0;
+    padding: 22px 15px;
+    border: 1px dashed #fdba74;
+    border-radius: 10px;
+    color: var(--color-text-secondary);
+    text-align: center;
+}
+
+.status-message {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border-left: 4px solid var(--color-danger);
+    border-radius: 9px;
+}
+
+.error-message {
+    background-color: #fef2f2;
+    color: #991b1b;
+}
+
+@media (max-width: 600px) {
+    .page-header,
+    .search-form {
+        flex-direction: column;
+    }
+
+    .search-form input,
+    .search-form button,
+    .page-header button {
+        width: 100%;
+    }
+}

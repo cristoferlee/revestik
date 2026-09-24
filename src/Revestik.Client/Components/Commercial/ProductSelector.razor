@@ -1,0 +1,96 @@
+@using Revestik.Shared.Products
+
+<section class="product-search-panel">
+    <div class="page-header">
+        <div>
+            <h4>Buscar en inventario</h4>
+            <p>
+                Selecciona un producto para cargar sus datos en esta línea.
+            </p>
+        </div>
+
+        @if (OnClose.HasDelegate)
+        {
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="CloseAsync">
+                Cerrar
+            </button>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message"
+             role="alert">
+            @errorMessage
+        </div>
+    }
+
+    <form class="search-form"
+          @onsubmit="SearchProductsAsync"
+          @onsubmit:preventDefault>
+        <input type="search"
+               maxlength="150"
+               placeholder="Buscar por descripción o CABYS"
+               aria-label="Buscar producto por descripción o CABYS"
+               @bind="productSearchTerm" />
+
+        <button type="submit"
+                class="primary-button"
+                disabled="@isSearchingProducts">
+            @(isSearchingProducts ? "Buscando..." : "Buscar")
+        </button>
+    </form>
+
+    @if (isSearchingProducts)
+    {
+        <p class="empty-state">Buscando productos...</p>
+    }
+    else if (hasSearchedProducts && productSearchResults.Count == 0)
+    {
+        <p class="empty-state">No se encontraron productos.</p>
+    }
+    else if (productSearchResults.Count > 0)
+    {
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Descripción</th>
+                        <th>CABYS</th>
+                        <th>Unidad</th>
+                        <th>Precio</th>
+                        <th>IVA</th>
+                        <th>Stock</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var product in productSearchResults)
+                    {
+                        <tr>
+                            <td data-label="Descripción">@product.Description</td>
+                            <td data-label="CABYS">
+                                @(string.IsNullOrWhiteSpace(product.CabysCode)
+                                    ? "—"
+                                    : product.CabysCode)
+                            </td>
+                            <td data-label="Unidad">@product.Unit</td>
+                            <td data-label="Precio">@product.SalePrice.ToString("N2")</td>
+                            <td data-label="IVA">@product.TaxRate.ToString("N0")%</td>
+                            <td data-label="Stock">@product.StockQuantity.ToString("N2")</td>
+                            <td data-label="Acción">
+                                <button type="button"
+                                        class="secondary-button"
+                                        @onclick="() => SelectProductAsync(product)">
+                                    Seleccionar
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

@@ -7,6 +7,7 @@ using Revestik.Client.Services.Customers;
 using Revestik.Client.Services.Locations;
 using Revestik.Client.Services.Products;
 using Revestik.Client.Services.Quotations;
+using Revestik.Client.Services.Sales;
 using Revestik.Client.Services.Taxpayers;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
@@ -86,6 +87,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IQuotationApiService,
     QuotationApiService>();
+
+builder.Services.AddScoped<
+    ISaleApiService,
+    SaleApiService>();
 
 builder.Services.AddScoped<
     ITaxpayerApiService,

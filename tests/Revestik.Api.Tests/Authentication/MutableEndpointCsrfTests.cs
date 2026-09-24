@@ -8,6 +8,7 @@ using Revestik.Api.Tests.Hosting;
 using Revestik.Shared.Authentication;
 using Revestik.Shared.Customers;
 using Revestik.Shared.Quotations;
+using Revestik.Shared.Sales;
 
 namespace Revestik.Api.Tests.Authentication;
 
@@ -48,6 +49,14 @@ public sealed class MutableEndpointCsrfTests
     [InlineData("DELETE", "/api/customers/1")]
     [InlineData("POST", "/api/quotations")]
     [InlineData("PUT", "/api/quotations/1")]
+    [InlineData("POST", "/api/sales")]
+    [InlineData("PUT", "/api/sales/1")]
+    [InlineData("POST", "/api/sales/1/issue")]
+    [InlineData("POST", "/api/sales/from-quotation/1")]
+    [InlineData("POST", "/api/sales/1/void")]
+    [InlineData("POST", "/api/sales/1/replacement")]
+    [InlineData("POST", "/api/sales/1/payments")]
+    [InlineData("POST", "/api/sales/1/payments/1/void")]
     [InlineData("POST", "/api/auth/logout")]
     public async Task MutableEndpoint_WithoutCsrfToken_ReturnsBadRequest(
         string method,
@@ -189,6 +198,52 @@ public sealed class MutableEndpointCsrfTests
                 new LogoutRequest(Confirm: true));
         }
         else if (
+            path.Contains("/payments/", StringComparison.OrdinalIgnoreCase) &&
+            path.EndsWith("/void", StringComparison.OrdinalIgnoreCase))
+        {
+            request.Content = JsonContent.Create(
+                new VoidSalePaymentRequest
+                {
+                    Reason = "CSRF test."
+                });
+        }
+        else if (
+            path.EndsWith("/payments", StringComparison.OrdinalIgnoreCase))
+        {
+            request.Content = JsonContent.Create(
+                new SalePaymentRequest
+                {
+                    Amount = 100m,
+                    PaymentMethod = PaymentMethod.Cash,
+                    PaidAtUtc = DateTime.UtcNow
+                });
+        }
+        else if (
+            path.EndsWith("/void", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith("/replacement", StringComparison.OrdinalIgnoreCase))
+        {
+            request.Content = JsonContent.Create(
+                new VoidSaleRequest
+                {
+                    Reason = "CSRF test."
+                });
+        }
+        else if (
+            path.StartsWith(
+                "/api/sales/from-quotation",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            request.Content = JsonContent.Create(new { });
+        }
+        else if (
+            path.StartsWith(
+                "/api/sales",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            request.Content = JsonContent.Create(
+                CreateValidSaleRequest());
+        }
+        else if (
             path.StartsWith(
                 "/api/quotations",
                 StringComparison.OrdinalIgnoreCase) &&
@@ -237,6 +292,28 @@ public sealed class MutableEndpointCsrfTests
                 {
                     CabysCode = "1234567890123",
                     Description = "CSRF test product",
+                    Unit = "Unidad",
+                    Quantity = 1m,
+                    UnitPrice = 113m,
+                    TaxRate = 13m
+                }
+            ]
+        };
+    }
+
+    private static SaleUpsertRequest
+        CreateValidSaleRequest()
+    {
+        return new SaleUpsertRequest
+        {
+            CustomerId = 1,
+            Lines =
+            [
+                new SaleLineRequest
+                {
+                    CabysCode = "1234567890123",
+                    Description = "CSRF test product",
+                    Unit = "Unidad",
                     Quantity = 1m,
                     UnitPrice = 113m,
                     TaxRate = 13m

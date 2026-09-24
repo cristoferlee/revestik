@@ -1,0 +1,443 @@
+@using Revestik.Shared.Customers
+
+@if (Disabled)
+{
+    <div class="selected-customer-card form-wide">
+        <span class="selected-customer-label">
+            Cliente
+        </span>
+
+        @if (SelectedCustomer is null)
+        {
+            <strong>Sin cliente seleccionado</strong>
+        }
+        else
+        {
+            <strong>@SelectedCustomer.Name</strong>
+            <span class="selected-customer-identification">
+                @SelectedCustomer.IdentificationNumber
+            </span>
+        }
+    </div>
+}
+else
+{
+    <div class="form-group form-wide">
+        <label for="commercial-customer-search">
+            Cliente
+        </label>
+
+        <form class="search-form"
+              @onsubmit="SearchCustomersAsync"
+              @onsubmit:preventDefault>
+            <input id="commercial-customer-search"
+                   type="search"
+                   maxlength="150"
+                   placeholder="Buscar por nombre o identificación"
+                   aria-label="Buscar cliente por nombre o identificación"
+                   @bind="customerSearchTerm" />
+
+            <button type="submit"
+                    class="primary-button"
+                    disabled="@isSearchingCustomers">
+                @(isSearchingCustomers
+                    ? "Buscando..."
+                    : "Buscar")
+            </button>
+
+            @if (!string.IsNullOrWhiteSpace(customerSearchTerm) ||
+                 customerSearchResults.Count > 0)
+            {
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@isSearchingCustomers"
+                        @onclick="ClearCustomerSearch">
+                    Limpiar
+                </button>
+            }
+        </form>
+
+        <div class="form-actions">
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@isNewCustomerFormOpen"
+                    @onclick="OpenNewCustomerFormAsync">
+                Nuevo cliente
+            </button>
+        </div>
+
+        @if (isNewCustomerFormOpen)
+        {
+            <section class="customer-card"
+                     aria-labelledby="commercial-new-customer-title">
+                <div class="page-header">
+                    <div>
+                        <h3 id="commercial-new-customer-title">
+                            Nuevo cliente
+                        </h3>
+
+                        <p>
+                            Registra el cliente sin salir del documento comercial.
+                        </p>
+                    </div>
+
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@isSavingNewCustomer"
+                            @onclick="CloseNewCustomerForm">
+                        Cancelar
+                    </button>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(newCustomerErrorMessage))
+                {
+                    <div class="status-message error-message"
+                         role="alert">
+                        @newCustomerErrorMessage
+                    </div>
+                }
+
+                <EditForm Model="newCustomerModel"
+                          OnValidSubmit="SaveNewCustomerAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="commercial-new-customer-name">
+                                Nombre
+                            </label>
+
+                            <InputText id="commercial-new-customer-name"
+                                       @bind-Value="newCustomerModel.Name" />
+
+                            <ValidationMessage
+                                For="@(() => newCustomerModel.Name)" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="commercial-new-customer-identification-type">
+                                Tipo de identificación
+                            </label>
+
+                            <InputSelect id="commercial-new-customer-identification-type"
+                                         @bind-Value="newCustomerModel.IdentificationType">
+                                <option value="">
+                                    Seleccione un tipo de identificación
+                                </option>
+
+                                <option value="@IdentificationType.PhysicalPerson">
+                                    Cédula física
+                                </option>
+
+                                <option value="@IdentificationType.Dimex">
+                                    DIMEX
+                                </option>
+
+                                <option value="@IdentificationType.LegalEntity">
+                                    Cédula jurídica
+                                </option>
+                            </InputSelect>
+
+                            <ValidationMessage
+                                For="@(() => newCustomerModel.IdentificationType)" />
+                        </div>
+
+                        <div class="form-group form-wide">
+                            <label for="commercial-new-customer-identification">
+                                Cédula de identidad
+                            </label>
+
+                            <div class="identification-input-row">
+                                <InputText id="commercial-new-customer-identification"
+                                           inputmode="numeric"
+                                           maxlength="@NewCustomerIdentificationMaximumLength"
+                                           placeholder="@NewCustomerIdentificationPlaceholder"
+                                           @bind-Value="newCustomerModel.IdentificationNumber" />
+
+                                <button type="button"
+                                        class="secondary-button lookup-button"
+                                        disabled="@(!CanLookupNewCustomerTaxpayer ||
+                                                    isLookingUpNewCustomerTaxpayer)"
+                                        @onclick="LookupNewCustomerTaxpayerAsync">
+                                    @(isLookingUpNewCustomerTaxpayer
+                                        ? "Consultando..."
+                                        : "Consultar en Hacienda")
+                                </button>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(
+                                    NewCustomerIdentificationRule))
+                            {
+                                <p class="field-guidance">
+                                    @NewCustomerIdentificationRule
+                                </p>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(
+                                    newCustomerTaxpayerMessage))
+                            {
+                                <p class="@(wasNewCustomerTaxpayerLookupSuccessful
+                                                ? "lookup-message lookup-success"
+                                                : "lookup-message lookup-error")"
+                                   role="@(wasNewCustomerTaxpayerLookupSuccessful
+                                              ? "status"
+                                              : "alert")">
+                                    @newCustomerTaxpayerMessage
+                                </p>
+                            }
+
+                            <ValidationMessage
+                                For="@(() => newCustomerModel.IdentificationNumber)" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="commercial-new-customer-email">
+                                Correo electrónico
+                            </label>
+
+                            <InputText id="commercial-new-customer-email"
+                                       type="email"
+                                       @bind-Value="newCustomerModel.Email" />
+
+                            <ValidationMessage
+                                For="@(() => newCustomerModel.Email)" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="commercial-new-customer-phone">
+                                Teléfono
+                            </label>
+
+                            <InputText id="commercial-new-customer-phone"
+                                       type="tel"
+                                       @bind-Value="newCustomerModel.PhoneNumber" />
+
+                            <ValidationMessage
+                                For="@(() => newCustomerModel.PhoneNumber)" />
+                        </div>
+
+                        <fieldset class="address-section form-wide">
+                            <legend>
+                                Dirección
+                            </legend>
+
+                            <p class="field-guidance">
+                                Selecciona la ubicación administrativa y agrega las
+                                señas necesarias para localizar al cliente.
+                            </p>
+
+                            @if (!string.IsNullOrWhiteSpace(
+                                    newCustomerLocationErrorMessage))
+                            {
+                                <p class="lookup-message lookup-error"
+                                   role="alert">
+                                    @newCustomerLocationErrorMessage
+                                </p>
+                            }
+
+                            <div class="address-grid">
+                                <div class="form-group">
+                                    <label for="commercial-new-customer-province">
+                                        Provincia
+                                    </label>
+
+                                    <select id="commercial-new-customer-province"
+                                            value="@newCustomerModel.ProvinceCode"
+                                            disabled="@isLoadingNewCustomerLocations"
+                                            @onchange="OnNewCustomerProvinceChangedAsync">
+                                        <option value="">
+                                            Seleccione una provincia
+                                        </option>
+
+                                        @foreach (var province in newCustomerProvinces)
+                                        {
+                                            <option value="@province.Code">
+                                                @province.Name
+                                            </option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="commercial-new-customer-canton">
+                                        Cantón
+                                    </label>
+
+                                    <select id="commercial-new-customer-canton"
+                                            value="@newCustomerModel.CantonCode"
+                                            disabled="@(!CanSelectNewCustomerCanton)"
+                                            @onchange="OnNewCustomerCantonChangedAsync">
+                                        <option value="">
+                                            Seleccione un cantón
+                                        </option>
+
+                                        @foreach (var canton in newCustomerCantons)
+                                        {
+                                            <option value="@canton.Code">
+                                                @canton.Name
+                                            </option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="commercial-new-customer-district">
+                                        Distrito
+                                    </label>
+
+                                    <select id="commercial-new-customer-district"
+                                            value="@newCustomerModel.DistrictCode"
+                                            disabled="@(!CanSelectNewCustomerDistrict)"
+                                            @onchange="OnNewCustomerDistrictChanged">
+                                        <option value="">
+                                            Seleccione un distrito
+                                        </option>
+
+                                        @foreach (var district in newCustomerDistricts)
+                                        {
+                                            <option value="@district.Code">
+                                                @district.Name
+                                            </option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="form-group form-wide">
+                                    <label for="commercial-new-customer-address">
+                                        Otras señas
+                                    </label>
+
+                                    <InputTextArea id="commercial-new-customer-address"
+                                                   rows="3"
+                                                   maxlength="160"
+                                                   placeholder="Ejemplo: 100 metros al norte de la iglesia, casa color blanco."
+                                                   @bind-Value="newCustomerModel.OtherSigns" />
+
+                                    <p class="field-guidance">
+                                        Escribe entre 5 y 160 caracteres.
+                                    </p>
+
+                                    <ValidationMessage
+                                        For="@(() => newCustomerModel.OtherSigns)" />
+                                </div>
+                            </div>
+                        </fieldset>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@isSavingNewCustomer"
+                                @onclick="CloseNewCustomerForm">
+                            Cancelar
+                        </button>
+
+                        <button type="submit"
+                                class="primary-button"
+                                disabled="@isSavingNewCustomer">
+                            @(isSavingNewCustomer
+                                ? "Guardando..."
+                                : "Guardar cliente")
+                        </button>
+                    </div>
+                </EditForm>
+            </section>
+        }
+
+        @if (isSearchingCustomers)
+        {
+            <p class="empty-state">
+                Buscando clientes...
+            </p>
+        }
+        else if (hasSearchedCustomers &&
+                 customerSearchResults.Count == 0)
+        {
+            <p class="empty-state">
+                No se encontraron clientes activos.
+            </p>
+        }
+        else if (customerSearchResults.Count > 0)
+        {
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Identificación</th>
+                            <th>Nombre</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var customer in customerSearchResults)
+                        {
+                            <tr>
+                                <td data-label="Identificación">
+                                    @customer.IdentificationNumber
+                                </td>
+
+                                <td data-label="Nombre">
+                                    @customer.Name
+                                </td>
+
+                                <td data-label="Acción">
+                                    <button type="button"
+                                            class="secondary-button"
+                                            @onclick="() => SelectCustomerAsync(customer)">
+                                        Seleccionar
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (customerSearchTotalPages > 1)
+            {
+                <div class="customer-pagination">
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@(isSearchingCustomers || customerSearchPage <= 1)"
+                            @onclick="GoToPreviousCustomerPageAsync">
+                        Anterior
+                    </button>
+
+                    <span>Página @customerSearchPage de @customerSearchTotalPages</span>
+
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@(isSearchingCustomers || customerSearchPage >= customerSearchTotalPages)"
+                            @onclick="GoToNextCustomerPageAsync">
+                        Siguiente
+                    </button>
+                </div>
+            }
+        }
+    </div>
+
+    @if (SelectedCustomer is not null)
+    {
+        <div class="selected-customer-card form-wide">
+            <span class="selected-customer-label">
+                Cliente seleccionado
+            </span>
+
+            <strong>
+                @SelectedCustomer.Name
+            </strong>
+
+            <span class="selected-customer-identification">
+                @SelectedCustomer.IdentificationNumber
+            </span>
+
+            <button type="button"
+                    class="secondary-button change-customer-button"
+                    @onclick="ClearSelectedCustomerAsync">
+                Cambiar cliente
+            </button>
+        </div>
+    }
+}
