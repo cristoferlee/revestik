@@ -99,6 +99,12 @@ public static class AuthenticationExtensions
                     RoleNames.Sales,
                     RoleNames.Warehouse))
             .AddPolicy(
+                PolicyNames.ManageProductCatalog,
+                policy => policy.RequireRole(
+                    RoleNames.Administrator,
+                    RoleNames.Accountant,
+                    RoleNames.Sales))
+            .AddPolicy(
                 PolicyNames.ManageSales,
                 policy => policy.RequireRole(
                     RoleNames.Administrator,

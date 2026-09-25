@@ -46,18 +46,18 @@ public sealed class ProductServicePaginationTests
         Assert.Contains(
             result.Items,
             product =>
-                product.Description == "Porcelanato Blanco");
+                product.Name == "Porcelanato Blanco");
 
         Assert.Contains(
             result.Items,
             product =>
-                product.Description == "Porcelanato Sin Stock" &&
-                product.StockQuantity == 0m);
+                product.Name == "Porcelanato Sin Stock" &&
+                product.AvailableStock == 0m);
 
         Assert.DoesNotContain(
             result.Items,
             product =>
-                product.Description == "Producto Eliminado");
+                product.Name == "Producto Eliminado");
     }
 
     [Theory]
@@ -99,7 +99,7 @@ public sealed class ProductServicePaginationTests
         var product = Assert.Single(result.Items);
 
         Assert.Equal(1, result.TotalCount);
-        Assert.Equal(expectedDescription, product.Description);
+        Assert.Equal(expectedDescription, product.Name);
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public sealed class ProductServicePaginationTests
 
         Assert.Equal(
             ["Mortero", "Porcelanato"],
-            result.Items.Select(product => product.Description));
+            result.Items.Select(product => product.Name));
     }
 
     [Fact]
@@ -203,12 +203,32 @@ public sealed class ProductServicePaginationTests
     {
         return new Product
         {
-            Description = description,
-            CabysCode = cabysCode,
-            Unit = "m²",
+            Category = new ProductCategory
+            {
+                Name = $"Categoría {Guid.NewGuid()}",
+                CreatedAtUtc = DateTime.UtcNow
+            },
+            Name = description,
+            Description = $"Descripción de {description}",
+            CabysCode = cabysCode ?? "0000000000000",
+            InventoryUnit = new UnitOfMeasure
+            {
+                Name = $"Unidad {Guid.NewGuid()}",
+                Symbol = $"u-{Guid.NewGuid():N}"[..10],
+                CreatedAtUtc = DateTime.UtcNow
+            },
+            CommercialUnit = new UnitOfMeasure
+            {
+                Name = $"Unidad comercial {Guid.NewGuid()}",
+                Symbol = $"c-{Guid.NewGuid():N}"[..10],
+                CreatedAtUtc = DateTime.UtcNow
+            },
+            CommercialUnitsPerInventoryUnit = 1m,
             SalePrice = 15000m,
+            CurrentCost = 10000m,
             TaxRate = 13m,
             StockQuantity = stockQuantity,
+            MinimumStock = 5m,
             IsDeleted = isDeleted,
             CreatedAtUtc = DateTime.UtcNow
         };

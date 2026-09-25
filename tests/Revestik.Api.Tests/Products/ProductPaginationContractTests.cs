@@ -13,6 +13,10 @@ public sealed class ProductPaginationContractTests
         Assert.Equal(1, request.Page);
         Assert.Equal(20, request.PageSize);
         Assert.Null(request.Search);
+        Assert.Null(request.CategoryId);
+        Assert.Null(request.UnitId);
+        Assert.Equal(ProductActivityStatus.Active, request.ActivityStatus);
+        Assert.Equal(ProductStockStatus.All, request.StockStatus);
     }
 
     [Theory]
@@ -62,6 +66,24 @@ public sealed class ProductPaginationContractTests
         var validationResults = Validate(request);
 
         Assert.Empty(validationResults);
+    }
+
+    [Theory]
+    [InlineData(0, null)]
+    [InlineData(-1, null)]
+    [InlineData(null, 0)]
+    [InlineData(null, -1)]
+    public void ProductListRequest_WithInvalidCatalogFilter_ReturnsValidationError(
+        int? categoryId,
+        int? unitId)
+    {
+        var request = new ProductListRequest
+        {
+            CategoryId = categoryId,
+            UnitId = unitId
+        };
+
+        Assert.NotEmpty(Validate(request));
     }
 
     private static IReadOnlyList<ValidationResult> Validate(

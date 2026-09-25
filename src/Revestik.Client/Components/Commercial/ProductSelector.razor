@@ -70,16 +70,18 @@
                     @foreach (var product in productSearchResults)
                     {
                         <tr>
-                            <td data-label="Descripción">@product.Description</td>
+                            <td data-label="Descripción">@product.Name</td>
                             <td data-label="CABYS">
                                 @(string.IsNullOrWhiteSpace(product.CabysCode)
                                     ? "—"
                                     : product.CabysCode)
                             </td>
-                            <td data-label="Unidad">@product.Unit</td>
+                            <td data-label="Unidad">@product.CommercialUnitSymbol</td>
                             <td data-label="Precio">@product.SalePrice.ToString("N2")</td>
                             <td data-label="IVA">@product.TaxRate.ToString("N0")%</td>
-                            <td data-label="Stock">@product.StockQuantity.ToString("N2")</td>
+                            <td data-label="Stock">
+                                @product.AvailableStock.ToString("N2") @product.InventoryUnitSymbol
+                            </td>
                             <td data-label="Acción">
                                 <button type="button"
                                         class="secondary-button"

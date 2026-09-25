@@ -7,6 +7,7 @@ using Revestik.Api.Data;
 using Revestik.Api.Tests.Hosting;
 using Revestik.Shared.Authentication;
 using Revestik.Shared.Customers;
+using Revestik.Shared.Products;
 using Revestik.Shared.Quotations;
 using Revestik.Shared.Sales;
 
@@ -47,6 +48,16 @@ public sealed class MutableEndpointCsrfTests
     [InlineData("POST", "/api/customers")]
     [InlineData("PUT", "/api/customers/1")]
     [InlineData("DELETE", "/api/customers/1")]
+    [InlineData("POST", "/api/product-categories")]
+    [InlineData("PUT", "/api/product-categories/1")]
+    [InlineData("DELETE", "/api/product-categories/1")]
+    [InlineData("POST", "/api/units-of-measure")]
+    [InlineData("PUT", "/api/units-of-measure/1")]
+    [InlineData("DELETE", "/api/units-of-measure/1")]
+    [InlineData("POST", "/api/products")]
+    [InlineData("PUT", "/api/products/1")]
+    [InlineData("DELETE", "/api/products/1")]
+    [InlineData("POST", "/api/products/1/reactivate")]
     [InlineData("POST", "/api/quotations")]
     [InlineData("PUT", "/api/quotations/1")]
     [InlineData("POST", "/api/sales")]
@@ -196,6 +207,45 @@ public sealed class MutableEndpointCsrfTests
         {
             request.Content = JsonContent.Create(
                 new LogoutRequest(Confirm: true));
+        }
+        else if (path.StartsWith(
+            "/api/product-categories",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            request.Content = JsonContent.Create(
+                new ProductCategoryUpsertRequest
+                {
+                    Name = "CSRF Test Category"
+                });
+        }
+        else if (path.StartsWith(
+            "/api/units-of-measure",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            request.Content = JsonContent.Create(
+                new UnitOfMeasureUpsertRequest
+                {
+                    Name = "CSRF Test Unit",
+                    Symbol = "csrf"
+                });
+        }
+        else if (path.StartsWith(
+            "/api/products",
+            StringComparison.OrdinalIgnoreCase))
+        {
+            request.Content = JsonContent.Create(
+                new ProductUpsertRequest
+                {
+                    CategoryId = 1,
+                    Name = "CSRF Test Product",
+                    CabysCode = "1234567890123",
+                    InventoryUnitId = 1,
+                    CommercialUnitId = 1,
+                    CommercialUnitsPerInventoryUnit = 1m,
+                    SalePrice = 100m,
+                    CurrentCost = 50m,
+                    TaxRate = 13m
+                });
         }
         else if (
             path.Contains("/payments/", StringComparison.OrdinalIgnoreCase) &&

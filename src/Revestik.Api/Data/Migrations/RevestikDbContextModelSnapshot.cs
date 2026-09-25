@@ -330,38 +330,64 @@ namespace Revestik.Api.Data.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("CabysCode")
+                        .IsRequired()
+                        .IsFixedLength()
                         .HasMaxLength(13)
-                        .HasColumnType("nvarchar(13)");
+                        .HasColumnType("nchar(13)");
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CommercialUnitId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("CommercialUnitsPerInventoryUnit")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal>("CurrentCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<int>("InventoryUnitId")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
+
+                    b.Property<decimal>("MinimumStock")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("RequiresWholeInventoryUnits")
+                        .HasColumnType("bit");
 
                     b.Property<decimal>("SalePrice")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("StockQuantity")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<decimal>("TaxRate")
                         .HasPrecision(5, 2)
                         .HasColumnType("decimal(5,2)");
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
@@ -370,12 +396,102 @@ namespace Revestik.Api.Data.Migrations
 
                     b.HasIndex("CabysCode");
 
-                    b.HasIndex("Description");
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("CommercialUnitId");
+
+                    b.HasIndex("InventoryUnitId");
+
+                    b.HasIndex("Name");
 
                     b.ToTable("Products", null, t =>
                         {
+                            t.HasCheckConstraint("CK_Products_CabysCode", "LEN([CabysCode]) = 13 AND [CabysCode] NOT LIKE '%[^0-9]%'");
+
+                            t.HasCheckConstraint("CK_Products_Conversion", "[CommercialUnitsPerInventoryUnit] > 0");
+
+                            t.HasCheckConstraint("CK_Products_CurrentCost", "[CurrentCost] > 0");
+
+                            t.HasCheckConstraint("CK_Products_MinimumStock", "[MinimumStock] >= 0");
+
+                            t.HasCheckConstraint("CK_Products_SalePrice", "[SalePrice] >= 0");
+
+                            t.HasCheckConstraint("CK_Products_StockQuantity", "[StockQuantity] >= 0 AND ([RequiresWholeInventoryUnits] = 0 OR [StockQuantity] = FLOOR([StockQuantity]))");
+
                             t.HasCheckConstraint("CK_Products_TaxRate", "[TaxRate] IN (0, 13)");
                         });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProductCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("ProductCategories", (string)null);
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.UnitOfMeasure", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("Symbol")
+                        .IsUnique();
+
+                    b.ToTable("UnitsOfMeasure", (string)null);
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Quotation", b =>
@@ -841,6 +957,33 @@ namespace Revestik.Api.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.Product", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.ProductCategory", "Category")
+                        .WithMany("Products")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.UnitOfMeasure", "CommercialUnit")
+                        .WithMany()
+                        .HasForeignKey("CommercialUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.UnitOfMeasure", "InventoryUnit")
+                        .WithMany()
+                        .HasForeignKey("InventoryUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+
+                    b.Navigation("CommercialUnit");
+
+                    b.Navigation("InventoryUnit");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<string>", b =>
                 {
                     b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", null)
@@ -1038,6 +1181,11 @@ namespace Revestik.Api.Data.Migrations
                     b.Navigation("Charges");
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProductCategory", b =>
+                {
+                    b.Navigation("Products");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Sale", b =>

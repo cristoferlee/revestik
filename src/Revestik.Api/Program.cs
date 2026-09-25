@@ -76,6 +76,9 @@ builder.Services.AddRevestikAuthentication(
 
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<
+    IInventoryCatalogService,
+    InventoryCatalogService>();
 builder.Services.AddScoped<IQuotationService, QuotationService>();
 builder.Services.AddScoped<IQuotationNumberGenerator, SqlQuotationNumberGenerator>();
 builder.Services.AddSingleton<IQuotationPdfService, QuotationPdfService>();
@@ -178,6 +181,7 @@ app.MapGet(
 
 app.MapCustomerEndpoints();
 app.MapProductEndpoints();
+app.MapInventoryCatalogEndpoints();
 app.MapQuotationEndpoints();
 app.MapSaleEndpoints();
 app.MapTaxpayerEndpoints();

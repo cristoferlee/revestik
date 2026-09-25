@@ -11,6 +11,9 @@ public static class PolicyNames
     public const string ManageInventory =
         "ManageInventory";
 
+    public const string ManageProductCatalog =
+        "ManageProductCatalog";
+
     public const string ManageSales =
         "ManageSales";
 

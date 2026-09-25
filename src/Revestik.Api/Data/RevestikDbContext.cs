@@ -11,6 +11,8 @@ public sealed class RevestikDbContext(DbContextOptions<RevestikDbContext> option
 {
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
+    public DbSet<UnitOfMeasure> UnitsOfMeasure => Set<UnitOfMeasure>();
     public DbSet<Quotation> Quotations => Set<Quotation>();
     public DbSet<QuotationLine> QuotationLines => Set<QuotationLine>();
     public DbSet<QuotationCharge> QuotationCharges => Set<QuotationCharge>();

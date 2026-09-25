@@ -1,19 +1,25 @@
 namespace Revestik.Shared.Products;
 
-public sealed record ProductListItemResponse(
+public sealed record ProductResponse(
     int Id,
     int CategoryId,
     string CategoryName,
     string Name,
     string Description,
     string CabysCode,
+    int InventoryUnitId,
+    string InventoryUnitName,
     string InventoryUnitSymbol,
+    int CommercialUnitId,
+    string CommercialUnitName,
     string CommercialUnitSymbol,
     decimal CommercialUnitsPerInventoryUnit,
     bool RequiresWholeInventoryUnits,
     decimal SalePrice,
     decimal CurrentCost,
     decimal TaxRate,
-    decimal AvailableStock,
+    decimal StockQuantity,
     decimal MinimumStock,
-    bool IsDeleted);
+    bool IsDeleted,
+    DateTime CreatedAtUtc,
+    DateTime? UpdatedAtUtc);

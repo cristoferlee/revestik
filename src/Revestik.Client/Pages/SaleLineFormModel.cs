@@ -91,9 +91,9 @@ public sealed class SaleLineFormModel
         ProductListItemResponse product)
     {
         ProductId = product.Id;
-        Description = product.Description;
+        Description = product.Name;
         CabysCode = product.CabysCode;
-        Unit = product.Unit;
+        Unit = product.CommercialUnitSymbol;
         UnitPrice = product.SalePrice;
         TaxRate = product.TaxRate;
     }

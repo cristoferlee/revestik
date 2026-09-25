@@ -46,7 +46,7 @@ public sealed class ProductAuthorizationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task GetProducts_WithWarehouseRole_ReturnsForbidden()
+    public async Task GetProducts_WithWarehouseRole_ReturnsOk()
     {
         using var request = CreateAuthenticatedRequest(
             RoleNames.Warehouse);
@@ -54,7 +54,7 @@ public sealed class ProductAuthorizationTests : IAsyncLifetime
         using var response = await client.SendAsync(request);
 
         Assert.Equal(
-            HttpStatusCode.Forbidden,
+            HttpStatusCode.OK,
             response.StatusCode);
     }
 
@@ -74,12 +74,57 @@ public sealed class ProductAuthorizationTests : IAsyncLifetime
             response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("POST", "/api/products")]
+    [InlineData("PUT", "/api/products/1")]
+    public async Task WriteProduct_WithWarehouseRole_ReturnsForbidden(
+        string method,
+        string path)
+    {
+        using var request = CreateAuthenticatedRequest(
+            RoleNames.Warehouse,
+            new HttpMethod(method),
+            path);
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(RoleNames.Accountant)]
+    [InlineData(RoleNames.Sales)]
+    [InlineData(RoleNames.Warehouse)]
+    public async Task DeleteProduct_WithoutAdministratorRole_ReturnsForbidden(
+        string role)
+    {
+        using var request = CreateAuthenticatedRequest(
+            role,
+            HttpMethod.Delete,
+            "/api/products/1");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     private static HttpRequestMessage CreateAuthenticatedRequest(
         string role)
     {
-        var request = new HttpRequestMessage(
+        return CreateAuthenticatedRequest(
+            role,
             HttpMethod.Get,
             "/api/products?page=1&pageSize=20");
+    }
+
+    private static HttpRequestMessage CreateAuthenticatedRequest(
+        string role,
+        HttpMethod method,
+        string path)
+    {
+        var request = new HttpRequestMessage(
+            method,
+            path);
 
         request.Headers.Add(
             TestAuthenticationHandler.UserHeaderName,
