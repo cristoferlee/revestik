@@ -11,6 +11,16 @@ public sealed class InventoryMovement
 
     public Product Product { get; set; } = null!;
 
+    public int? SaleId { get; set; }
+
+    public Sale? Sale { get; set; }
+
+    public int? ReversesInventoryMovementId { get; set; }
+
+    public InventoryMovement? ReversesInventoryMovement { get; set; }
+
+    public InventoryMovement? ReversalInventoryMovement { get; set; }
+
     public InventoryMovementType Type { get; set; }
 
     public decimal QuantityChange { get; set; }

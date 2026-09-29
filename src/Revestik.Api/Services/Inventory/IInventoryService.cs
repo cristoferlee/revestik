@@ -22,6 +22,13 @@ public interface IInventoryService
     Task ConsumeSaleStockAsync(
         int productId,
         decimal commercialQuantity,
+        int saleId,
+        string saleNumber,
+        string createdByUserId,
+        CancellationToken cancellationToken);
+
+    Task ReverseSaleStockAsync(
+        int saleId,
         string saleNumber,
         string createdByUserId,
         CancellationToken cancellationToken);

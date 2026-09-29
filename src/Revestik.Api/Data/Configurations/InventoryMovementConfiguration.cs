@@ -93,12 +93,33 @@ public sealed class InventoryMovementConfiguration
             .HasForeignKey(movement => movement.ProductId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(movement => movement.Sale)
+            .WithMany()
+            .HasForeignKey(movement => movement.SaleId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(movement => movement.ReversesInventoryMovement)
+            .WithOne(movement => movement.ReversalInventoryMovement)
+            .HasForeignKey<InventoryMovement>(
+                movement => movement.ReversesInventoryMovementId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasOne(movement => movement.CreatedByUser)
             .WithMany()
             .HasForeignKey(movement => movement.CreatedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(movement => movement.ProductId);
+
+        builder.HasIndex(movement => movement.SaleId);
+
+        builder.HasIndex(
+                movement => movement.ReversesInventoryMovementId)
+            .HasDatabaseName(
+                "UX_InventoryMovements_ReversesInventoryMovementId")
+            .IsUnique()
+            .HasFilter(
+                "[ReversesInventoryMovementId] IS NOT NULL");
 
         builder.HasIndex(movement => movement.CreatedAtUtc);
 

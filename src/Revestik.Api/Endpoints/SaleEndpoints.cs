@@ -72,7 +72,6 @@ public static class SaleEndpoints
             })
             .WithName("GetSaleById");
 
-
         group.MapGet(
             "/{id:int}/pdf",
             async (
@@ -298,6 +297,7 @@ public static class SaleEndpoints
                         await inventoryService.ConsumeSaleStockAsync(
                             line.ProductId,
                             line.CommercialQuantity,
+                            sale.Id,
                             sale.SaleNumber,
                             userId,
                             cancellationToken);
@@ -333,6 +333,8 @@ public static class SaleEndpoints
                 VoidSaleRequest request,
                 ClaimsPrincipal user,
                 ISaleService saleService,
+                IInventoryService inventoryService,
+                RevestikDbContext dbContext,
                 CancellationToken cancellationToken) =>
             {
                 var validationErrors = ValidateRequest(request);
@@ -349,6 +351,10 @@ public static class SaleEndpoints
                     return InvalidAuthenticatedUser();
                 }
 
+                await using var transaction =
+                    await dbContext.Database.BeginTransactionAsync(
+                        cancellationToken);
+
                 try
                 {
                     var sale = await saleService.VoidAsync(
@@ -357,16 +363,37 @@ public static class SaleEndpoints
                         userId,
                         cancellationToken);
 
-                    return sale is null
-                        ? Results.NotFound()
-                        : Results.Ok(sale);
+                    if (sale is null)
+                    {
+                        await transaction.RollbackAsync(
+                            cancellationToken);
+
+                        return Results.NotFound();
+                    }
+
+                    await inventoryService.ReverseSaleStockAsync(
+                        sale.Id,
+                        sale.SaleNumber,
+                        userId,
+                        cancellationToken);
+
+                    await transaction.CommitAsync(
+                        cancellationToken);
+
+                    return Results.Ok(sale);
                 }
                 catch (InvalidOperationException exception)
                 {
+                    await transaction.RollbackAsync(
+                        cancellationToken);
+
                     return MapBusinessError(exception);
                 }
                 catch (ArgumentException exception)
                 {
+                    await transaction.RollbackAsync(
+                        cancellationToken);
+
                     return MapArgumentError(exception);
                 }
             })
@@ -380,6 +407,8 @@ public static class SaleEndpoints
                 VoidSaleRequest request,
                 ClaimsPrincipal user,
                 ISaleService saleService,
+                IInventoryService inventoryService,
+                RevestikDbContext dbContext,
                 CancellationToken cancellationToken) =>
             {
                 var validationErrors = ValidateRequest(request);
@@ -396,27 +425,58 @@ public static class SaleEndpoints
                     return InvalidAuthenticatedUser();
                 }
 
+                await using var transaction =
+                    await dbContext.Database.BeginTransactionAsync(
+                        cancellationToken);
+
                 try
                 {
-                    var sale =
+                    var replacement =
                         await saleService.CreateReplacementAsync(
                             id,
                             request,
                             userId,
                             cancellationToken);
 
-                    return sale is null
-                        ? Results.NotFound()
-                        : Results.Created(
-                            $"/api/sales/{sale.Id}",
-                            sale);
+                    if (replacement is null)
+                    {
+                        await transaction.RollbackAsync(
+                            cancellationToken);
+
+                        return Results.NotFound();
+                    }
+
+                    var original = await saleService.GetByIdAsync(
+                        id,
+                        cancellationToken)
+                        ?? throw new InvalidOperationException(
+                            "The original sale could not be loaded after replacement creation.");
+
+                    await inventoryService.ReverseSaleStockAsync(
+                        original.Id,
+                        original.SaleNumber,
+                        userId,
+                        cancellationToken);
+
+                    await transaction.CommitAsync(
+                        cancellationToken);
+
+                    return Results.Created(
+                        $"/api/sales/{replacement.Id}",
+                        replacement);
                 }
                 catch (InvalidOperationException exception)
                 {
+                    await transaction.RollbackAsync(
+                        cancellationToken);
+
                     return MapBusinessError(exception);
                 }
                 catch (ArgumentException exception)
                 {
+                    await transaction.RollbackAsync(
+                        cancellationToken);
+
                     return MapArgumentError(exception);
                 }
             })

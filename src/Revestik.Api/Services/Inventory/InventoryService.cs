@@ -249,6 +249,7 @@ public sealed class InventoryService(RevestikDbContext dbContext)
     public async Task ConsumeSaleStockAsync(
         int productId,
         decimal commercialQuantity,
+        int saleId,
         string saleNumber,
         string createdByUserId,
         CancellationToken cancellationToken)
@@ -256,6 +257,10 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         if (commercialQuantity <= 0m)
             throw new InvalidInventoryOperationException(
                 "Sale quantity must be greater than zero.");
+
+        if (saleId <= 0)
+            throw new InvalidInventoryOperationException(
+                "Sale ID is required for inventory consumption.");
 
         if (string.IsNullOrWhiteSpace(saleNumber))
             throw new InvalidInventoryOperationException(
@@ -340,6 +345,7 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         var movement = new InventoryMovement
         {
             ProductId = product.Id,
+            SaleId = saleId,
             Type = InventoryMovementType.Sale,
             QuantityChange = -consumedPhysicalQuantity,
             StockBefore = stockBefore,
@@ -374,9 +380,153 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         }
     }
 
+    public async Task ReverseSaleStockAsync(
+        int saleId,
+        string saleNumber,
+        string createdByUserId,
+        CancellationToken cancellationToken)
+    {
+        if (saleId <= 0)
+            throw new InvalidInventoryOperationException(
+                "Sale ID is required for inventory reversal.");
+
+        if (string.IsNullOrWhiteSpace(saleNumber))
+            throw new InvalidInventoryOperationException(
+                "Sale number is required for inventory reversal.");
+
+        await EnsureActiveUserAsync(
+            createdByUserId,
+            cancellationToken);
+
+        var saleMovements = await dbContext.InventoryMovements
+            .Where(movement =>
+                movement.SaleId == saleId &&
+                movement.Type == InventoryMovementType.Sale)
+            .OrderBy(movement => movement.Id)
+            .ToListAsync(cancellationToken);
+
+        if (saleMovements.Count == 0)
+            return;
+
+        var movementIds = saleMovements
+            .Select(movement => movement.Id)
+            .ToArray();
+
+        var reversedMovementIds = await dbContext.InventoryMovements
+            .AsNoTracking()
+            .Where(movement =>
+                movement.ReversesInventoryMovementId.HasValue &&
+                movementIds.Contains(
+                    movement.ReversesInventoryMovementId.Value))
+            .Select(movement =>
+                movement.ReversesInventoryMovementId!.Value)
+            .ToListAsync(cancellationToken);
+
+        if (reversedMovementIds.Count == saleMovements.Count)
+            return;
+
+        if (reversedMovementIds.Count > 0)
+        {
+            throw new InventoryCostIntegrityException(
+                "The sale inventory reversal is only partially recorded.");
+        }
+
+        var productIds = saleMovements
+            .Select(movement => movement.ProductId)
+            .Distinct()
+            .ToArray();
+
+        var products = await dbContext.Products
+            .Where(product => productIds.Contains(product.Id))
+            .ToDictionaryAsync(
+                product => product.Id,
+                cancellationToken);
+
+        if (products.Count != productIds.Length)
+        {
+            throw new InventoryCostIntegrityException(
+                "One or more products referenced by the sale inventory history no longer exist.");
+        }
+
+        foreach (var product in products.Values)
+        {
+            await EnsureProductVersionCurrentAsync(
+                product,
+                cancellationToken,
+                allowDeleted: true);
+
+            await inventoryCostService.EnsureBalanceAsync(
+                product.Id,
+                product.StockQuantity,
+                cancellationToken);
+        }
+
+        var consumptions =
+            await inventoryCostService
+                .GetValidatedRestorationConsumptionsAsync(
+                    saleMovements,
+                    cancellationToken);
+
+        inventoryCostService.RestoreConsumptions(
+            consumptions);
+
+        var now = DateTime.UtcNow;
+
+        foreach (var movement in saleMovements)
+        {
+            var product = products[movement.ProductId];
+            var quantityToRestore =
+                Math.Abs(movement.QuantityChange);
+
+            var stockBefore = product.StockQuantity;
+            var stockAfter =
+                stockBefore + quantityToRestore;
+
+            var reversal = new InventoryMovement
+            {
+                ProductId = product.Id,
+                SaleId = saleId,
+                ReversesInventoryMovementId = movement.Id,
+                Type = InventoryMovementType.SaleReversal,
+                QuantityChange = quantityToRestore,
+                StockBefore = stockBefore,
+                StockAfter = stockAfter,
+                UnitCost = null,
+                AdjustmentReason = null,
+                Notes =
+                    $"Anulación de venta {saleNumber}. Reposición de bodega: {quantityToRestore:0.####}.",
+                CreatedByUserId = createdByUserId,
+                CreatedAtUtc = now
+            };
+
+            dbContext.InventoryMovements.Add(reversal);
+
+            product.StockQuantity = stockAfter;
+            product.UpdatedAtUtc = now;
+        }
+
+        try
+        {
+            await dbContext.SaveChangesAsync(
+                cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new InventoryConcurrencyException();
+        }
+        catch (DbUpdateException ex)
+            when (ex.InnerException is SqlException
+                { Number: 2601 or 2627 })
+        {
+            throw new InventoryCostIntegrityException(
+                "The sale inventory movement has already been reversed.");
+        }
+    }
+
     private async Task EnsureProductVersionCurrentAsync(
         Product product,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool allowDeleted = false)
     {
         var databaseState = await dbContext.Products
             .AsNoTracking()
@@ -389,7 +539,7 @@ public sealed class InventoryService(RevestikDbContext dbContext)
             .SingleOrDefaultAsync(cancellationToken);
 
         if (databaseState is null ||
-            databaseState.IsDeleted ||
+            (!allowDeleted && databaseState.IsDeleted) ||
             !product.RowVersion.SequenceEqual(databaseState.RowVersion))
         {
             throw new InventoryConcurrencyException();

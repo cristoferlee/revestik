@@ -12,6 +12,8 @@ public sealed class InventorySaleConsumptionTests
     private const string UserId =
         "inventory-sale-consumption-user";
 
+    private const int SaleId = 900001;
+
     [Fact]
     public async Task ConsumeSaleStock_WithEnoughStock_ConsumesFifoAndUpdatesStock()
     {
@@ -28,6 +30,7 @@ public sealed class InventorySaleConsumptionTests
         await service.ConsumeSaleStockAsync(
             product.Id,
             80m,
+            SaleId,
             "VEN-TEST-001",
             UserId,
             CancellationToken.None);
@@ -39,6 +42,7 @@ public sealed class InventorySaleConsumptionTests
                 item.ProductId == product.Id &&
                 item.Type == InventoryMovementType.Sale);
 
+        Assert.Equal(SaleId, movement.SaleId);
         Assert.Equal(-80m, movement.QuantityChange);
         Assert.Equal(100m, movement.StockBefore);
         Assert.Equal(20m, movement.StockAfter);
@@ -72,6 +76,7 @@ public sealed class InventorySaleConsumptionTests
         await service.ConsumeSaleStockAsync(
             product.Id,
             120m,
+            SaleId,
             "VEN-TEST-002",
             UserId,
             CancellationToken.None);
@@ -83,6 +88,7 @@ public sealed class InventorySaleConsumptionTests
                 item.ProductId == product.Id &&
                 item.Type == InventoryMovementType.Sale);
 
+        Assert.Equal(SaleId, movement.SaleId);
         Assert.Equal(-100m, movement.QuantityChange);
         Assert.Equal(0m, movement.StockAfter);
         Assert.Contains(
@@ -106,6 +112,7 @@ public sealed class InventorySaleConsumptionTests
         await service.ConsumeSaleStockAsync(
             product.Id,
             11.52m,
+            SaleId,
             "VEN-TEST-003",
             UserId,
             CancellationToken.None);
@@ -117,6 +124,7 @@ public sealed class InventorySaleConsumptionTests
                 item.ProductId == product.Id &&
                 item.Type == InventoryMovementType.Sale);
 
+        Assert.Equal(SaleId, movement.SaleId);
         Assert.Equal(-8m, movement.QuantityChange);
     }
 
@@ -136,6 +144,7 @@ public sealed class InventorySaleConsumptionTests
         await service.ConsumeSaleStockAsync(
             product.Id,
             20m,
+            SaleId,
             "VEN-TEST-004",
             UserId,
             CancellationToken.None);
