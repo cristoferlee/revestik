@@ -1,6 +1,584 @@
 @page "/settings"
+@using Microsoft.AspNetCore.Authorization
+@using Revestik.Client.Services.Products
+@using Revestik.Shared.Products
+@attribute [Authorize(Roles = "Administrator")]
+@inject IInventoryCatalogApiService CatalogApi
 
 <PageTitle>Configuración | Revestik</PageTitle>
 
-<h1>Configuración</h1>
-<p>La configuración de la aplicación se encuentra en desarrollo.</p>
+<section class="settings-page">
+    <header class="settings-header">
+        <div>
+            <h1>Configuración</h1>
+            <p>Administra los catálogos que utiliza Inventario.</p>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message" role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="status-message" role="status">
+            @successMessage
+        </div>
+    }
+
+    <section class="settings-card">
+        <div class="settings-section-heading">
+            <div>
+                <h2>Categorías de producto</h2>
+                <p>Estas categorías aparecen al crear o editar productos en Inventario.</p>
+            </div>
+
+            <button type="button"
+                    class="primary-button"
+                    disabled="@isBusy"
+                    @onclick="OpenNewCategory">
+                Nueva categoría
+            </button>
+        </div>
+
+        @if (categories.Count == 0)
+        {
+            <p class="empty-state">No hay categorías registradas.</p>
+        }
+        else
+        {
+            <div class="settings-list">
+                @foreach (var category in categories.OrderBy(item => item.Name))
+                {
+                    <article class="settings-row">
+                        <div>
+                            <strong>@category.Name</strong>
+                            <span class="settings-status">
+                                @(category.IsActive ? "Activa" : "Inactiva")
+                            </span>
+                        </div>
+
+                        <div class="settings-actions">
+                            <button type="button"
+                                    class="secondary-button"
+                                    disabled="@isBusy"
+                                    @onclick="() => OpenEditCategory(category)">
+                                Editar
+                            </button>
+
+                            @if (category.IsActive)
+                            {
+                                <button type="button"
+                                        class="secondary-button danger-button"
+                                        disabled="@isBusy"
+                                        @onclick="() => DeactivateCategoryAsync(category)">
+                                    Desactivar
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button"
+                                        class="primary-button"
+                                        disabled="@isBusy"
+                                        @onclick="() => ReactivateCategoryAsync(category)">
+                                    Reactivar
+                                </button>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="settings-card">
+        <div class="settings-section-heading">
+            <div>
+                <h2>Unidades de medida</h2>
+                <p>
+                    Define cómo se cuenta físicamente un producto y cómo se expresa al cliente.
+                </p>
+            </div>
+
+            <button type="button"
+                    class="primary-button"
+                    disabled="@isBusy"
+                    @onclick="OpenNewUnit">
+                Nueva unidad
+            </button>
+        </div>
+
+        @if (units.Count == 0)
+        {
+            <p class="empty-state">No hay unidades registradas.</p>
+        }
+        else
+        {
+            <div class="settings-list">
+                @foreach (var unit in units.OrderBy(item => item.Name))
+                {
+                    <article class="settings-row">
+                        <div>
+                            <strong>@unit.Name</strong>
+                            <span class="settings-symbol">@unit.Symbol</span>
+                            <span class="settings-status">
+                                @(unit.IsActive ? "Activa" : "Inactiva")
+                            </span>
+                        </div>
+
+                        <div class="settings-actions">
+                            <button type="button"
+                                    class="secondary-button"
+                                    disabled="@isBusy"
+                                    @onclick="() => OpenEditUnit(unit)">
+                                Editar
+                            </button>
+
+                            @if (unit.IsActive)
+                            {
+                                <button type="button"
+                                        class="secondary-button danger-button"
+                                        disabled="@isBusy"
+                                        @onclick="() => DeactivateUnitAsync(unit)">
+                                    Desactivar
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button"
+                                        class="primary-button"
+                                        disabled="@isBusy"
+                                        @onclick="() => ReactivateUnitAsync(unit)">
+                                    Reactivar
+                                </button>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+
+    @if (isCategoryFormOpen)
+    {
+        <div class="settings-modal-backdrop" @onclick="CloseForms">
+            <section class="settings-modal"
+                     role="dialog"
+                     aria-modal="true"
+                     @onclick:stopPropagation>
+                <div class="settings-section-heading">
+                    <div>
+                        <h2>@(editingCategoryId.HasValue ? "Editar categoría" : "Nueva categoría")</h2>
+                    </div>
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@isBusy"
+                            @onclick="CloseForms">
+                        Cerrar
+                    </button>
+                </div>
+
+                <EditForm Model="categoryRequest"
+                          OnValidSubmit="SaveCategoryAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="form-group">
+                        <label>Nombre</label>
+                        <InputText @bind-Value="categoryRequest.Name"
+                                   maxlength="100" />
+                        <ValidationMessage For="@(() => categoryRequest.Name)" />
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@isBusy"
+                                @onclick="CloseForms">
+                            Cancelar
+                        </button>
+                        <button type="submit"
+                                class="primary-button"
+                                disabled="@isBusy">
+                            @(isSaving ? "Guardando..." : "Guardar")
+                        </button>
+                    </div>
+                </EditForm>
+            </section>
+        </div>
+    }
+
+    @if (isUnitFormOpen)
+    {
+        <div class="settings-modal-backdrop" @onclick="CloseForms">
+            <section class="settings-modal"
+                     role="dialog"
+                     aria-modal="true"
+                     @onclick:stopPropagation>
+                <div class="settings-section-heading">
+                    <div>
+                        <h2>@(editingUnitId.HasValue ? "Editar unidad" : "Nueva unidad")</h2>
+                    </div>
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@isBusy"
+                            @onclick="CloseForms">
+                        Cerrar
+                    </button>
+                </div>
+
+                <EditForm Model="unitRequest"
+                          OnValidSubmit="SaveUnitAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Nombre</label>
+                            <InputText @bind-Value="unitRequest.Name"
+                                       maxlength="100" />
+                            <ValidationMessage For="@(() => unitRequest.Name)" />
+                        </div>
+
+                        <div class="form-group">
+                            <label>Símbolo</label>
+                            <InputText @bind-Value="unitRequest.Symbol"
+                                       maxlength="20"
+                                       placeholder="Ejemplo: caja, m², und" />
+                            <ValidationMessage For="@(() => unitRequest.Symbol)" />
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@isBusy"
+                                @onclick="CloseForms">
+                            Cancelar
+                        </button>
+                        <button type="submit"
+                                class="primary-button"
+                                disabled="@isBusy">
+                            @(isSaving ? "Guardando..." : "Guardar")
+                        </button>
+                    </div>
+                </EditForm>
+            </section>
+        </div>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<ProductCategoryResponse> categories = [];
+    private IReadOnlyList<UnitOfMeasureResponse> units = [];
+
+    private ProductCategoryUpsertRequest categoryRequest = new();
+    private UnitOfMeasureUpsertRequest unitRequest = new();
+
+    private int? editingCategoryId;
+    private int? editingUnitId;
+    private bool isCategoryFormOpen;
+    private bool isUnitFormOpen;
+    private bool isLoading;
+    private bool isSaving;
+
+    private string? errorMessage;
+    private string? successMessage;
+
+    private bool isBusy => isLoading || isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCatalogsAsync();
+    }
+
+    private async Task LoadCatalogsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            categories = await CatalogApi.GetCategoriesAsync(includeInactive: true);
+            units = await CatalogApi.GetUnitsAsync(includeInactive: true);
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = $"No se pudo cargar la configuración. {exception.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenNewCategory()
+    {
+        ClearMessages();
+        editingCategoryId = null;
+        categoryRequest = new ProductCategoryUpsertRequest
+        {
+            IsActive = true
+        };
+        isCategoryFormOpen = true;
+    }
+
+    private void OpenEditCategory(ProductCategoryResponse category)
+    {
+        ClearMessages();
+        editingCategoryId = category.Id;
+        categoryRequest = new ProductCategoryUpsertRequest
+        {
+            Name = category.Name,
+            IsActive = category.IsActive
+        };
+        isCategoryFormOpen = true;
+    }
+
+    private async Task SaveCategoryAsync()
+    {
+        isSaving = true;
+        ClearMessages();
+
+        try
+        {
+            if (editingCategoryId.HasValue)
+            {
+                var updated = await CatalogApi.UpdateCategoryAsync(
+                    editingCategoryId.Value,
+                    categoryRequest);
+
+                if (updated is null)
+                {
+                    errorMessage = "La categoría ya no existe.";
+                    return;
+                }
+
+                successMessage = $"Categoría {updated.Name} actualizada.";
+            }
+            else
+            {
+                var created = await CatalogApi.CreateCategoryAsync(categoryRequest);
+                successMessage = $"Categoría {created.Name} creada.";
+            }
+
+            isCategoryFormOpen = false;
+            await LoadCatalogsAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = $"No se pudo guardar la categoría. {exception.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task DeactivateCategoryAsync(ProductCategoryResponse category)
+    {
+        isSaving = true;
+        ClearMessages();
+
+        try
+        {
+            if (!await CatalogApi.DeactivateCategoryAsync(category.Id))
+            {
+                errorMessage = "La categoría ya no existe.";
+                return;
+            }
+
+            successMessage = $"Categoría {category.Name} desactivada.";
+            await LoadCatalogsAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = $"No se pudo desactivar la categoría. {exception.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ReactivateCategoryAsync(ProductCategoryResponse category)
+    {
+        isSaving = true;
+        ClearMessages();
+
+        try
+        {
+            var updated = await CatalogApi.UpdateCategoryAsync(
+                category.Id,
+                new ProductCategoryUpsertRequest
+                {
+                    Name = category.Name,
+                    IsActive = true
+                });
+
+            if (updated is null)
+            {
+                errorMessage = "La categoría ya no existe.";
+                return;
+            }
+
+            successMessage = $"Categoría {updated.Name} reactivada.";
+            await LoadCatalogsAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = $"No se pudo reactivar la categoría. {exception.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void OpenNewUnit()
+    {
+        ClearMessages();
+        editingUnitId = null;
+        unitRequest = new UnitOfMeasureUpsertRequest
+        {
+            IsActive = true
+        };
+        isUnitFormOpen = true;
+    }
+
+    private void OpenEditUnit(UnitOfMeasureResponse unit)
+    {
+        ClearMessages();
+        editingUnitId = unit.Id;
+        unitRequest = new UnitOfMeasureUpsertRequest
+        {
+            Name = unit.Name,
+            Symbol = unit.Symbol,
+            IsActive = unit.IsActive
+        };
+        isUnitFormOpen = true;
+    }
+
+    private async Task SaveUnitAsync()
+    {
+        isSaving = true;
+        ClearMessages();
+
+        try
+        {
+            if (editingUnitId.HasValue)
+            {
+                var updated = await CatalogApi.UpdateUnitAsync(
+                    editingUnitId.Value,
+                    unitRequest);
+
+                if (updated is null)
+                {
+                    errorMessage = "La unidad ya no existe.";
+                    return;
+                }
+
+                successMessage = $"Unidad {updated.Name} actualizada.";
+            }
+            else
+            {
+                var created = await CatalogApi.CreateUnitAsync(unitRequest);
+                successMessage = $"Unidad {created.Name} creada.";
+            }
+
+            isUnitFormOpen = false;
+            await LoadCatalogsAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = $"No se pudo guardar la unidad. {exception.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task DeactivateUnitAsync(UnitOfMeasureResponse unit)
+    {
+        isSaving = true;
+        ClearMessages();
+
+        try
+        {
+            if (!await CatalogApi.DeactivateUnitAsync(unit.Id))
+            {
+                errorMessage = "La unidad ya no existe.";
+                return;
+            }
+
+            successMessage = $"Unidad {unit.Name} desactivada.";
+            await LoadCatalogsAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = $"No se pudo desactivar la unidad. {exception.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ReactivateUnitAsync(UnitOfMeasureResponse unit)
+    {
+        isSaving = true;
+        ClearMessages();
+
+        try
+        {
+            var updated = await CatalogApi.UpdateUnitAsync(
+                unit.Id,
+                new UnitOfMeasureUpsertRequest
+                {
+                    Name = unit.Name,
+                    Symbol = unit.Symbol,
+                    IsActive = true
+                });
+
+            if (updated is null)
+            {
+                errorMessage = "La unidad ya no existe.";
+                return;
+            }
+
+            successMessage = $"Unidad {updated.Name} reactivada.";
+            await LoadCatalogsAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = $"No se pudo reactivar la unidad. {exception.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void CloseForms()
+    {
+        if (isSaving)
+        {
+            return;
+        }
+
+        isCategoryFormOpen = false;
+        isUnitFormOpen = false;
+        editingCategoryId = null;
+        editingUnitId = null;
+    }
+
+    private void ClearMessages()
+    {
+        errorMessage = null;
+        successMessage = null;
+    }
+}

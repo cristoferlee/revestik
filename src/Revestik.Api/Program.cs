@@ -7,6 +7,7 @@ using Revestik.Api.Extensions;
 using Revestik.Api.Integrations.Hacienda;
 using Revestik.Api.Integrations.Locations;
 using Revestik.Api.Services.Customers;
+using Revestik.Api.Services.Inventory;
 using Revestik.Api.Services.Products;
 using Revestik.Api.Services.Quotations;
 using Revestik.Api.Services.Quotations.Pdf;
@@ -76,6 +77,7 @@ builder.Services.AddRevestikAuthentication(
 
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<
     IInventoryCatalogService,
     InventoryCatalogService>();
@@ -182,6 +184,7 @@ app.MapGet(
 app.MapCustomerEndpoints();
 app.MapProductEndpoints();
 app.MapInventoryCatalogEndpoints();
+app.MapInventoryEndpoints();
 app.MapQuotationEndpoints();
 app.MapSaleEndpoints();
 app.MapTaxpayerEndpoints();

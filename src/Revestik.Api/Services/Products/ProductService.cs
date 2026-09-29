@@ -13,11 +13,11 @@ public sealed class ProductService(RevestikDbContext dbContext)
         ProductListRequest request,
         CancellationToken cancellationToken)
     {
-        var query = ApplyFilters(
+        var filteredQuery = ApplyFilters(
             dbContext.Products.AsNoTracking(),
             request);
 
-        var totalCount = await query.CountAsync(cancellationToken);
+        var totalCount = await filteredQuery.CountAsync(cancellationToken);
         var skip = ((long)request.Page - 1) * request.PageSize;
 
         IReadOnlyList<ProductListItemResponse> items;
@@ -28,9 +28,12 @@ public sealed class ProductService(RevestikDbContext dbContext)
         }
         else
         {
-            items = await query
-                .OrderBy(product => product.Name)
-                .ThenBy(product => product.Id)
+            var orderedQuery = ApplyOrdering(
+                filteredQuery,
+                request.SortBy ?? ProductSortField.Name,
+                request.SortDirection ?? SortDirection.Asc);
+
+            items = await orderedQuery
                 .Skip((int)skip)
                 .Take(request.PageSize)
                 .Select(product => new ProductListItemResponse(
@@ -252,6 +255,85 @@ public sealed class ProductService(RevestikDbContext dbContext)
         };
 
         return query;
+    }
+
+    private static IOrderedQueryable<Product> ApplyOrdering(
+        IQueryable<Product> query,
+        ProductSortField sortBy,
+        SortDirection direction)
+    {
+        return (sortBy, direction) switch
+        {
+            (ProductSortField.Name, SortDirection.Asc) =>
+                query.OrderBy(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            (ProductSortField.Name, SortDirection.Desc) =>
+                query.OrderByDescending(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            (ProductSortField.Category, SortDirection.Asc) =>
+                query.OrderBy(product => product.Category.Name)
+                    .ThenBy(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            (ProductSortField.Category, SortDirection.Desc) =>
+                query.OrderByDescending(product => product.Category.Name)
+                    .ThenBy(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            (ProductSortField.CabysCode, SortDirection.Asc) =>
+                query.OrderBy(product => product.CabysCode)
+                    .ThenBy(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            (ProductSortField.CabysCode, SortDirection.Desc) =>
+                query.OrderByDescending(product => product.CabysCode)
+                    .ThenBy(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            (ProductSortField.StockQuantity, SortDirection.Asc) =>
+                query.OrderBy(product => product.StockQuantity)
+                    .ThenBy(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            (ProductSortField.StockQuantity, SortDirection.Desc) =>
+                query.OrderByDescending(product => product.StockQuantity)
+                    .ThenBy(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            (ProductSortField.MinimumStock, SortDirection.Asc) =>
+                query.OrderBy(product => product.MinimumStock)
+                    .ThenBy(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            (ProductSortField.MinimumStock, SortDirection.Desc) =>
+                query.OrderByDescending(product => product.MinimumStock)
+                    .ThenBy(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            (ProductSortField.CurrentCost, SortDirection.Asc) =>
+                query.OrderBy(product => product.CurrentCost)
+                    .ThenBy(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            (ProductSortField.CurrentCost, SortDirection.Desc) =>
+                query.OrderByDescending(product => product.CurrentCost)
+                    .ThenBy(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            (ProductSortField.SalePrice, SortDirection.Asc) =>
+                query.OrderBy(product => product.SalePrice)
+                    .ThenBy(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            (ProductSortField.SalePrice, SortDirection.Desc) =>
+                query.OrderByDescending(product => product.SalePrice)
+                    .ThenBy(product => product.Name)
+                    .ThenBy(product => product.Id),
+
+            _ => throw new ArgumentOutOfRangeException(nameof(sortBy))
+        };
     }
 
     private async Task ValidateCatalogReferencesAsync(

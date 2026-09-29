@@ -2,60 +2,71 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    min-height: 46px;
-    padding: 8px clamp(20px, 5vw, 72px);
-    border-top: 1px solid var(--color-border);
-    background-color: #ffffff;
-    gap: 16px;
+    gap: 10px;
+}
+
+.user-avatar {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    place-items: center;
+    border: 1px solid #d9dee5;
+    border-radius: 50%;
+    background: #eef1f4;
+    color: #3f4a57;
+    font-size: 0.76rem;
+    font-weight: 700;
 }
 
 .user-details {
     display: flex;
+    min-width: 0;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: flex-start;
+    line-height: 1.2;
 }
 
 .user-name {
-    color: var(--color-text);
-    font-size: 0.86rem;
-    font-weight: 600;
+    max-width: 180px;
+    overflow: hidden;
+    color: #26313d;
+    font-size: 0.82rem;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .user-role {
-    color: var(--color-text-muted);
-    font-size: 0.72rem;
+    color: #87909c;
+    font-size: 0.68rem;
 }
 
 .logout-button {
-    padding: 7px 12px;
-    border: 1px solid var(--color-border);
-    border-radius: 7px;
-    background-color: #ffffff;
-    color: var(--color-text);
+    min-height: 34px;
+    padding: 0 11px;
+    border: 1px solid #d9dee5;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #4b5563;
     cursor: pointer;
     font: inherit;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     font-weight: 600;
 }
 
 .logout-button:hover {
     border-color: var(--color-primary);
-    color: var(--color-primary);
+    color: var(--color-primary-dark);
 }
 
 .logout-button:disabled {
     cursor: wait;
-    opacity: 0.65;
+    opacity: 0.6;
 }
 
 @media (max-width: 560px) {
-    .user-session {
-        justify-content: space-between;
-        padding-right: 16px;
-        padding-left: 16px;
-    }
-
     .user-details {
-        align-items: flex-start;
+        display: none;
     }
 }

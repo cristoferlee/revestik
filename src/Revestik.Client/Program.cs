@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Revestik.Client;
 using Revestik.Client.Services.Authentication;
 using Revestik.Client.Services.Customers;
+using Revestik.Client.Services.Inventory;
 using Revestik.Client.Services.Locations;
 using Revestik.Client.Services.Products;
 using Revestik.Client.Services.Quotations;
@@ -83,6 +84,14 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IProductApiService,
     ProductApiService>();
+
+builder.Services.AddScoped<
+    IInventoryCatalogApiService,
+    InventoryCatalogApiService>();
+
+builder.Services.AddScoped<
+    IInventoryApiService,
+    InventoryApiService>();
 
 builder.Services.AddScoped<
     IQuotationApiService,

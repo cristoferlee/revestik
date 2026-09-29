@@ -1,55 +1,37 @@
-﻿<nav class="main-navigation" aria-label="Navegación principal">
+<nav class="main-navigation" aria-label="Navegación principal">
     <button class="navigation-toggle"
             type="button"
             aria-expanded="@isNavigationOpen"
             aria-controls="primary-navigation"
             @onclick="ToggleNavigation">
-        Menú
+        <span>Menú principal</span>
+        <span aria-hidden="true">☰</span>
     </button>
 
     <div id="primary-navigation" class="@NavigationCssClass">
-        <NavLink class="navigation-link"
-                 href="/"
-                 Match="NavLinkMatch.All"
-                 @onclick="CloseNavigation">
-            Dashboard
+        <NavLink class="navigation-link" href="/" Match="NavLinkMatch.All" @onclick="CloseNavigation">
+            <span class="nav-icon" aria-hidden="true">⌂</span><span>Dashboard</span>
         </NavLink>
-
-        <NavLink class="navigation-link"
-                 href="/sales"
-                 @onclick="CloseNavigation">
-            Ventas
+        <NavLink class="navigation-link" href="/customers" @onclick="CloseNavigation">
+            <span class="nav-icon" aria-hidden="true">◎</span><span>Clientes</span>
         </NavLink>
-
-        <NavLink class="navigation-link"
-                 href="/inventory"
-                 @onclick="CloseNavigation">
-            Inventario
+        <NavLink class="navigation-link" href="/quotes" @onclick="CloseNavigation">
+            <span class="nav-icon" aria-hidden="true">▤</span><span>Cotizaciones</span>
         </NavLink>
-
-        <NavLink class="navigation-link"
-                 href="/purchases"
-                 @onclick="CloseNavigation">
-            Compras
+        <NavLink class="navigation-link" href="/sales" @onclick="CloseNavigation">
+            <span class="nav-icon" aria-hidden="true">↗</span><span>Ventas</span>
         </NavLink>
-
-        <NavLink class="navigation-link"
-                 href="/customers"
-                 @onclick="CloseNavigation">
-            Clientes
+        <NavLink class="navigation-link" href="/inventory" @onclick="CloseNavigation">
+            <span class="nav-icon" aria-hidden="true">◇</span><span>Inventario</span>
         </NavLink>
-
-        <NavLink class="navigation-link"
-                 href="/quotes"
-                 @onclick="CloseNavigation">
-            Cotizaciones
+        <NavLink class="navigation-link" href="/purchases" @onclick="CloseNavigation">
+            <span class="nav-icon" aria-hidden="true">⇣</span><span>Compras</span>
         </NavLink>
 
         <AuthorizeView Roles="Administrator">
-            <NavLink class="navigation-link"
-                     href="/settings"
-                     @onclick="CloseNavigation">
-                Configuración
+            <div class="navigation-divider"></div>
+            <NavLink class="navigation-link" href="/settings" @onclick="CloseNavigation">
+                <span class="nav-icon" aria-hidden="true">⚙</span><span>Configuración</span>
             </NavLink>
         </AuthorizeView>
     </div>

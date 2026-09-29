@@ -2,6 +2,8 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Revestik.Api.Authorization;
+using Revestik.Api.Data;
+using Revestik.Api.Services.Inventory;
 using Revestik.Api.Services.Sales;
 using Revestik.Api.Services.Sales.Pdf;
 using Revestik.Shared.Sales;
@@ -242,6 +244,8 @@ public static class SaleEndpoints
                 SaleUpsertRequest request,
                 ClaimsPrincipal user,
                 ISaleService saleService,
+                IInventoryService inventoryService,
+                RevestikDbContext dbContext,
                 CancellationToken cancellationToken) =>
             {
                 var validationErrors = ValidateRequest(request);
@@ -258,6 +262,10 @@ public static class SaleEndpoints
                     return InvalidAuthenticatedUser();
                 }
 
+                await using var transaction =
+                    await dbContext.Database.BeginTransactionAsync(
+                        cancellationToken);
+
                 try
                 {
                     var sale = await saleService.IssueAsync(
@@ -266,16 +274,52 @@ public static class SaleEndpoints
                         userId,
                         cancellationToken);
 
-                    return sale is null
-                        ? Results.NotFound()
-                        : Results.Ok(sale);
+                    if (sale is null)
+                    {
+                        await transaction.RollbackAsync(
+                            cancellationToken);
+
+                        return Results.NotFound();
+                    }
+
+                    var inventoryLines = request.Lines
+                        .Where(line => line.ProductId.HasValue)
+                        .GroupBy(line => line.ProductId!.Value)
+                        .Select(group => new
+                        {
+                            ProductId = group.Key,
+                            CommercialQuantity =
+                                group.Sum(line => line.Quantity)
+                        })
+                        .ToList();
+
+                    foreach (var line in inventoryLines)
+                    {
+                        await inventoryService.ConsumeSaleStockAsync(
+                            line.ProductId,
+                            line.CommercialQuantity,
+                            sale.SaleNumber,
+                            userId,
+                            cancellationToken);
+                    }
+
+                    await transaction.CommitAsync(
+                        cancellationToken);
+
+                    return Results.Ok(sale);
                 }
                 catch (InvalidOperationException exception)
                 {
+                    await transaction.RollbackAsync(
+                        cancellationToken);
+
                     return MapBusinessError(exception);
                 }
                 catch (ArgumentException exception)
                 {
+                    await transaction.RollbackAsync(
+                        cancellationToken);
+
                     return MapArgumentError(exception);
                 }
             })

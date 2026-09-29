@@ -1,6 +1,10 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 using Revestik.Api.Authorization;
+using Revestik.Api.Data;
+using Revestik.Api.Services.Inventory;
 using Revestik.Api.Services.Products;
+using Revestik.Shared.Inventory;
 using Revestik.Shared.Products;
 
 namespace Revestik.Api.Endpoints;
@@ -86,6 +90,73 @@ public static class ProductEndpoints
             .RequireAuthorization(PolicyNames.ManageProductCatalog)
             .AddEndpointFilter<AntiforgeryValidationFilter>()
             .WithName("CreateProduct");
+
+        group.MapPost(
+            "/with-initial-stock",
+            async (
+                InventoryProductCreateRequest request,
+                ClaimsPrincipal user,
+                RevestikDbContext dbContext,
+                IProductService productService,
+                IInventoryService inventoryService,
+                CancellationToken cancellationToken) =>
+            {
+                var validationErrors =
+                    MergeValidationErrors(
+                        ValidateRequest(request.Product),
+                        ValidateRequest(request.InitialStock));
+
+                if (validationErrors.Count > 0)
+                {
+                    return Results.ValidationProblem(validationErrors);
+                }
+
+                var userId =
+                    user.FindFirstValue(ClaimTypes.NameIdentifier);
+
+                if (string.IsNullOrWhiteSpace(userId))
+                {
+                    return Results.Unauthorized();
+                }
+
+                await using var transaction =
+                    await dbContext.Database.BeginTransactionAsync(
+                        cancellationToken);
+
+                try
+                {
+                    var product = await productService.CreateAsync(
+                        request.Product,
+                        cancellationToken);
+
+                    await inventoryService.RegisterInitialStockAsync(
+                        product.Id,
+                        request.InitialStock,
+                        userId,
+                        cancellationToken);
+
+                    var createdProduct =
+                        await productService.GetByIdAsync(
+                            product.Id,
+                            cancellationToken)
+                        ?? throw new InvalidOperationException(
+                            "The created product could not be loaded.");
+
+                    await transaction.CommitAsync(cancellationToken);
+
+                    return Results.Created(
+                        $"/api/products/{createdProduct.Id}",
+                        createdProduct);
+                }
+                catch (InvalidProductCatalogReferenceException exception)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return CreateCatalogReferenceProblem(exception.Message);
+                }
+            })
+            .RequireAuthorization(PolicyNames.ManageProductCatalog)
+            .AddEndpointFilter<AntiforgeryValidationFilter>()
+            .WithName("CreateInventoryProduct");
 
         group.MapPut(
             "/{id:int}",
@@ -199,6 +270,20 @@ public static class ProductEndpoints
                 group => group.Key,
                 group => group
                     .Select(error => error.ErrorMessage)
+                    .ToArray());
+    }
+
+    private static Dictionary<string, string[]> MergeValidationErrors(
+        params Dictionary<string, string[]>[] collections)
+    {
+        return collections
+            .SelectMany(collection => collection)
+            .GroupBy(pair => pair.Key)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .SelectMany(pair => pair.Value)
+                    .Distinct()
                     .ToArray());
     }
 }

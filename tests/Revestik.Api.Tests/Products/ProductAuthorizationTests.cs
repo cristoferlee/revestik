@@ -108,6 +108,23 @@ public sealed class ProductAuthorizationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData(RoleNames.Accountant)]
+    [InlineData(RoleNames.Sales)]
+    [InlineData(RoleNames.Warehouse)]
+    public async Task ReactivateProduct_WithoutAdministratorRole_ReturnsForbidden(
+        string role)
+    {
+        using var request = CreateAuthenticatedRequest(
+            role,
+            HttpMethod.Post,
+            "/api/products/1/reactivate");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     private static HttpRequestMessage CreateAuthenticatedRequest(
         string role)
     {

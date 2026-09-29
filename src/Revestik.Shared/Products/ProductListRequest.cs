@@ -27,6 +27,16 @@ public sealed class ProductListRequest
     public ProductStockStatus? StockStatus { get; set; } =
         ProductStockStatus.All;
 
+    [EnumDataType(
+        typeof(ProductSortField),
+        ErrorMessage = "El campo de orden no es válido.")]
+    public ProductSortField? SortBy { get; set; }
+
+    [EnumDataType(
+        typeof(SortDirection),
+        ErrorMessage = "La dirección de orden no es válida.")]
+    public SortDirection? SortDirection { get; set; }
+
     [Range(
         1,
         int.MaxValue,

@@ -87,6 +87,9 @@ public sealed class ProductConfiguration
         builder.Property(product => product.UpdatedAtUtc)
             .HasColumnType("datetime2");
 
+        builder.Property(product => product.RowVersion)
+            .IsRowVersion();
+
         builder.HasOne(product => product.Category)
             .WithMany(category => category.Products)
             .HasForeignKey(product => product.CategoryId)

@@ -4,6 +4,10 @@
 <AuthorizeView>
     <Authorized Context="authenticationContext">
         <div class="user-session">
+            <div class="user-avatar" aria-hidden="true">
+                @GetInitials(authenticationContext.User.Identity?.Name)
+            </div>
+
             <div class="user-details">
                 <span class="user-name">
                     @authenticationContext.User.Identity?.Name
@@ -48,5 +52,23 @@
                 claim.Type ==
                 System.Security.Claims.ClaimTypes.Role)
             ?.Value ?? "Usuario";
+    }
+
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "RV";
+        }
+
+        var parts = name
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        return parts.Length == 1
+            ? parts[0][..1].ToUpperInvariant()
+            : string.Concat(
+                parts[0][0],
+                parts[^1][0])
+                .ToUpperInvariant();
     }
 }

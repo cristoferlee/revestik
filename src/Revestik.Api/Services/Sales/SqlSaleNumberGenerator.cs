@@ -1,5 +1,6 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Revestik.Api.Data;
 
 namespace Revestik.Api.Services.Sales;
@@ -27,6 +28,15 @@ public sealed class SqlSaleNumberGenerator(
         {
             await using var command =
                 connection.CreateCommand();
+
+            var currentTransaction =
+                dbContext.Database.CurrentTransaction;
+
+            if (currentTransaction is not null)
+            {
+                command.Transaction =
+                    currentTransaction.GetDbTransaction();
+            }
 
             command.CommandText =
                 "SELECT NEXT VALUE FOR dbo.SaleNumberSequence;";

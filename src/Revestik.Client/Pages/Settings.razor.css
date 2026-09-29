@@ -1,0 +1,101 @@
+.settings-page {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.settings-header,
+.settings-section-heading,
+.settings-row,
+.settings-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.settings-header,
+.settings-section-heading,
+.settings-row {
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.settings-header p,
+.settings-section-heading p {
+    color: var(--color-text-secondary);
+}
+
+.settings-card,
+.settings-modal {
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-card);
+}
+
+.settings-card {
+    padding: 1.25rem;
+}
+
+.settings-list {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.settings-row {
+    padding: 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.8rem;
+}
+
+.settings-row > div:first-child {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.settings-status,
+.settings-symbol {
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+}
+
+.settings-actions {
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.settings-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgb(17 24 39 / 55%);
+}
+
+.settings-modal {
+    width: min(620px, 100%);
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    padding: 1.25rem;
+}
+
+.danger-button {
+    color: var(--color-danger);
+}
+
+@media (max-width: 700px) {
+    .settings-header,
+    .settings-section-heading,
+    .settings-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .settings-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}

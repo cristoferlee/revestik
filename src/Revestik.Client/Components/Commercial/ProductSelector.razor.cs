@@ -7,35 +7,22 @@ namespace Revestik.Client.Components.Commercial;
 public partial class ProductSelector : ComponentBase, IDisposable
 {
     private readonly CancellationTokenSource cancellationTokenSource = new();
-
     private IReadOnlyList<ProductListItemResponse> productSearchResults = [];
-
     private string productSearchTerm = string.Empty;
     private string? errorMessage;
-
     private bool isSearchingProducts;
     private bool hasSearchedProducts;
 
-    [Parameter]
-    public EventCallback<ProductListItemResponse> ProductSelected { get; set; }
+    [Parameter] public EventCallback<ProductListItemResponse> ProductSelected { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Inject] private IProductApiService ProductApiService { get; set; } = default!;
 
-    [Parameter]
-    public EventCallback OnClose { get; set; }
-
-    [Inject]
-    private IProductApiService ProductApiService { get; set; } = default!;
+    protected override async Task OnInitializedAsync() => await SearchProductsAsync();
 
     private async Task SearchProductsAsync()
     {
         errorMessage = null;
         hasSearchedProducts = true;
-
-        if (string.IsNullOrWhiteSpace(productSearchTerm))
-        {
-            productSearchResults = [];
-            return;
-        }
-
         isSearchingProducts = true;
 
         try
@@ -43,7 +30,13 @@ public partial class ProductSelector : ComponentBase, IDisposable
             var result = await ProductApiService.GetPageAsync(
                 new ProductListRequest
                 {
-                    Search = productSearchTerm.Trim(),
+                    Search = string.IsNullOrWhiteSpace(productSearchTerm)
+                        ? null
+                        : productSearchTerm.Trim(),
+                    ActivityStatus = ProductActivityStatus.Active,
+                    StockStatus = ProductStockStatus.All,
+                    SortBy = ProductSortField.Name,
+                    SortDirection = SortDirection.Asc,
                     Page = 1,
                     PageSize = 20
                 },
@@ -51,13 +44,10 @@ public partial class ProductSelector : ComponentBase, IDisposable
 
             productSearchResults = result.Items;
         }
-        catch (OperationCanceledException)
-        {
-        }
+        catch (OperationCanceledException) { }
         catch (HttpRequestException)
         {
-            errorMessage =
-                "No fue posible buscar productos. Verifica la conexión con la API.";
+            errorMessage = "No fue posible cargar los productos. Verifica la conexión con la API.";
         }
         finally
         {
@@ -65,16 +55,16 @@ public partial class ProductSelector : ComponentBase, IDisposable
         }
     }
 
-    private async Task SelectProductAsync(
-        ProductListItemResponse product)
+    private async Task ClearSearchAsync()
     {
-        await ProductSelected.InvokeAsync(product);
+        productSearchTerm = string.Empty;
+        await SearchProductsAsync();
     }
 
-    private async Task CloseAsync()
-    {
-        await OnClose.InvokeAsync();
-    }
+    private async Task SelectProductAsync(ProductListItemResponse product) =>
+        await ProductSelected.InvokeAsync(product);
+
+    private async Task CloseAsync() => await OnClose.InvokeAsync();
 
     public void Dispose()
     {
