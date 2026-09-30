@@ -231,6 +231,43 @@ public static class ProductEndpoints
             .AddEndpointFilter<AntiforgeryValidationFilter>()
             .WithName("ReactivateProduct");
 
+        group.MapDelete(
+            "/{id:int}/permanent",
+            async (
+                int id,
+                IProductService productService,
+                CancellationToken cancellationToken) =>
+            {
+                var result =
+                    await productService.ArchivePermanentlyAsync(
+                        id,
+                        cancellationToken);
+
+                return result switch
+                {
+                    ProductPermanentArchiveResult.Archived =>
+                        Results.NoContent(),
+
+                    ProductPermanentArchiveResult.NotFound =>
+                        Results.NotFound(),
+
+                    ProductPermanentArchiveResult.Active =>
+                        Results.Problem(
+                            title:
+                                "El producto está activo.",
+                            detail:
+                                "Descontinúa el producto antes de eliminarlo definitivamente.",
+                            statusCode:
+                                StatusCodes.Status409Conflict),
+
+                    _ => Results.StatusCode(
+                        StatusCodes.Status500InternalServerError)
+                };
+            })
+            .RequireAuthorization(PolicyNames.AdministratorOnly)
+            .AddEndpointFilter<AntiforgeryValidationFilter>()
+            .WithName("ArchiveProductPermanently");
+
         return endpoints;
     }
 

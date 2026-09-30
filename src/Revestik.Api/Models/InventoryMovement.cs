@@ -15,6 +15,10 @@ public sealed class InventoryMovement
 
     public Sale? Sale { get; set; }
 
+    public int? PhysicalCountId { get; set; }
+
+    public InventoryPhysicalCount? PhysicalCount { get; set; }
+
     public int? ReversesInventoryMovementId { get; set; }
 
     public InventoryMovement? ReversesInventoryMovement { get; set; }

@@ -94,6 +94,14 @@ builder.Services.AddScoped<
     InventoryApiService>();
 
 builder.Services.AddScoped<
+    IPhysicalCountApiService,
+    PhysicalCountApiService>();
+
+builder.Services.AddScoped<
+    IInventoryCostApiService,
+    InventoryCostApiService>();
+
+builder.Services.AddScoped<
     IQuotationApiService,
     QuotationApiService>();
 

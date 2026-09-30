@@ -1,0 +1,583 @@
+@page "/inventory/physical-count"
+@page "/inventory/physical-count/{Id:int}"
+@using System.Net
+@using Microsoft.AspNetCore.Authorization
+@using Revestik.Client.Services.Inventory
+@using Revestik.Shared.Inventory
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales,Warehouse")]
+@inject IPhysicalCountApiService PhysicalCountApi
+@inject NavigationManager Navigation
+
+<PageTitle>Conteo físico | Revestik</PageTitle>
+
+<section class="physical-count-page">
+    <header class="physical-count-header">
+        <div>
+            <a class="back-link" href="/inventory">← Inventario</a>
+            <h1>Conteo físico</h1>
+            <p>
+                Compara las existencias registradas con el conteo real de bodega.
+                El inventario solo cambia al finalizar el conteo.
+            </p>
+        </div>
+
+        @if (physicalCount is not null)
+        {
+            <span class="@GetStatusClass()">
+                @(physicalCount.Status == PhysicalCountStatus.Draft
+                    ? "Borrador"
+                    : "Completado")
+            </span>
+        }
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="physical-count-message error-message" role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="physical-count-message success-message" role="status">
+            @successMessage
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="physical-count-card empty-state">
+            Cargando conteo físico...
+        </div>
+    }
+    else if (!Id.HasValue)
+    {
+        <section class="physical-count-card start-card">
+            <div>
+                <h2>Nuevo conteo</h2>
+                <p>
+                    Al iniciar se guardará una fotografía del stock actual de
+                    todos los productos activos. Registrar cantidades no
+                    modifica inventario hasta completar el conteo.
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label for="physical-count-notes">Notas opcionales</label>
+                <textarea id="physical-count-notes"
+                          maxlength="1000"
+                          rows="4"
+                          @bind="newCountNotes"
+                          placeholder="Ejemplo: Conteo mensual de bodega."></textarea>
+            </div>
+
+            <div class="physical-count-actions">
+                <a class="secondary-button" href="/inventory">Cancelar</a>
+                <button type="button"
+                        class="primary-button"
+                        disabled="@isBusy"
+                        @onclick="StartAsync">
+                    @(isBusy ? "Iniciando..." : "Iniciar conteo")
+                </button>
+            </div>
+        </section>
+    }
+    else if (physicalCount is null)
+    {
+        <section class="physical-count-card empty-state">
+            <h2>Conteo no encontrado</h2>
+            <p>El conteo solicitado no existe o ya no está disponible.</p>
+            <a class="secondary-button" href="/inventory/physical-count">
+                Iniciar nuevo conteo
+            </a>
+        </section>
+    }
+    else
+    {
+        <section class="physical-count-card count-summary">
+            <div>
+                <span>Conteo</span>
+                <strong>#@physicalCount.Id</strong>
+            </div>
+            <div>
+                <span>Iniciado</span>
+                <strong>@physicalCount.StartedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong>
+            </div>
+            <div>
+                <span>Productos</span>
+                <strong>@physicalCount.Lines.Count</strong>
+            </div>
+            <div>
+                <span>Contados</span>
+                <strong>@CountedLines / @physicalCount.Lines.Count</strong>
+            </div>
+            <div>
+                <span>Con diferencia</span>
+                <strong>@DifferenceLines</strong>
+            </div>
+        </section>
+
+        @if (!string.IsNullOrWhiteSpace(physicalCount.Notes))
+        {
+            <section class="physical-count-card count-notes">
+                <strong>Notas</strong>
+                <p>@physicalCount.Notes</p>
+            </section>
+        }
+
+        <section class="physical-count-card table-card">
+            <div class="table-heading">
+                <div>
+                    <h2>Productos</h2>
+                    <p>
+                        Registra el conteo físico en la unidad indicada.
+                    </p>
+                </div>
+
+                @if (physicalCount.Status == PhysicalCountStatus.Draft)
+                {
+                    <span class="progress-text">
+                        @CountedLines de @physicalCount.Lines.Count registrados
+                    </span>
+                }
+            </div>
+
+            <div class="physical-count-table-wrap">
+                <table class="physical-count-table">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Stock sistema</th>
+                            <th>Conteo físico</th>
+                            <th>Diferencia</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in lines)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@line.ProductName</strong>
+                                    <small>@line.InventoryUnitSymbol</small>
+                                </td>
+                                <td>
+                                    @FormatQuantity(line.ExpectedQuantity)
+                                    @line.InventoryUnitSymbol
+                                </td>
+                                <td>
+                                    @if (physicalCount.Status == PhysicalCountStatus.Draft)
+                                    {
+                                        <input type="number"
+                                               min="0"
+                                               step="@(line.RequiresWholeInventoryUnits ? "1" : "0.0001")"
+                                               value="@GetInputValue(line)"
+                                               @onchange="eventArgs => UpdateCountedValue(line, eventArgs.Value?.ToString())"
+                                               aria-label="Conteo físico de @line.ProductName" />
+                                    }
+                                    else
+                                    {
+                                        <span>
+                                            @FormatQuantity(line.CountedQuantity ?? 0m)
+                                            @line.InventoryUnitSymbol
+                                        </span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="@GetDifferenceClass(line)">
+                                        @GetDifferenceText(line)
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="physical-count-actions sticky-actions">
+            <a class="secondary-button" href="/inventory">Volver a inventario</a>
+
+            @if (physicalCount.Status == PhysicalCountStatus.Draft)
+            {
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@(isBusy || CountedLines == 0)"
+                        @onclick="SaveAsync">
+                    @(isSaving ? "Guardando..." : "Guardar borrador")
+                </button>
+
+                <button type="button"
+                        class="primary-button"
+                        disabled="@(isBusy || !CanComplete)"
+                        @onclick="CompleteAsync">
+                    @(isCompleting ? "Finalizando..." : "Finalizar conteo")
+                </button>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    private PhysicalCountResponse? physicalCount;
+    private readonly List<PhysicalCountLineEntry> lines = [];
+    private string newCountNotes = string.Empty;
+    private string? errorMessage;
+    private string? successMessage;
+    private bool isLoading;
+    private bool isSaving;
+    private bool isCompleting;
+
+    private bool isBusy =>
+        isLoading || isSaving || isCompleting;
+
+    private int CountedLines =>
+        lines.Count(line => line.CountedQuantity.HasValue);
+
+    private int DifferenceLines =>
+        lines.Count(line =>
+            line.CountedQuantity.HasValue &&
+            line.CountedQuantity.Value != line.ExpectedQuantity);
+
+    private bool CanComplete =>
+        physicalCount is not null &&
+        physicalCount.Status == PhysicalCountStatus.Draft &&
+        lines.Count > 0 &&
+        lines.All(line => line.CountedQuantity.HasValue);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        ClearMessages();
+
+        if (!Id.HasValue)
+        {
+            physicalCount = null;
+            lines.Clear();
+            return;
+        }
+
+        await LoadAsync(Id.Value);
+    }
+
+    private async Task LoadAsync(int id)
+    {
+        isLoading = true;
+
+        try
+        {
+            physicalCount =
+                await PhysicalCountApi.GetByIdAsync(id);
+
+            PopulateLines();
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage =
+                $"No se pudo cargar el conteo. {exception.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task StartAsync()
+    {
+        isSaving = true;
+        ClearMessages();
+
+        try
+        {
+            var created = await PhysicalCountApi.StartAsync(
+                new PhysicalCountCreateRequest
+                {
+                    Notes = newCountNotes
+                });
+
+            Navigation.NavigateTo(
+                $"/inventory/physical-count/{created.Id}");
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage =
+                $"No se pudo iniciar el conteo. {exception.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (physicalCount is null)
+            return;
+
+        var updates = lines
+            .Where(line => line.CountedQuantity.HasValue)
+            .Select(line =>
+                new PhysicalCountLineUpdateRequest
+                {
+                    LineId = line.Id,
+                    CountedQuantity =
+                        line.CountedQuantity!.Value
+                })
+            .ToList();
+
+        if (updates.Count == 0)
+            return;
+
+        isSaving = true;
+        ClearMessages();
+
+        try
+        {
+            var updated =
+                await PhysicalCountApi.UpdateLinesAsync(
+                    physicalCount.Id,
+                    new PhysicalCountUpdateRequest
+                    {
+                        Lines = updates
+                    });
+
+            if (updated is null)
+            {
+                errorMessage =
+                    "El conteo ya no está disponible.";
+                return;
+            }
+
+            physicalCount = updated;
+            PopulateLines();
+            successMessage =
+                "Borrador guardado correctamente.";
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage =
+                $"No se pudo guardar el conteo. {exception.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task CompleteAsync()
+    {
+        if (physicalCount is null || !CanComplete)
+            return;
+
+        isCompleting = true;
+        ClearMessages();
+
+        try
+        {
+            var updates = lines
+                .Select(line =>
+                    new PhysicalCountLineUpdateRequest
+                    {
+                        LineId = line.Id,
+                        CountedQuantity =
+                            line.CountedQuantity!.Value
+                    })
+                .ToList();
+
+            var saved =
+                await PhysicalCountApi.UpdateLinesAsync(
+                    physicalCount.Id,
+                    new PhysicalCountUpdateRequest
+                    {
+                        Lines = updates
+                    });
+
+            if (saved is null)
+            {
+                errorMessage =
+                    "El conteo ya no está disponible.";
+                return;
+            }
+
+            var completed =
+                await PhysicalCountApi.CompleteAsync(
+                    physicalCount.Id);
+
+            if (completed is null)
+            {
+                errorMessage =
+                    "El conteo ya no está disponible.";
+                return;
+            }
+
+            physicalCount = completed;
+            PopulateLines();
+
+            successMessage =
+                "Conteo finalizado. Las diferencias fueron aplicadas al inventario.";
+        }
+        catch (HttpRequestException exception)
+            when (exception.StatusCode ==
+                  HttpStatusCode.Conflict)
+        {
+            errorMessage =
+                "El inventario cambió después de iniciar este conteo. " +
+                "No se aplicó ninguna diferencia. Revisa el stock antes de intentar nuevamente.";
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage =
+                $"No se pudo finalizar el conteo. {exception.Message}";
+        }
+        finally
+        {
+            isCompleting = false;
+        }
+    }
+
+    private void PopulateLines()
+    {
+        lines.Clear();
+
+        if (physicalCount is null)
+            return;
+
+        lines.AddRange(
+            physicalCount.Lines.Select(line =>
+                new PhysicalCountLineEntry
+                {
+                    Id = line.Id,
+                    ProductId = line.ProductId,
+                    ProductName = line.ProductName,
+                    InventoryUnitSymbol =
+                        line.InventoryUnitSymbol,
+                    RequiresWholeInventoryUnits =
+                        line.RequiresWholeInventoryUnits,
+                    ExpectedQuantity =
+                        line.ExpectedQuantity,
+                    CountedQuantity =
+                        line.CountedQuantity
+                }));
+    }
+
+    private static string GetInputValue(
+        PhysicalCountLineEntry line) =>
+        line.CountedQuantity?.ToString(
+            "0.####",
+            System.Globalization.CultureInfo.InvariantCulture)
+        ?? string.Empty;
+
+    private void UpdateCountedValue(
+        PhysicalCountLineEntry line,
+        string? value)
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            line.CountedQuantity = null;
+            return;
+        }
+
+        if (!decimal.TryParse(
+                value,
+                System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var quantity))
+        {
+            line.CountedQuantity = null;
+            errorMessage =
+                $"La cantidad de {line.ProductName} no es válida.";
+            return;
+        }
+
+        if (quantity < 0m)
+        {
+            line.CountedQuantity = null;
+            errorMessage =
+                "Las cantidades contadas no pueden ser negativas.";
+            return;
+        }
+
+        if (line.RequiresWholeInventoryUnits &&
+            quantity != decimal.Truncate(quantity))
+        {
+            line.CountedQuantity = null;
+            errorMessage =
+                $"{line.ProductName} requiere unidades físicas completas.";
+            return;
+        }
+
+        if (decimal.Round(quantity, 4) != quantity)
+        {
+            line.CountedQuantity = null;
+            errorMessage =
+                "Las cantidades no pueden tener más de 4 decimales.";
+            return;
+        }
+
+        line.CountedQuantity = quantity;
+    }
+
+    private static string FormatQuantity(decimal value) =>
+        value.ToString("N4").TrimEnd('0').TrimEnd(
+            System.Globalization.NumberFormatInfo.CurrentInfo.NumberDecimalSeparator.ToCharArray());
+
+    private static string GetDifferenceText(
+        PhysicalCountLineEntry line)
+    {
+        if (!line.CountedQuantity.HasValue)
+            return "Pendiente";
+
+        var difference =
+            line.CountedQuantity.Value -
+            line.ExpectedQuantity;
+
+        return difference > 0m
+            ? $"+{FormatQuantity(difference)}"
+            : FormatQuantity(difference);
+    }
+
+    private static string GetDifferenceClass(
+        PhysicalCountLineEntry line)
+    {
+        if (!line.CountedQuantity.HasValue)
+            return "difference-pending";
+
+        var difference =
+            line.CountedQuantity.Value -
+            line.ExpectedQuantity;
+
+        return difference switch
+        {
+            > 0m => "difference-positive",
+            < 0m => "difference-negative",
+            _ => "difference-zero"
+        };
+    }
+
+    private string GetStatusClass() =>
+        physicalCount?.Status == PhysicalCountStatus.Completed
+            ? "count-status count-status-completed"
+            : "count-status count-status-draft";
+
+    private void ClearMessages()
+    {
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private sealed class PhysicalCountLineEntry
+    {
+        public int Id { get; init; }
+        public int ProductId { get; init; }
+        public string ProductName { get; init; } = string.Empty;
+        public string InventoryUnitSymbol { get; init; } = string.Empty;
+        public bool RequiresWholeInventoryUnits { get; init; }
+        public decimal ExpectedQuantity { get; init; }
+        public decimal? CountedQuantity { get; set; }
+    }
+}

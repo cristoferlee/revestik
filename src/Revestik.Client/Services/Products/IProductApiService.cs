@@ -31,6 +31,10 @@ public interface IProductApiService
         int id,
         CancellationToken cancellationToken = default);
 
+    Task<bool> ArchivePermanentlyAsync(
+        int id,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<ProductCategoryResponse>> GetCategoriesAsync(
         CancellationToken cancellationToken = default);
 

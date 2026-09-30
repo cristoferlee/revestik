@@ -78,15 +78,34 @@ builder.Services.AddRevestikAuthentication(
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
+
+builder.Services.AddScoped<
+    IInventoryCostResolutionService,
+    InventoryCostResolutionService>();
+
+builder.Services.AddScoped<
+    IInventoryPhysicalCountService,
+    InventoryPhysicalCountService>();
+
 builder.Services.AddScoped<
     IInventoryCatalogService,
     InventoryCatalogService>();
+
 builder.Services.AddScoped<IQuotationService, QuotationService>();
-builder.Services.AddScoped<IQuotationNumberGenerator, SqlQuotationNumberGenerator>();
-builder.Services.AddSingleton<IQuotationPdfService, QuotationPdfService>();
+builder.Services.AddScoped<
+    IQuotationNumberGenerator,
+    SqlQuotationNumberGenerator>();
+builder.Services.AddSingleton<
+    IQuotationPdfService,
+    QuotationPdfService>();
+
 builder.Services.AddScoped<ISaleService, SaleService>();
-builder.Services.AddScoped<ISaleNumberGenerator, SqlSaleNumberGenerator>();
-builder.Services.AddSingleton<ISalePdfService, SalePdfService>();
+builder.Services.AddScoped<
+    ISaleNumberGenerator,
+    SqlSaleNumberGenerator>();
+builder.Services.AddSingleton<
+    ISalePdfService,
+    SalePdfService>();
 
 var haciendaBaseUrl =
     builder.Configuration["Hacienda:BaseUrl"]

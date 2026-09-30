@@ -371,6 +371,13 @@ namespace Revestik.Api.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("CostResolvedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CostResolvedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -385,6 +392,10 @@ namespace Revestik.Api.Data.Migrations
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<decimal?>("ResolvedUnitCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int>("SourceMovementId")
                         .HasColumnType("int");
 
@@ -393,6 +404,8 @@ namespace Revestik.Api.Data.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CostResolvedByUserId");
 
                     b.HasIndex("ProductId");
 
@@ -406,6 +419,8 @@ namespace Revestik.Api.Data.Migrations
                             t.HasCheckConstraint("CK_InventoryCostLayers_OriginalQuantity", "[OriginalQuantity] > 0");
 
                             t.HasCheckConstraint("CK_InventoryCostLayers_RemainingQuantity", "[RemainingQuantity] >= 0 AND [RemainingQuantity] <= [OriginalQuantity]");
+
+                            t.HasCheckConstraint("CK_InventoryCostLayers_ResolvedCost", "([ResolvedUnitCost] IS NULL AND [CostResolvedByUserId] IS NULL AND [CostResolvedAtUtc] IS NULL) OR ([UnitCost] IS NULL AND [ResolvedUnitCost] > 0 AND [CostResolvedByUserId] IS NOT NULL AND [CostResolvedAtUtc] IS NOT NULL)");
 
                             t.HasCheckConstraint("CK_InventoryCostLayers_UnitCost", "[UnitCost] IS NULL OR [UnitCost] > 0");
                         });
@@ -435,6 +450,9 @@ namespace Revestik.Api.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("PhysicalCountId")
+                        .HasColumnType("int");
 
                     b.Property<int>("ProductId")
                         .HasColumnType("int");
@@ -474,6 +492,8 @@ namespace Revestik.Api.Data.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
+                    b.HasIndex("PhysicalCountId");
+
                     b.HasIndex("ProductId")
                         .IsUnique()
                         .HasDatabaseName("UX_InventoryMovements_Product_InitialStock")
@@ -503,6 +523,92 @@ namespace Revestik.Api.Data.Migrations
                             t.HasCheckConstraint("CK_InventoryMovements_StockAfter", "[StockAfter] >= 0");
 
                             t.HasCheckConstraint("CK_InventoryMovements_StockBefore", "[StockBefore] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.InventoryPhysicalCount", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CompletedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("StartedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompletedByUserId");
+
+                    b.HasIndex("StartedAtUtc");
+
+                    b.HasIndex("StartedByUserId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("InventoryPhysicalCounts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InventoryPhysicalCounts_Completion", "([Status] = 'Draft' AND [CompletedAtUtc] IS NULL AND [CompletedByUserId] IS NULL) OR ([Status] = 'Completed' AND [CompletedAtUtc] IS NOT NULL AND [CompletedByUserId] IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.InventoryPhysicalCountLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("CountedQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("ExpectedQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("PhysicalCountId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PhysicalCountId", "ProductId")
+                        .IsUnique();
+
+                    b.ToTable("InventoryPhysicalCountLines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_InventoryPhysicalCountLines_CountedQuantity", "[CountedQuantity] IS NULL OR [CountedQuantity] >= 0");
+
+                            t.HasCheckConstraint("CK_InventoryPhysicalCountLines_ExpectedQuantity", "[ExpectedQuantity] >= 0");
                         });
                 });
 
@@ -544,6 +650,11 @@ namespace Revestik.Api.Data.Migrations
 
                     b.Property<int>("InventoryUnitId")
                         .HasColumnType("int");
+
+                    b.Property<bool>("IsArchived")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -1120,6 +1231,11 @@ namespace Revestik.Api.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<bool>("RequiresWholeQuantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Symbol")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1211,6 +1327,11 @@ namespace Revestik.Api.Data.Migrations
 
             modelBuilder.Entity("Revestik.Api.Models.InventoryCostLayer", b =>
                 {
+                    b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CostResolvedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Revestik.Api.Models.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
@@ -1236,6 +1357,11 @@ namespace Revestik.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Revestik.Api.Models.InventoryPhysicalCount", "PhysicalCount")
+                        .WithMany("Movements")
+                        .HasForeignKey("PhysicalCountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Revestik.Api.Models.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
@@ -1254,11 +1380,50 @@ namespace Revestik.Api.Data.Migrations
 
                     b.Navigation("CreatedByUser");
 
+                    b.Navigation("PhysicalCount");
+
                     b.Navigation("Product");
 
                     b.Navigation("ReversesInventoryMovement");
 
                     b.Navigation("Sale");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.InventoryPhysicalCount", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", "CompletedByUser")
+                        .WithMany()
+                        .HasForeignKey("CompletedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", "StartedByUser")
+                        .WithMany()
+                        .HasForeignKey("StartedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CompletedByUser");
+
+                    b.Navigation("StartedByUser");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.InventoryPhysicalCountLine", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.InventoryPhysicalCount", "PhysicalCount")
+                        .WithMany("Lines")
+                        .HasForeignKey("PhysicalCountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PhysicalCount");
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Product", b =>
@@ -1441,6 +1606,13 @@ namespace Revestik.Api.Data.Migrations
             modelBuilder.Entity("Revestik.Api.Models.InventoryMovement", b =>
                 {
                     b.Navigation("ReversalInventoryMovement");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.InventoryPhysicalCount", b =>
+                {
+                    b.Navigation("Lines");
+
+                    b.Navigation("Movements");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.ProductCategory", b =>

@@ -21,6 +21,9 @@ public sealed class UnitOfMeasureConfiguration
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(unit => unit.RequiresWholeQuantity)
+            .HasDefaultValue(false);
+
         builder.Property(unit => unit.IsActive)
             .HasDefaultValue(true);
 

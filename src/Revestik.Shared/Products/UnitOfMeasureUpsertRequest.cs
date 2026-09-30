@@ -16,5 +16,7 @@ public sealed class UnitOfMeasureUpsertRequest
         ErrorMessage = "El símbolo de la unidad no puede superar los 20 caracteres.")]
     public string Symbol { get; set; } = string.Empty;
 
+    public bool RequiresWholeQuantity { get; set; }
+
     public bool IsActive { get; set; } = true;
 }

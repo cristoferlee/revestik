@@ -25,6 +25,12 @@ public sealed class RevestikDbContext(
     public DbSet<InventoryCostConsumption> InventoryCostConsumptions =>
         Set<InventoryCostConsumption>();
 
+    public DbSet<InventoryPhysicalCount> InventoryPhysicalCounts =>
+        Set<InventoryPhysicalCount>();
+
+    public DbSet<InventoryPhysicalCountLine> InventoryPhysicalCountLines =>
+        Set<InventoryPhysicalCountLine>();
+
     public DbSet<Quotation> Quotations => Set<Quotation>();
     public DbSet<QuotationLine> QuotationLines => Set<QuotationLine>();
     public DbSet<QuotationCharge> QuotationCharges => Set<QuotationCharge>();

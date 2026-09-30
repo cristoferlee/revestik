@@ -37,6 +37,7 @@ public sealed class Product
     public decimal MinimumStock { get; set; }
 
     public bool IsDeleted { get; set; }
+    public bool IsArchived { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
 

@@ -169,6 +169,23 @@ public sealed class ProductApiService(
         return true;
     }
 
+    public async Task<bool> ArchivePermanentlyAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.DeleteAsync(
+            $"api/products/{id}/permanent",
+            cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+
+        response.EnsureSuccessStatusCode();
+        return true;
+    }
+
     public async Task<IReadOnlyList<ProductCategoryResponse>> GetCategoriesAsync(
         CancellationToken cancellationToken = default)
     {

@@ -8,6 +8,8 @@ public sealed class UnitOfMeasure
 
     public string Symbol { get; set; } = string.Empty;
 
+    public bool RequiresWholeQuantity { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAtUtc { get; set; }

@@ -17,8 +17,13 @@ public sealed class ProductService(RevestikDbContext dbContext)
             dbContext.Products.AsNoTracking(),
             request);
 
-        var totalCount = await filteredQuery.CountAsync(cancellationToken);
-        var skip = ((long)request.Page - 1) * request.PageSize;
+        var totalCount =
+            await filteredQuery.CountAsync(
+                cancellationToken);
+
+        var skip =
+            ((long)request.Page - 1) *
+            request.PageSize;
 
         IReadOnlyList<ProductListItemResponse> items;
 
@@ -36,23 +41,24 @@ public sealed class ProductService(RevestikDbContext dbContext)
             items = await orderedQuery
                 .Skip((int)skip)
                 .Take(request.PageSize)
-                .Select(product => new ProductListItemResponse(
-                    product.Id,
-                    product.CategoryId,
-                    product.Category.Name,
-                    product.Name,
-                    product.Description,
-                    product.CabysCode,
-                    product.InventoryUnit.Symbol,
-                    product.CommercialUnit.Symbol,
-                    product.CommercialUnitsPerInventoryUnit,
-                    product.RequiresWholeInventoryUnits,
-                    product.SalePrice,
-                    product.CurrentCost,
-                    product.TaxRate,
-                    product.StockQuantity,
-                    product.MinimumStock,
-                    product.IsDeleted))
+                .Select(product =>
+                    new ProductListItemResponse(
+                        product.Id,
+                        product.CategoryId,
+                        product.Category.Name,
+                        product.Name,
+                        product.Description,
+                        product.CabysCode,
+                        product.InventoryUnit.Symbol,
+                        product.CommercialUnit.Symbol,
+                        product.CommercialUnitsPerInventoryUnit,
+                        product.RequiresWholeInventoryUnits,
+                        product.SalePrice,
+                        product.CurrentCost,
+                        product.TaxRate,
+                        product.StockQuantity,
+                        product.MinimumStock,
+                        product.IsDeleted))
                 .ToListAsync(cancellationToken);
         }
 
@@ -69,30 +75,33 @@ public sealed class ProductService(RevestikDbContext dbContext)
     {
         return await dbContext.Products
             .AsNoTracking()
-            .Where(product => product.Id == id)
-            .Select(product => new ProductResponse(
-                product.Id,
-                product.CategoryId,
-                product.Category.Name,
-                product.Name,
-                product.Description,
-                product.CabysCode,
-                product.InventoryUnitId,
-                product.InventoryUnit.Name,
-                product.InventoryUnit.Symbol,
-                product.CommercialUnitId,
-                product.CommercialUnit.Name,
-                product.CommercialUnit.Symbol,
-                product.CommercialUnitsPerInventoryUnit,
-                product.RequiresWholeInventoryUnits,
-                product.SalePrice,
-                product.CurrentCost,
-                product.TaxRate,
-                product.StockQuantity,
-                product.MinimumStock,
-                product.IsDeleted,
-                product.CreatedAtUtc,
-                product.UpdatedAtUtc))
+            .Where(product =>
+                product.Id == id &&
+                !product.IsArchived)
+            .Select(product =>
+                new ProductResponse(
+                    product.Id,
+                    product.CategoryId,
+                    product.Category.Name,
+                    product.Name,
+                    product.Description,
+                    product.CabysCode,
+                    product.InventoryUnitId,
+                    product.InventoryUnit.Name,
+                    product.InventoryUnit.Symbol,
+                    product.CommercialUnitId,
+                    product.CommercialUnit.Name,
+                    product.CommercialUnit.Symbol,
+                    product.CommercialUnitsPerInventoryUnit,
+                    product.RequiresWholeInventoryUnits,
+                    product.SalePrice,
+                    product.CurrentCost,
+                    product.TaxRate,
+                    product.StockQuantity,
+                    product.MinimumStock,
+                    product.IsDeleted,
+                    product.CreatedAtUtc,
+                    product.UpdatedAtUtc))
             .SingleOrDefaultAsync(cancellationToken);
     }
 
@@ -105,19 +114,33 @@ public sealed class ProductService(RevestikDbContext dbContext)
             currentProduct: null,
             cancellationToken);
 
+        var inventoryUnitRequiresWholeQuantity =
+            await GetInventoryUnitRequiresWholeQuantityAsync(
+                request.InventoryUnitId,
+                cancellationToken);
+
         var product = new Product
         {
             StockQuantity = 0m,
             IsDeleted = false,
+            IsArchived = false,
             CreatedAtUtc = DateTime.UtcNow
         };
 
         ApplyRequest(product, request);
 
-        dbContext.Products.Add(product);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        product.RequiresWholeInventoryUnits =
+            request.RequiresWholeInventoryUnits ||
+            inventoryUnitRequiresWholeQuantity;
 
-        return await GetByIdAsync(product.Id, cancellationToken)
+        dbContext.Products.Add(product);
+
+        await dbContext.SaveChangesAsync(
+            cancellationToken);
+
+        return await GetByIdAsync(
+                product.Id,
+                cancellationToken)
             ?? throw new InvalidOperationException(
                 "The created product could not be loaded.");
     }
@@ -129,7 +152,10 @@ public sealed class ProductService(RevestikDbContext dbContext)
     {
         var product = await dbContext.Products
             .SingleOrDefaultAsync(
-                product => product.Id == id && !product.IsDeleted,
+                product =>
+                    product.Id == id &&
+                    !product.IsDeleted &&
+                    !product.IsArchived,
                 cancellationToken);
 
         if (product is null)
@@ -142,12 +168,25 @@ public sealed class ProductService(RevestikDbContext dbContext)
             product,
             cancellationToken);
 
+        var inventoryUnitRequiresWholeQuantity =
+            await GetInventoryUnitRequiresWholeQuantityAsync(
+                request.InventoryUnitId,
+                cancellationToken);
+
         ApplyRequest(product, request);
+
+        product.RequiresWholeInventoryUnits =
+            request.RequiresWholeInventoryUnits ||
+            inventoryUnitRequiresWholeQuantity;
+
         product.UpdatedAtUtc = DateTime.UtcNow;
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(
+            cancellationToken);
 
-        return await GetByIdAsync(product.Id, cancellationToken)
+        return await GetByIdAsync(
+                product.Id,
+                cancellationToken)
             ?? throw new InvalidOperationException(
                 "The updated product could not be loaded.");
     }
@@ -158,7 +197,9 @@ public sealed class ProductService(RevestikDbContext dbContext)
     {
         var product = await dbContext.Products
             .SingleOrDefaultAsync(
-                product => product.Id == id,
+                product =>
+                    product.Id == id &&
+                    !product.IsArchived,
                 cancellationToken);
 
         if (product is null)
@@ -170,7 +211,9 @@ public sealed class ProductService(RevestikDbContext dbContext)
         {
             product.IsDeleted = true;
             product.UpdatedAtUtc = DateTime.UtcNow;
-            await dbContext.SaveChangesAsync(cancellationToken);
+
+            await dbContext.SaveChangesAsync(
+                cancellationToken);
         }
 
         return true;
@@ -182,7 +225,9 @@ public sealed class ProductService(RevestikDbContext dbContext)
     {
         var product = await dbContext.Products
             .SingleOrDefaultAsync(
-                product => product.Id == id,
+                product =>
+                    product.Id == id &&
+                    !product.IsArchived,
                 cancellationToken);
 
         if (product is null)
@@ -194,28 +239,72 @@ public sealed class ProductService(RevestikDbContext dbContext)
         {
             product.IsDeleted = false;
             product.UpdatedAtUtc = DateTime.UtcNow;
-            await dbContext.SaveChangesAsync(cancellationToken);
+
+            await dbContext.SaveChangesAsync(
+                cancellationToken);
         }
 
         return true;
+    }
+
+    public async Task<ProductPermanentArchiveResult> ArchivePermanentlyAsync(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        var product = await dbContext.Products
+            .SingleOrDefaultAsync(
+                product =>
+                    product.Id == id &&
+                    !product.IsArchived,
+                cancellationToken);
+
+        if (product is null)
+        {
+            return ProductPermanentArchiveResult.NotFound;
+        }
+
+        if (!product.IsDeleted)
+        {
+            return ProductPermanentArchiveResult.Active;
+        }
+
+        product.IsArchived = true;
+        product.UpdatedAtUtc = DateTime.UtcNow;
+
+        await dbContext.SaveChangesAsync(
+            cancellationToken);
+
+        return ProductPermanentArchiveResult.Archived;
     }
 
     private static IQueryable<Product> ApplyFilters(
         IQueryable<Product> query,
         ProductListRequest request)
     {
-        query = (request.ActivityStatus ?? ProductActivityStatus.Active) switch
-        {
-            ProductActivityStatus.Active =>
-                query.Where(product => !product.IsDeleted),
-            ProductActivityStatus.Deleted =>
-                query.Where(product => product.IsDeleted),
-            ProductActivityStatus.All => query,
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(request.ActivityStatus))
-        };
+        query = query.Where(product =>
+            !product.IsArchived);
 
-        if (!string.IsNullOrWhiteSpace(request.Search))
+        query =
+            (request.ActivityStatus ??
+             ProductActivityStatus.Active) switch
+            {
+                ProductActivityStatus.Active =>
+                    query.Where(product =>
+                        !product.IsDeleted),
+
+                ProductActivityStatus.Deleted =>
+                    query.Where(product =>
+                        product.IsDeleted),
+
+                ProductActivityStatus.All =>
+                    query,
+
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(request.ActivityStatus))
+            };
+
+        if (!string.IsNullOrWhiteSpace(
+                request.Search))
         {
             var search = request.Search.Trim();
 
@@ -228,31 +317,44 @@ public sealed class ProductService(RevestikDbContext dbContext)
         if (request.CategoryId.HasValue)
         {
             query = query.Where(product =>
-                product.CategoryId == request.CategoryId.Value);
+                product.CategoryId ==
+                request.CategoryId.Value);
         }
 
         if (request.UnitId.HasValue)
         {
             query = query.Where(product =>
-                product.InventoryUnitId == request.UnitId.Value ||
-                product.CommercialUnitId == request.UnitId.Value);
+                product.InventoryUnitId ==
+                    request.UnitId.Value ||
+                product.CommercialUnitId ==
+                    request.UnitId.Value);
         }
 
-        query = (request.StockStatus ?? ProductStockStatus.All) switch
-        {
-            ProductStockStatus.All => query,
-            ProductStockStatus.InStock =>
-                query.Where(product =>
-                    product.StockQuantity > product.MinimumStock),
-            ProductStockStatus.LowStock =>
-                query.Where(product =>
-                    product.StockQuantity > 0m &&
-                    product.StockQuantity <= product.MinimumStock),
-            ProductStockStatus.OutOfStock =>
-                query.Where(product => product.StockQuantity == 0m),
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(request.StockStatus))
-        };
+        query =
+            (request.StockStatus ??
+             ProductStockStatus.All) switch
+            {
+                ProductStockStatus.All =>
+                    query,
+
+                ProductStockStatus.InStock =>
+                    query.Where(product =>
+                        product.StockQuantity >
+                        product.MinimumStock),
+
+                ProductStockStatus.LowStock =>
+                    query.Where(product =>
+                        product.StockQuantity > 0m &&
+                        product.StockQuantity <=
+                        product.MinimumStock),
+
+                ProductStockStatus.OutOfStock =>
+                    query.Where(product =>
+                        product.StockQuantity == 0m),
+
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(request.StockStatus))
+            };
 
         return query;
     }
@@ -332,7 +434,8 @@ public sealed class ProductService(RevestikDbContext dbContext)
                     .ThenBy(product => product.Name)
                     .ThenBy(product => product.Id),
 
-            _ => throw new ArgumentOutOfRangeException(nameof(sortBy))
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(sortBy))
         };
     }
 
@@ -341,15 +444,18 @@ public sealed class ProductService(RevestikDbContext dbContext)
         Product? currentProduct,
         CancellationToken cancellationToken)
     {
-        var categoryIsValid = await dbContext.ProductCategories
-            .AsNoTracking()
-            .AnyAsync(
-                category =>
-                    category.Id == request.CategoryId &&
-                    (category.IsActive ||
-                     currentProduct != null &&
-                     currentProduct.CategoryId == category.Id),
-                cancellationToken);
+        var categoryIsValid =
+            await dbContext.ProductCategories
+                .AsNoTracking()
+                .AnyAsync(
+                    category =>
+                        category.Id ==
+                        request.CategoryId &&
+                        (category.IsActive ||
+                         currentProduct != null &&
+                         currentProduct.CategoryId ==
+                         category.Id),
+                    cancellationToken);
 
         if (!categoryIsValid)
         {
@@ -357,48 +463,89 @@ public sealed class ProductService(RevestikDbContext dbContext)
                 "La categoría no existe o está inactiva.");
         }
 
-        var validUnitIds = await dbContext.UnitsOfMeasure
-            .AsNoTracking()
-            .Where(unit =>
-                (unit.Id == request.InventoryUnitId ||
-                 unit.Id == request.CommercialUnitId) &&
-                (unit.IsActive ||
-                 currentProduct != null &&
-                 (currentProduct.InventoryUnitId == unit.Id ||
-                  currentProduct.CommercialUnitId == unit.Id)))
-            .Select(unit => unit.Id)
-            .Distinct()
-            .ToListAsync(cancellationToken);
+        var validUnitIds =
+            await dbContext.UnitsOfMeasure
+                .AsNoTracking()
+                .Where(unit =>
+                    (unit.Id ==
+                        request.InventoryUnitId ||
+                     unit.Id ==
+                        request.CommercialUnitId) &&
+                    (unit.IsActive ||
+                     currentProduct != null &&
+                     (currentProduct.InventoryUnitId ==
+                        unit.Id ||
+                      currentProduct.CommercialUnitId ==
+                        unit.Id)))
+                .Select(unit => unit.Id)
+                .Distinct()
+                .ToListAsync(cancellationToken);
 
-        if (!validUnitIds.Contains(request.InventoryUnitId) ||
-            !validUnitIds.Contains(request.CommercialUnitId))
+        if (!validUnitIds.Contains(
+                request.InventoryUnitId) ||
+            !validUnitIds.Contains(
+                request.CommercialUnitId))
         {
             throw new InvalidProductCatalogReferenceException(
                 "Una de las unidades no existe o está inactiva.");
         }
     }
 
+    private async Task<bool>
+        GetInventoryUnitRequiresWholeQuantityAsync(
+            int inventoryUnitId,
+            CancellationToken cancellationToken)
+    {
+        return await dbContext.UnitsOfMeasure
+            .AsNoTracking()
+            .Where(unit =>
+                unit.Id == inventoryUnitId)
+            .Select(unit =>
+                unit.RequiresWholeQuantity)
+            .SingleAsync(cancellationToken);
+    }
+
     private static void ApplyRequest(
         Product product,
         ProductUpsertRequest request)
     {
-        product.CategoryId = request.CategoryId;
-        product.Name = NormalizeRequired(request.Name);
-        product.Description = (request.Description ?? string.Empty).Trim();
-        product.CabysCode = NormalizeRequired(request.CabysCode);
-        product.InventoryUnitId = request.InventoryUnitId;
-        product.CommercialUnitId = request.CommercialUnitId;
+        product.CategoryId =
+            request.CategoryId;
+
+        product.Name =
+            NormalizeRequired(request.Name);
+
+        product.Description =
+            (request.Description ??
+             string.Empty).Trim();
+
+        product.CabysCode =
+            NormalizeRequired(request.CabysCode);
+
+        product.InventoryUnitId =
+            request.InventoryUnitId;
+
+        product.CommercialUnitId =
+            request.CommercialUnitId;
+
         product.CommercialUnitsPerInventoryUnit =
             request.CommercialUnitsPerInventoryUnit;
-        product.RequiresWholeInventoryUnits =
-            request.RequiresWholeInventoryUnits;
-        product.SalePrice = request.SalePrice;
-        product.CurrentCost = request.CurrentCost;
-        product.TaxRate = request.TaxRate;
-        product.MinimumStock = request.MinimumStock;
+
+        product.SalePrice =
+            request.SalePrice;
+
+        product.CurrentCost =
+            request.CurrentCost;
+
+        product.TaxRate =
+            request.TaxRate;
+
+        product.MinimumStock =
+            request.MinimumStock;
     }
 
-    private static string NormalizeRequired(string value)
+    private static string NormalizeRequired(
+        string value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {

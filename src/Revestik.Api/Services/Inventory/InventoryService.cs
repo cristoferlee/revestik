@@ -46,21 +46,28 @@ public sealed class InventoryService(RevestikDbContext dbContext)
                 layer.RemainingQuantity > 0m);
 
         var totalInventoryCostValue = await activeLayers
-            .Where(layer => layer.UnitCost.HasValue)
+            .Where(layer =>
+                layer.UnitCost.HasValue ||
+                layer.ResolvedUnitCost.HasValue)
             .SumAsync(
                 layer =>
                     layer.RemainingQuantity *
-                    layer.UnitCost!.Value,
+                    (layer.UnitCost ??
+                     layer.ResolvedUnitCost)!.Value,
                 cancellationToken);
 
         var unknownCostQuantity = await activeLayers
-            .Where(layer => !layer.UnitCost.HasValue)
+            .Where(layer =>
+                !layer.UnitCost.HasValue &&
+                !layer.ResolvedUnitCost.HasValue)
             .SumAsync(
                 layer => layer.RemainingQuantity,
                 cancellationToken);
 
         var productsWithUnknownCost = await activeLayers
-            .Where(layer => !layer.UnitCost.HasValue)
+            .Where(layer =>
+                !layer.UnitCost.HasValue &&
+                !layer.ResolvedUnitCost.HasValue)
             .Select(layer => layer.ProductId)
             .Distinct()
             .CountAsync(cancellationToken);
@@ -82,26 +89,44 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        await EnsureActiveUserAsync(createdByUserId, cancellationToken);
 
-        var product = await dbContext.Products.SingleOrDefaultAsync(
-            p => p.Id == productId && !p.IsDeleted,
+        await EnsureActiveUserAsync(
+            createdByUserId,
             cancellationToken);
 
-        if (product is null) return null;
+        var product = await dbContext.Products
+            .SingleOrDefaultAsync(
+                product =>
+                    product.Id == productId &&
+                    !product.IsDeleted,
+                cancellationToken);
 
-        var exists = await dbContext.InventoryMovements.AsNoTracking().AnyAsync(
-            m => m.ProductId == productId &&
-                 m.Type == InventoryMovementType.InitialStock,
-            cancellationToken);
+        if (product is null)
+        {
+            return null;
+        }
 
-        if (exists) throw new InitialStockAlreadyRegisteredException();
+        var exists = await dbContext.InventoryMovements
+            .AsNoTracking()
+            .AnyAsync(
+                movement =>
+                    movement.ProductId == productId &&
+                    movement.Type ==
+                    InventoryMovementType.InitialStock,
+                cancellationToken);
+
+        if (exists)
+        {
+            throw new InitialStockAlreadyRegisteredException();
+        }
 
         ValidateQuantity(product, request.Quantity);
 
         if (product.StockQuantity != 0m)
+        {
             throw new InvalidInventoryOperationException(
                 "Initial stock can only be registered while current stock is zero.");
+        }
 
         var now = DateTime.UtcNow;
 
@@ -121,11 +146,18 @@ public sealed class InventoryService(RevestikDbContext dbContext)
 
         product.StockQuantity = request.Quantity;
         product.UpdatedAtUtc = now;
+
         dbContext.InventoryMovements.Add(movement);
 
         if (request.Quantity > 0m)
+        {
             inventoryCostService.CreateLayer(
-                product, movement, request.Quantity, product.CurrentCost, now);
+                product,
+                movement,
+                request.Quantity,
+                product.CurrentCost,
+                now);
+        }
 
         try
         {
@@ -135,8 +167,11 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         {
             throw new InventoryConcurrencyException();
         }
-        catch (DbUpdateException ex)
-            when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+        catch (DbUpdateException exception)
+            when (exception.InnerException is SqlException
+            {
+                Number: 2601 or 2627
+            })
         {
             throw new InitialStockAlreadyRegisteredException();
         }
@@ -151,13 +186,22 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        await EnsureActiveUserAsync(createdByUserId, cancellationToken);
 
-        var product = await dbContext.Products.SingleOrDefaultAsync(
-            p => p.Id == productId && !p.IsDeleted,
+        await EnsureActiveUserAsync(
+            createdByUserId,
             cancellationToken);
 
-        if (product is null) return null;
+        var product = await dbContext.Products
+            .SingleOrDefaultAsync(
+                product =>
+                    product.Id == productId &&
+                    !product.IsDeleted,
+                cancellationToken);
+
+        if (product is null)
+        {
+            return null;
+        }
 
         await EnsureProductVersionCurrentAsync(
             product,
@@ -166,35 +210,50 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         var hasInitialStock = await dbContext.InventoryMovements
             .AsNoTracking()
             .AnyAsync(
-                m => m.ProductId == productId &&
-                     m.Type == InventoryMovementType.InitialStock,
+                movement =>
+                    movement.ProductId == productId &&
+                    movement.Type ==
+                    InventoryMovementType.InitialStock,
                 cancellationToken);
 
         if (!hasInitialStock)
+        {
             throw new InvalidInventoryOperationException(
                 "Initial stock must be registered before inventory adjustments.");
+        }
 
-        ValidateQuantity(product, request.NewStockQuantity);
+        ValidateQuantity(
+            product,
+            request.NewStockQuantity);
 
         var stockBefore = product.StockQuantity;
         var stockAfter = request.NewStockQuantity;
         var quantityChange = stockAfter - stockBefore;
 
         if (quantityChange == 0m)
+        {
             throw new InvalidInventoryOperationException(
                 "The new stock must be different from the current stock.");
+        }
 
         if (!Enum.IsDefined(request.Reason))
+        {
             throw new InvalidInventoryOperationException(
                 "The adjustment reason is invalid.");
+        }
 
         var notes = (request.Notes ?? string.Empty).Trim();
+
         if (notes.Length < 3)
+        {
             throw new InvalidInventoryOperationException(
                 "The adjustment note must contain at least 3 characters.");
+        }
 
         await inventoryCostService.EnsureBalanceAsync(
-            product.Id, stockBefore, cancellationToken);
+            product.Id,
+            stockBefore,
+            cancellationToken);
 
         var now = DateTime.UtcNow;
 
@@ -219,7 +278,11 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         if (quantityChange > 0m)
         {
             inventoryCostService.CreateLayer(
-                product, movement, quantityChange, null, now);
+                product,
+                movement,
+                quantityChange,
+                null,
+                now);
         }
         else
         {
@@ -255,28 +318,39 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         CancellationToken cancellationToken)
     {
         if (commercialQuantity <= 0m)
+        {
             throw new InvalidInventoryOperationException(
                 "Sale quantity must be greater than zero.");
+        }
 
         if (saleId <= 0)
+        {
             throw new InvalidInventoryOperationException(
                 "Sale ID is required for inventory consumption.");
+        }
 
         if (string.IsNullOrWhiteSpace(saleNumber))
+        {
             throw new InvalidInventoryOperationException(
                 "Sale number is required for inventory consumption.");
+        }
 
         await EnsureActiveUserAsync(
             createdByUserId,
             cancellationToken);
 
-        var product = await dbContext.Products.SingleOrDefaultAsync(
-            p => p.Id == productId && !p.IsDeleted,
-            cancellationToken);
+        var product = await dbContext.Products
+            .SingleOrDefaultAsync(
+                product =>
+                    product.Id == productId &&
+                    !product.IsDeleted,
+                cancellationToken);
 
         if (product is null)
+        {
             throw new InvalidInventoryOperationException(
                 "The selected inventory product does not exist or is deleted.");
+        }
 
         await EnsureProductVersionCurrentAsync(
             product,
@@ -285,17 +359,23 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         var hasInitialStock = await dbContext.InventoryMovements
             .AsNoTracking()
             .AnyAsync(
-                m => m.ProductId == productId &&
-                     m.Type == InventoryMovementType.InitialStock,
+                movement =>
+                    movement.ProductId == productId &&
+                    movement.Type ==
+                    InventoryMovementType.InitialStock,
                 cancellationToken);
 
         if (!hasInitialStock)
+        {
             throw new InvalidInventoryOperationException(
                 "Initial stock must be registered before a product can be consumed by a sale.");
+        }
 
         if (product.CommercialUnitsPerInventoryUnit <= 0m)
+        {
             throw new InvalidInventoryOperationException(
                 "The product inventory conversion is invalid.");
+        }
 
         var requestedPhysicalQuantity = decimal.Round(
             commercialQuantity /
@@ -319,10 +399,9 @@ public sealed class InventoryService(RevestikDbContext dbContext)
             return;
         }
 
-        var consumedPhysicalQuantity =
-            Math.Min(
-                stockBefore,
-                requestedPhysicalQuantity);
+        var consumedPhysicalQuantity = Math.Min(
+            stockBefore,
+            requestedPhysicalQuantity);
 
         if (consumedPhysicalQuantity <= 0m)
         {
@@ -387,12 +466,16 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         CancellationToken cancellationToken)
     {
         if (saleId <= 0)
+        {
             throw new InvalidInventoryOperationException(
                 "Sale ID is required for inventory reversal.");
+        }
 
         if (string.IsNullOrWhiteSpace(saleNumber))
+        {
             throw new InvalidInventoryOperationException(
                 "Sale number is required for inventory reversal.");
+        }
 
         await EnsureActiveUserAsync(
             createdByUserId,
@@ -406,7 +489,9 @@ public sealed class InventoryService(RevestikDbContext dbContext)
             .ToListAsync(cancellationToken);
 
         if (saleMovements.Count == 0)
+        {
             return;
+        }
 
         var movementIds = saleMovements
             .Select(movement => movement.Id)
@@ -423,7 +508,9 @@ public sealed class InventoryService(RevestikDbContext dbContext)
             .ToListAsync(cancellationToken);
 
         if (reversedMovementIds.Count == saleMovements.Count)
+        {
             return;
+        }
 
         if (reversedMovementIds.Count > 0)
         {
@@ -437,7 +524,8 @@ public sealed class InventoryService(RevestikDbContext dbContext)
             .ToArray();
 
         var products = await dbContext.Products
-            .Where(product => productIds.Contains(product.Id))
+            .Where(product =>
+                productIds.Contains(product.Id))
             .ToDictionaryAsync(
                 product => product.Id,
                 cancellationToken);
@@ -475,10 +563,12 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         foreach (var movement in saleMovements)
         {
             var product = products[movement.ProductId];
+
             var quantityToRestore =
                 Math.Abs(movement.QuantityChange);
 
             var stockBefore = product.StockQuantity;
+
             var stockAfter =
                 stockBefore + quantityToRestore;
 
@@ -514,9 +604,11 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         {
             throw new InventoryConcurrencyException();
         }
-        catch (DbUpdateException ex)
-            when (ex.InnerException is SqlException
-                { Number: 2601 or 2627 })
+        catch (DbUpdateException exception)
+            when (exception.InnerException is SqlException
+            {
+                Number: 2601 or 2627
+            })
         {
             throw new InventoryCostIntegrityException(
                 "The sale inventory movement has already been reversed.");
@@ -530,17 +622,19 @@ public sealed class InventoryService(RevestikDbContext dbContext)
     {
         var databaseState = await dbContext.Products
             .AsNoTracking()
-            .Where(p => p.Id == product.Id)
-            .Select(p => new
+            .Where(databaseProduct =>
+                databaseProduct.Id == product.Id)
+            .Select(databaseProduct => new
             {
-                p.RowVersion,
-                p.IsDeleted
+                databaseProduct.RowVersion,
+                databaseProduct.IsDeleted
             })
             .SingleOrDefaultAsync(cancellationToken);
 
         if (databaseState is null ||
             (!allowDeleted && databaseState.IsDeleted) ||
-            !product.RowVersion.SequenceEqual(databaseState.RowVersion))
+            !product.RowVersion.SequenceEqual(
+                databaseState.RowVersion))
         {
             throw new InventoryConcurrencyException();
         }
@@ -551,30 +645,46 @@ public sealed class InventoryService(RevestikDbContext dbContext)
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(userId))
+        {
             throw new InvalidInventoryUserException();
+        }
 
-        var active = await dbContext.Users.AsNoTracking().AnyAsync(
-            u => u.Id == userId && u.IsActive,
-            cancellationToken);
+        var active = await dbContext.Users
+            .AsNoTracking()
+            .AnyAsync(
+                user =>
+                    user.Id == userId &&
+                    user.IsActive,
+                cancellationToken);
 
-        if (!active) throw new InvalidInventoryUserException();
+        if (!active)
+        {
+            throw new InvalidInventoryUserException();
+        }
     }
 
-    private static void ValidateQuantity(Product product, decimal quantity)
+    private static void ValidateQuantity(
+        Product product,
+        decimal quantity)
     {
         if (quantity < 0m)
+        {
             throw new InvalidInventoryOperationException(
                 "Inventory quantity cannot be negative.");
+        }
 
         if (product.RequiresWholeInventoryUnits &&
             quantity != decimal.Truncate(quantity))
+        {
             throw new InvalidInventoryOperationException(
                 "This product requires whole inventory units.");
+        }
     }
 
     private static InventoryMovementResponse MapMovement(
-        InventoryMovement movement) =>
-        new(
+        InventoryMovement movement)
+    {
+        return new InventoryMovementResponse(
             movement.Id,
             movement.ProductId,
             movement.Type,
@@ -586,4 +696,5 @@ public sealed class InventoryService(RevestikDbContext dbContext)
             movement.Notes,
             movement.CreatedByUserId,
             movement.CreatedAtUtc);
+    }
 }

@@ -98,6 +98,11 @@ public sealed class InventoryMovementConfiguration
             .HasForeignKey(movement => movement.SaleId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(movement => movement.PhysicalCount)
+            .WithMany(count => count.Movements)
+            .HasForeignKey(movement => movement.PhysicalCountId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasOne(movement => movement.ReversesInventoryMovement)
             .WithOne(movement => movement.ReversalInventoryMovement)
             .HasForeignKey<InventoryMovement>(
@@ -112,6 +117,8 @@ public sealed class InventoryMovementConfiguration
         builder.HasIndex(movement => movement.ProductId);
 
         builder.HasIndex(movement => movement.SaleId);
+
+        builder.HasIndex(movement => movement.PhysicalCountId);
 
         builder.HasIndex(
                 movement => movement.ReversesInventoryMovementId)

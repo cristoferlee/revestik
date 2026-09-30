@@ -12,24 +12,33 @@
         <NavLink class="navigation-link" href="/" Match="NavLinkMatch.All" @onclick="CloseNavigation">
             <span class="nav-icon" aria-hidden="true">⌂</span><span>Dashboard</span>
         </NavLink>
+
         <NavLink class="navigation-link" href="/customers" @onclick="CloseNavigation">
             <span class="nav-icon" aria-hidden="true">◎</span><span>Clientes</span>
         </NavLink>
+
         <NavLink class="navigation-link" href="/quotes" @onclick="CloseNavigation">
             <span class="nav-icon" aria-hidden="true">▤</span><span>Cotizaciones</span>
         </NavLink>
+
         <NavLink class="navigation-link" href="/sales" @onclick="CloseNavigation">
             <span class="nav-icon" aria-hidden="true">↗</span><span>Ventas</span>
         </NavLink>
-        <NavLink class="navigation-link" href="/inventory" @onclick="CloseNavigation">
+
+        <NavLink class="navigation-link"
+                 href="/inventory"
+                 Match="NavLinkMatch.All"
+                 @onclick="CloseNavigation">
             <span class="nav-icon" aria-hidden="true">◇</span><span>Inventario</span>
         </NavLink>
+
         <NavLink class="navigation-link" href="/purchases" @onclick="CloseNavigation">
             <span class="nav-icon" aria-hidden="true">⇣</span><span>Compras</span>
         </NavLink>
 
         <AuthorizeView Roles="Administrator">
             <div class="navigation-divider"></div>
+
             <NavLink class="navigation-link" href="/settings" @onclick="CloseNavigation">
                 <span class="nav-icon" aria-hidden="true">⚙</span><span>Configuración</span>
             </NavLink>

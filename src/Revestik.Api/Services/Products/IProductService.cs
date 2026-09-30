@@ -29,4 +29,8 @@ public interface IProductService
     Task<bool> ReactivateAsync(
         int id,
         CancellationToken cancellationToken);
+
+    Task<ProductPermanentArchiveResult> ArchivePermanentlyAsync(
+        int id,
+        CancellationToken cancellationToken);
 }

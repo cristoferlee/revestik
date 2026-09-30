@@ -34,6 +34,11 @@
                 </button>
             </AuthorizeView>
 
+            <a class="secondary-button"
+               href="/inventory/physical-count">
+                Nuevo conteo físico
+            </a>
+
             <button type="button"
                     class="secondary-button"
                     disabled="@isBusy"
@@ -58,14 +63,31 @@
     }
 
     <section class="inventory-kpis" aria-label="Resumen de inventario">
-        <article class="inventory-kpi"><span>Productos activos</span><strong>@summary.TotalProducts</strong></article>
-        <article class="inventory-kpi"><span>En stock</span><strong>@summary.InStockCount</strong></article>
-        <article class="inventory-kpi"><span>Stock bajo</span><strong>@summary.LowStockCount</strong></article>
-        <article class="inventory-kpi"><span>Agotados</span><strong>@summary.OutOfStockCount</strong></article>
+        <article class="inventory-kpi">
+            <span>Productos activos</span>
+            <strong>@summary.TotalProducts</strong>
+        </article>
+
+        <article class="inventory-kpi">
+            <span>En stock</span>
+            <strong>@summary.InStockCount</strong>
+        </article>
+
+        <article class="inventory-kpi">
+            <span>Stock bajo</span>
+            <strong>@summary.LowStockCount</strong>
+        </article>
+
+        <article class="inventory-kpi">
+            <span>Agotados</span>
+            <strong>@summary.OutOfStockCount</strong>
+        </article>
+
         <article class="inventory-kpi inventory-kpi-wide">
             <span>Valor conocido del inventario</span>
             <strong>₡@summary.TotalInventoryCostValue.ToString("N2")</strong>
         </article>
+
         <article class="inventory-kpi inventory-kpi-wide">
             <span>Cantidad con costo desconocido</span>
             <strong>@summary.UnknownCostQuantity.ToString("N2")</strong>
@@ -75,7 +97,10 @@
 
     <section class="inventory-filters">
         <div class="inventory-section-heading">
-            <div><h2>Productos</h2><p>Busca, filtra y ordena el catálogo.</p></div>
+            <div>
+                <h2>Productos</h2>
+                <p>Busca, filtra y ordena el catálogo.</p>
+            </div>
         </div>
 
         <form class="inventory-filter-grid"
@@ -93,6 +118,7 @@
                 <label>Categoría</label>
                 <InputSelect @bind-Value="filters.CategoryId">
                     <option value="">Todas</option>
+
                     @foreach (var category in categories)
                     {
                         <option value="@category.Id">@category.Name</option>
@@ -143,8 +169,18 @@
             </div>
 
             <div class="inventory-filter-actions">
-                <button type="submit" class="primary-button" disabled="@isLoadingProducts">Aplicar</button>
-                <button type="button" class="secondary-button" disabled="@isLoadingProducts" @onclick="ClearFiltersAsync">Limpiar</button>
+                <button type="submit"
+                        class="primary-button"
+                        disabled="@isLoadingProducts">
+                    Aplicar
+                </button>
+
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@isLoadingProducts"
+                        @onclick="ClearFiltersAsync">
+                    Limpiar
+                </button>
             </div>
         </form>
     </section>
@@ -160,7 +196,11 @@
     else
     {
         @foreach (var categoryGroup in products
-            .GroupBy(product => new { product.CategoryId, product.CategoryName })
+            .GroupBy(product => new
+            {
+                product.CategoryId,
+                product.CategoryName
+            })
             .OrderBy(group => group.Key.CategoryName))
         {
             <section class="inventory-category">
@@ -176,24 +216,64 @@
                     {
                         <article class="inventory-product-card @(product.IsDeleted ? "inventory-product-deleted" : null)">
                             <div class="inventory-product-top">
-                                <div><h3>@product.Name</h3><p>@product.Description</p></div>
+                                <div>
+                                    <h3>@product.Name</h3>
+                                    <p>@product.Description</p>
+                                </div>
+
                                 @if (product.IsDeleted)
                                 {
-                                    <span class="stock-badge stock-badge-deleted">Descontinuado</span>
+                                    <span class="stock-badge stock-badge-deleted">
+                                        Descontinuado
+                                    </span>
                                 }
                                 else
                                 {
-                                    <span class="@GetStockBadgeClass(product)">@GetStockLabel(product)</span>
+                                    <span class="@GetStockBadgeClass(product)">
+                                        @GetStockLabel(product)
+                                    </span>
                                 }
                             </div>
 
                             <dl class="inventory-product-details">
-                                <div><dt>CABYS</dt><dd>@product.CabysCode</dd></div>
-                                <div><dt>Stock físico</dt><dd><strong>@product.AvailableStock.ToString("N2")</strong> @product.InventoryUnitSymbol</dd></div>
-                                <div><dt>Stock comercial</dt><dd>@GetCommercialStock(product).ToString("N2") @product.CommercialUnitSymbol</dd></div>
-                                <div><dt>Mínimo</dt><dd>@product.MinimumStock.ToString("N2") @product.InventoryUnitSymbol</dd></div>
-                                <div><dt>Costo actual</dt><dd>₡@product.CurrentCost.ToString("N2")</dd></div>
-                                <div><dt>Precio venta</dt><dd>₡@product.SalePrice.ToString("N2")</dd></div>
+                                <div>
+                                    <dt>CABYS</dt>
+                                    <dd>@product.CabysCode</dd>
+                                </div>
+
+                                <div>
+                                    <dt>Stock físico</dt>
+                                    <dd>
+                                        <strong>@product.AvailableStock.ToString("N2")</strong>
+                                        @product.InventoryUnitSymbol
+                                    </dd>
+                                </div>
+
+                                <div>
+                                    <dt>Stock comercial</dt>
+                                    <dd>
+                                        @GetCommercialStock(product).ToString("N2")
+                                        @product.CommercialUnitSymbol
+                                    </dd>
+                                </div>
+
+                                <div>
+                                    <dt>Mínimo</dt>
+                                    <dd>
+                                        @product.MinimumStock.ToString("N2")
+                                        @product.InventoryUnitSymbol
+                                    </dd>
+                                </div>
+
+                                <div>
+                                    <dt>Costo actual</dt>
+                                    <dd>₡@product.CurrentCost.ToString("N2")</dd>
+                                </div>
+
+                                <div>
+                                    <dt>Precio venta</dt>
+                                    <dd>₡@product.SalePrice.ToString("N2")</dd>
+                                </div>
                             </dl>
 
                             <div class="inventory-product-actions">
@@ -233,6 +313,15 @@
                                                 @onclick="() => ReactivateProductAsync(product)">
                                             Reactivar
                                         </button>
+                                    
+                                        <button type="button"
+                                                class="secondary-button"
+                                                disabled="@isBusy"
+                                                @onclick="() => ArchivePermanentlyAsync(product)">
+                                            @(pendingPermanentDeleteProductId == product.Id
+                                                ? "Confirmar eliminación"
+                                                : "Eliminar definitivamente")
+                                        </button>
                                     </AuthorizeView>
                                 }
                             </div>
@@ -243,60 +332,142 @@
         }
 
         <nav class="inventory-pagination">
-            <button type="button" class="secondary-button" disabled="@(!CanGoPrevious || isLoadingProducts)" @onclick="PreviousPageAsync">Anterior</button>
-            <span>Página @filters.Page de @TotalPages · @totalCount producto(s)</span>
-            <button type="button" class="secondary-button" disabled="@(!CanGoNext || isLoadingProducts)" @onclick="NextPageAsync">Siguiente</button>
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@(!CanGoPrevious || isLoadingProducts)"
+                    @onclick="PreviousPageAsync">
+                Anterior
+            </button>
+
+            <span>
+                Página @filters.Page de @TotalPages · @totalCount producto(s)
+            </span>
+
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@(!CanGoNext || isLoadingProducts)"
+                    @onclick="NextPageAsync">
+                Siguiente
+            </button>
         </nav>
     }
 
     @if (selectedProductForAdjustment is not null)
     {
-        <div class="inventory-modal-backdrop" @onclick="CloseAllModals">
-            <section class="inventory-modal" role="dialog" aria-modal="true" @onclick:stopPropagation>
+        <div class="inventory-modal-backdrop"
+             @onclick="CloseAllModals">
+            <section class="inventory-modal"
+                     role="dialog"
+                     aria-modal="true"
+                     @onclick:stopPropagation>
                 <div class="inventory-section-heading">
-                    <div><h2>Ajustar stock</h2><p>@selectedProductForAdjustment.Name</p></div>
-                    <button type="button" class="secondary-button" disabled="@isBusy" @onclick="CloseAllModals">Cerrar</button>
+                    <div>
+                        <h2>Ajustar stock</h2>
+                        <p>@selectedProductForAdjustment.Name</p>
+                    </div>
+
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@isBusy"
+                            @onclick="CloseAllModals">
+                        Cerrar
+                    </button>
                 </div>
 
                 <div class="inventory-adjustment-summary">
-                    <span>Stock actual <strong>@selectedProductForAdjustment.AvailableStock.ToString("N2") @selectedProductForAdjustment.InventoryUnitSymbol</strong></span>
-                    <span>Diferencia <strong class="@AdjustmentDifferenceClass">@FormattedAdjustmentDifference</strong></span>
-                    <span>Nuevo stock <strong>@adjustmentRequest.NewStockQuantity.ToString("N2") @selectedProductForAdjustment.InventoryUnitSymbol</strong></span>
+                    <span>
+                        Stock actual
+                        <strong>
+                            @selectedProductForAdjustment.AvailableStock.ToString("N2")
+                            @selectedProductForAdjustment.InventoryUnitSymbol
+                        </strong>
+                    </span>
+
+                    <span>
+                        Diferencia
+                        <strong class="@AdjustmentDifferenceClass">
+                            @FormattedAdjustmentDifference
+                        </strong>
+                    </span>
+
+                    <span>
+                        Nuevo stock
+                        <strong>
+                            @adjustmentRequest.NewStockQuantity.ToString("N2")
+                            @selectedProductForAdjustment.InventoryUnitSymbol
+                        </strong>
+                    </span>
                 </div>
 
-                <EditForm Model="adjustmentRequest" OnValidSubmit="SaveAdjustmentAsync">
+                <EditForm Model="adjustmentRequest"
+                          OnValidSubmit="SaveAdjustmentAsync">
                     <DataAnnotationsValidator />
                     <ValidationSummary />
+
                     <div class="form-grid">
                         <div class="form-group">
                             <label>Conteo físico correcto</label>
+
                             <InputNumber @bind-Value="adjustmentRequest.NewStockQuantity"
                                          min="0"
                                          step="@GetQuantityStep(selectedProductForAdjustment)" />
+
                             <ValidationMessage For="@(() => adjustmentRequest.NewStockQuantity)" />
                         </div>
+
                         <div class="form-group">
                             <label>Motivo</label>
+
                             <InputSelect @bind-Value="adjustmentRequest.Reason">
-                                <option value="@InventoryAdjustmentReason.PhysicalCount">Conteo físico</option>
-                                <option value="@InventoryAdjustmentReason.Damage">Daño</option>
-                                <option value="@InventoryAdjustmentReason.Loss">Pérdida</option>
-                                <option value="@InventoryAdjustmentReason.Theft">Robo</option>
-                                <option value="@InventoryAdjustmentReason.InternalUse">Uso interno</option>
-                                <option value="@InventoryAdjustmentReason.RegistrationError">Error de registro</option>
-                                <option value="@InventoryAdjustmentReason.Other">Otro</option>
+                                <option value="@InventoryAdjustmentReason.PhysicalCount">
+                                    Conteo físico
+                                </option>
+                                <option value="@InventoryAdjustmentReason.Damage">
+                                    Daño
+                                </option>
+                                <option value="@InventoryAdjustmentReason.Loss">
+                                    Pérdida
+                                </option>
+                                <option value="@InventoryAdjustmentReason.Theft">
+                                    Robo
+                                </option>
+                                <option value="@InventoryAdjustmentReason.InternalUse">
+                                    Uso interno
+                                </option>
+                                <option value="@InventoryAdjustmentReason.RegistrationError">
+                                    Error de registro
+                                </option>
+                                <option value="@InventoryAdjustmentReason.Other">
+                                    Otro
+                                </option>
                             </InputSelect>
                         </div>
+
                         <div class="form-group form-wide">
                             <label>Notas</label>
-                            <InputTextArea @bind-Value="adjustmentRequest.Notes" rows="4" maxlength="1000" />
+
+                            <InputTextArea @bind-Value="adjustmentRequest.Notes"
+                                           rows="4"
+                                           maxlength="1000" />
+
                             <ValidationMessage For="@(() => adjustmentRequest.Notes)" />
                         </div>
                     </div>
+
                     <div class="form-actions">
-                        <button type="button" class="secondary-button" disabled="@isBusy" @onclick="CloseAllModals">Cancelar</button>
-                        <button type="submit" class="primary-button" disabled="@(isBusy || !HasAdjustmentDifference)">
-                            @(isSaving ? "Guardando..." : "Confirmar ajuste")
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@isBusy"
+                                @onclick="CloseAllModals">
+                            Cancelar
+                        </button>
+
+                        <button type="submit"
+                                class="primary-button"
+                                disabled="@(isBusy || !HasAdjustmentDifference)">
+                            @(isSaving
+                                ? "Guardando..."
+                                : "Confirmar ajuste")
                         </button>
                     </div>
                 </EditForm>
@@ -306,23 +477,31 @@
 
     @if (isProductFormOpen)
     {
-        <div class="inventory-modal-backdrop" @onclick="CloseAllModals">
+        <div class="inventory-modal-backdrop"
+             @onclick="CloseAllModals">
             <section class="inventory-modal inventory-modal-large"
                      role="dialog"
                      aria-modal="true"
                      @onclick:stopPropagation>
                 <div class="inventory-section-heading">
                     <div>
-                        <h2>@(editingProductId.HasValue ? "Editar producto" : "Nuevo producto")</h2>
+                        <h2>
+                            @(editingProductId.HasValue
+                                ? "Editar producto"
+                                : "Nuevo producto")
+                        </h2>
+
                         <p>
                             @(editingProductId.HasValue
                                 ? "Modifica la información del producto. Las existencias se ajustan por separado."
                                 : "Completa la información del producto y su existencia inicial.")
                         </p>
+
                         @if (!editingProductId.HasValue)
                         {
                             <p class="field-guidance">
                                 ¿Falta una categoría o unidad?
+
                                 <a href="/settings"
                                    class="inventory-settings-link">
                                     Administrar categorías y unidades
@@ -330,43 +509,64 @@
                             </p>
                         }
                     </div>
-                    <button type="button" class="secondary-button" disabled="@isBusy" @onclick="CloseAllModals">Cerrar</button>
+
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@isBusy"
+                            @onclick="CloseAllModals">
+                        Cerrar
+                    </button>
                 </div>
 
-                <EditForm Model="productRequest" OnValidSubmit="SaveProductAsync">
+                <EditForm Model="productRequest"
+                          OnValidSubmit="SaveProductAsync">
                     <DataAnnotationsValidator />
                     <ValidationSummary />
 
                     <div class="form-grid">
                         <div class="form-group">
                             <label>Categoría</label>
+
                             <InputSelect @bind-Value="productRequest.CategoryId">
                                 <option value="0">Seleccione</option>
+
                                 @foreach (var category in categories)
                                 {
-                                    <option value="@category.Id">@category.Name</option>
+                                    <option value="@category.Id">
+                                        @category.Name
+                                    </option>
                                 }
                             </InputSelect>
+
                             <ValidationMessage For="@(() => productRequest.CategoryId)" />
                         </div>
 
                         <div class="form-group">
                             <label>Nombre</label>
-                            <InputText @bind-Value="productRequest.Name" maxlength="150" />
+
+                            <InputText @bind-Value="productRequest.Name"
+                                       maxlength="150" />
+
                             <ValidationMessage For="@(() => productRequest.Name)" />
                         </div>
 
                         <div class="form-group form-wide">
                             <label>Descripción</label>
-                            <InputTextArea @bind-Value="productRequest.Description" rows="3" maxlength="500" />
+
+                            <InputTextArea @bind-Value="productRequest.Description"
+                                           rows="3"
+                                           maxlength="500" />
+
                             <ValidationMessage For="@(() => productRequest.Description)" />
                         </div>
 
                         <div class="form-group">
                             <label>CABYS</label>
+
                             <InputText @bind-Value="productRequest.CabysCode"
                                        inputmode="numeric"
                                        maxlength="13" />
+
                             <ValidationMessage For="@(() => productRequest.CabysCode)" />
                         </div>
 
@@ -374,29 +574,40 @@
                         {
                             <div class="form-group">
                                 <label>Unidad física de inventario</label>
+
                                 <select value="@productRequest.InventoryUnitId"
                                         @onchange="OnInventoryUnitChanged">
                                     <option value="0">Seleccione</option>
+
                                     @foreach (var unit in units)
                                     {
-                                        <option value="@unit.Id">@unit.Name (@unit.Symbol)</option>
+                                        <option value="@unit.Id">
+                                            @unit.Name (@unit.Symbol)
+                                        </option>
                                     }
                                 </select>
+
                                 <small class="field-guidance">
-                                    Cómo se cuenta físicamente en bodega: caja, saco, unidad, m², etc.
+                                    Cómo se cuenta físicamente en bodega:
+                                    caja, saco, unidad, m², etc.
                                 </small>
                             </div>
 
                             <div class="form-group">
                                 <label>Unidad comercial</label>
+
                                 <select value="@productRequest.CommercialUnitId"
                                         @onchange="OnCommercialUnitChanged">
                                     <option value="0">Seleccione</option>
+
                                     @foreach (var unit in units)
                                     {
-                                        <option value="@unit.Id">@unit.Name (@unit.Symbol)</option>
+                                        <option value="@unit.Id">
+                                            @unit.Name (@unit.Symbol)
+                                        </option>
                                     }
                                 </select>
+
                                 <small class="field-guidance">
                                     Cómo se expresa la cantidad al cliente.
                                 </small>
@@ -404,10 +615,12 @@
 
                             <div class="form-group">
                                 <label>Contenido por unidad física</label>
+
                                 <InputNumber @bind-Value="productRequest.CommercialUnitsPerInventoryUnit"
                                              min="0.0001"
                                              step="0.0001"
                                              disabled="@AreProductUnitsEqual" />
+
                                 <small class="field-guidance">
                                     @(AreProductUnitsEqual
                                         ? "Como ambas unidades son iguales, la relación es 1."
@@ -420,6 +633,7 @@
                                     <InputCheckbox @bind-Value="productRequest.RequiresWholeInventoryUnits" />
                                     Solo se venden unidades físicas completas
                                 </label>
+
                                 <small class="field-guidance">
                                     Ejemplo: no se abren cajas para vender fracciones.
                                 </small>
@@ -429,30 +643,43 @@
                         {
                             <div class="form-group form-wide">
                                 <label>Presentación del producto</label>
+
                                 <p class="field-guidance">
                                     @editingUnitDescription
-                                    · Esta información se conserva para mantener consistente el historial de inventario.
+                                    · Esta información se conserva para mantener
+                                    consistente el historial de inventario.
                                 </p>
                             </div>
                         }
 
                         <div class="form-group">
                             <label>Precio de venta</label>
-                            <InputNumber @bind-Value="productRequest.SalePrice" min="0.01" step="0.01" />
+
+                            <InputNumber @bind-Value="productRequest.SalePrice"
+                                         min="0.01"
+                                         step="0.01" />
+
                             <ValidationMessage For="@(() => productRequest.SalePrice)" />
                         </div>
 
                         <div class="form-group">
                             <label>Costo actual de referencia</label>
-                            <InputNumber @bind-Value="productRequest.CurrentCost" min="0.01" step="0.01" />
+
+                            <InputNumber @bind-Value="productRequest.CurrentCost"
+                                         min="0.01"
+                                         step="0.01" />
+
                             <ValidationMessage For="@(() => productRequest.CurrentCost)" />
+
                             <small class="field-guidance">
-                                Cambiarlo no modifica el costo de las existencias que ya están en bodega.
+                                Cambiarlo no modifica el costo de las existencias
+                                que ya están en bodega.
                             </small>
                         </div>
 
                         <div class="form-group">
                             <label>IVA</label>
+
                             <InputSelect @bind-Value="productRequest.TaxRate">
                                 <option value="13">13%</option>
                                 <option value="0">0%</option>
@@ -461,7 +688,11 @@
 
                         <div class="form-group">
                             <label>Stock mínimo</label>
-                            <InputNumber @bind-Value="productRequest.MinimumStock" min="0" step="0.0001" />
+
+                            <InputNumber @bind-Value="productRequest.MinimumStock"
+                                         min="0"
+                                         step="0.0001" />
+
                             <ValidationMessage For="@(() => productRequest.MinimumStock)" />
                         </div>
 
@@ -469,17 +700,22 @@
                         {
                             <div class="form-group">
                                 <label>Stock inicial</label>
+
                                 <InputNumber @bind-Value="initialStockRequest.Quantity"
                                              min="0"
                                              step="@NewProductQuantityStep" />
+
                                 <ValidationMessage For="@(() => initialStockRequest.Quantity)" />
+
                                 <small class="field-guidance">
-                                    Puedes registrar 0 si todavía no hay existencias en bodega.
+                                    Puedes registrar 0 si todavía no hay
+                                    existencias en bodega.
                                 </small>
                             </div>
 
                             <div class="form-group form-wide">
                                 <label>Nota de inventario inicial</label>
+
                                 <InputTextArea @bind-Value="initialStockRequest.Notes"
                                                rows="3"
                                                maxlength="1000"
@@ -489,8 +725,16 @@
                     </div>
 
                     <div class="form-actions">
-                        <button type="button" class="secondary-button" disabled="@isBusy" @onclick="CloseAllModals">Cancelar</button>
-                        <button type="submit" class="primary-button" disabled="@isBusy">
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@isBusy"
+                                @onclick="CloseAllModals">
+                            Cancelar
+                        </button>
+
+                        <button type="submit"
+                                class="primary-button"
+                                disabled="@isBusy">
                             @(isSaving
                                 ? "Guardando..."
                                 : editingProductId.HasValue
@@ -506,44 +750,72 @@
 
 @code {
     private readonly List<ProductListItemResponse> products = [];
+
     private IReadOnlyList<ProductCategoryResponse> categories = [];
     private IReadOnlyList<UnitOfMeasureResponse> units = [];
-    private InventorySummaryResponse summary = new(0, 0, 0, 0, 0m, 0m, 0);
 
-    private ProductListRequest filters = CreateDefaultFilters();
+    private InventorySummaryResponse summary =
+        new(
+            0,
+            0,
+            0,
+            0,
+            0m,
+            0m,
+            0);
+
+    private ProductListRequest filters =
+        CreateDefaultFilters();
+
     private ProductListItemResponse? selectedProductForAdjustment;
+
     private InventoryAdjustmentRequest adjustmentRequest = new();
     private InitialStockRequest initialStockRequest = new();
     private ProductUpsertRequest productRequest = new();
+
     private int? editingProductId;
     private string editingUnitDescription = string.Empty;
     private bool isProductFormOpen;
 
     private string? errorMessage;
     private string? successMessage;
+
     private bool isLoading;
     private bool isLoadingProducts;
     private bool isSaving;
+
     private int totalCount;
 
-    private bool isBusy => isLoading || isLoadingProducts || isSaving;
+    private bool isBusy =>
+        isLoading ||
+        isLoadingProducts ||
+        isSaving;
 
-    protected override async Task OnInitializedAsync() => await RefreshAsync();
+    protected override async Task OnInitializedAsync() =>
+        await RefreshAsync();
 
     private async Task RefreshAsync()
     {
         errorMessage = null;
         isLoading = true;
+
         try
         {
-            categories = await ProductApi.GetCategoriesAsync();
-            units = await ProductApi.GetUnitsAsync();
-            summary = await InventoryApi.GetSummaryAsync();
+            categories =
+                await ProductApi.GetCategoriesAsync();
+
+            units =
+                await ProductApi.GetUnitsAsync();
+
+            summary =
+                await InventoryApi.GetSummaryAsync();
+
             await LoadProductsAsync();
         }
         catch (HttpRequestException exception)
         {
-            errorMessage = $"No se pudo cargar el inventario. {exception.Message}";
+            errorMessage =
+                $"No se pudo cargar el inventario. {exception.Message}";
         }
         finally
         {
@@ -554,19 +826,27 @@
     private async Task LoadProductsAsync()
     {
         isLoadingProducts = true;
+
         try
         {
-            var response = await ProductApi.GetPageAsync(filters);
+            var response =
+                await ProductApi.GetPageAsync(filters);
+
             products.Clear();
             products.AddRange(response.Items);
+
             totalCount = response.TotalCount;
 
             if (filters.Page > TotalPages)
             {
                 filters.Page = TotalPages;
-                response = await ProductApi.GetPageAsync(filters);
+
+                response =
+                    await ProductApi.GetPageAsync(filters);
+
                 products.Clear();
                 products.AddRange(response.Items);
+
                 totalCount = response.TotalCount;
             }
         }
@@ -580,141 +860,188 @@
     {
         errorMessage = null;
         successMessage = null;
+
         filters.Page = 1;
+
         await TryLoadProductsAsync();
     }
 
     private async Task ClearFiltersAsync()
     {
         filters = CreateDefaultFilters();
+
         await ApplyFiltersAsync();
     }
 
     private async Task TryLoadProductsAsync()
     {
-        try { await LoadProductsAsync(); }
+        try
+        {
+            await LoadProductsAsync();
+        }
         catch (HttpRequestException exception)
         {
-            errorMessage = $"No se pudieron cargar los productos. {exception.Message}";
+            errorMessage =
+                $"No se pudieron cargar los productos. {exception.Message}";
         }
     }
 
     private async Task PreviousPageAsync()
     {
-        if (!CanGoPrevious) return;
+        if (!CanGoPrevious)
+            return;
+
         filters.Page--;
+
         await TryLoadProductsAsync();
     }
 
     private async Task NextPageAsync()
     {
-        if (!CanGoNext) return;
+        if (!CanGoNext)
+            return;
+
         filters.Page++;
+
         await TryLoadProductsAsync();
     }
 
-    private void OpenAdjustment(ProductListItemResponse product)
+    private void OpenAdjustment(
+        ProductListItemResponse product)
     {
         ClearMessages();
+
         selectedProductForAdjustment = product;
-        adjustmentRequest = new InventoryAdjustmentRequest
-        {
-            NewStockQuantity = product.AvailableStock,
-            Reason = InventoryAdjustmentReason.PhysicalCount,
-            Notes = string.Empty
-        };
+
+        adjustmentRequest =
+            new InventoryAdjustmentRequest
+            {
+                NewStockQuantity =
+                    product.AvailableStock,
+                Reason =
+                    InventoryAdjustmentReason.PhysicalCount,
+                Notes = string.Empty
+            };
     }
 
     private async Task OpenNewProductAsync()
     {
         ClearMessages();
 
-        if (categories.Count == 0 || units.Count == 0)
+        if (categories.Count == 0 ||
+            units.Count == 0)
         {
-            categories = await ProductApi.GetCategoriesAsync();
-            units = await ProductApi.GetUnitsAsync();
+            categories =
+                await ProductApi.GetCategoriesAsync();
+
+            units =
+                await ProductApi.GetUnitsAsync();
         }
 
         editingProductId = null;
         editingUnitDescription = string.Empty;
 
-        productRequest = new ProductUpsertRequest
-        {
-            CommercialUnitsPerInventoryUnit = 1m,
-            TaxRate = 13m
-        };
+        productRequest =
+            new ProductUpsertRequest
+            {
+                CommercialUnitsPerInventoryUnit = 1m,
+                TaxRate = 13m
+            };
 
-        initialStockRequest = new InitialStockRequest
-        {
-            Quantity = 0m,
-            Notes = "Inventario inicial del producto."
-        };
+        initialStockRequest =
+            new InitialStockRequest
+            {
+                Quantity = 0m,
+                Notes =
+                    "Inventario inicial del producto."
+            };
 
         isProductFormOpen = true;
     }
 
-    private async Task OpenEditProductAsync(int productId)
+    private async Task OpenEditProductAsync(
+        int productId)
     {
         ClearMessages();
+
         try
         {
-            var product = await ProductApi.GetByIdAsync(productId);
+            var product =
+                await ProductApi.GetByIdAsync(
+                    productId);
+
             if (product is null)
             {
-                errorMessage = "El producto ya no está disponible.";
+                errorMessage =
+                    "El producto ya no está disponible.";
+
                 return;
             }
 
             editingProductId = product.Id;
-            editingUnitDescription =
-                $"{product.InventoryUnitName} ({product.InventoryUnitSymbol}) → " +
-                $"{product.CommercialUnitsPerInventoryUnit:N4} " +
-                $"{product.CommercialUnitName} ({product.CommercialUnitSymbol})";
 
-            productRequest = new ProductUpsertRequest
-            {
-                CategoryId = product.CategoryId,
-                Name = product.Name,
-                Description = product.Description,
-                CabysCode = product.CabysCode,
-                InventoryUnitId = product.InventoryUnitId,
-                CommercialUnitId = product.CommercialUnitId,
-                CommercialUnitsPerInventoryUnit = product.CommercialUnitsPerInventoryUnit,
-                RequiresWholeInventoryUnits = product.RequiresWholeInventoryUnits,
-                SalePrice = product.SalePrice,
-                CurrentCost = product.CurrentCost,
-                TaxRate = product.TaxRate,
-                MinimumStock = product.MinimumStock
-            };
+            editingUnitDescription =
+                $"{product.InventoryUnitName} " +
+                $"({product.InventoryUnitSymbol}) → " +
+                $"{product.CommercialUnitsPerInventoryUnit:N4} " +
+                $"{product.CommercialUnitName} " +
+                $"({product.CommercialUnitSymbol})";
+
+            productRequest =
+                new ProductUpsertRequest
+                {
+                    CategoryId = product.CategoryId,
+                    Name = product.Name,
+                    Description = product.Description,
+                    CabysCode = product.CabysCode,
+                    InventoryUnitId =
+                        product.InventoryUnitId,
+                    CommercialUnitId =
+                        product.CommercialUnitId,
+                    CommercialUnitsPerInventoryUnit =
+                        product.CommercialUnitsPerInventoryUnit,
+                    RequiresWholeInventoryUnits =
+                        product.RequiresWholeInventoryUnits,
+                    SalePrice = product.SalePrice,
+                    CurrentCost = product.CurrentCost,
+                    TaxRate = product.TaxRate,
+                    MinimumStock = product.MinimumStock
+                };
 
             isProductFormOpen = true;
         }
         catch (HttpRequestException exception)
         {
-            errorMessage = $"No se pudo abrir el producto. {exception.Message}";
+            errorMessage =
+                $"No se pudo abrir el producto. {exception.Message}";
         }
     }
 
     private async Task SaveProductAsync()
     {
         isSaving = true;
+
         ClearMessages();
 
         try
         {
             if (editingProductId.HasValue)
             {
-                var updated = await ProductApi.UpdateAsync(
-                    editingProductId.Value,
-                    productRequest);
+                var updated =
+                    await ProductApi.UpdateAsync(
+                        editingProductId.Value,
+                        productRequest);
 
                 if (updated is null)
                 {
-                    errorMessage = "El producto ya no está disponible.";
+                    errorMessage =
+                        "El producto ya no está disponible.";
+
                     return;
                 }
 
-                successMessage = $"Producto {updated.Name} actualizado.";
+                successMessage =
+                    $"Producto {updated.Name} actualizado.";
             }
             else
             {
@@ -725,7 +1052,8 @@
                         new InventoryProductCreateRequest
                         {
                             Product = productRequest,
-                            InitialStock = initialStockRequest
+                            InitialStock =
+                                initialStockRequest
                         });
 
                 successMessage =
@@ -733,11 +1061,13 @@
             }
 
             isProductFormOpen = false;
+
             await RefreshDataAfterMutationAsync();
         }
         catch (HttpRequestException exception)
         {
-            errorMessage = $"No se pudo guardar el producto. {exception.Message}";
+            errorMessage =
+                $"No se pudo guardar el producto. {exception.Message}";
         }
         finally
         {
@@ -747,34 +1077,47 @@
 
     private async Task SaveAdjustmentAsync()
     {
-        if (selectedProductForAdjustment is null || !HasAdjustmentDifference) return;
+        if (selectedProductForAdjustment is null ||
+            !HasAdjustmentDifference)
+        {
+            return;
+        }
 
         isSaving = true;
+
         ClearMessages();
 
         try
         {
-            var productName = selectedProductForAdjustment.Name;
-            var movement = await InventoryApi.AdjustStockAsync(
-                selectedProductForAdjustment.Id,
-                adjustmentRequest);
+            var productName =
+                selectedProductForAdjustment.Name;
+
+            var movement =
+                await InventoryApi.AdjustStockAsync(
+                    selectedProductForAdjustment.Id,
+                    adjustmentRequest);
 
             if (movement is null)
             {
-                errorMessage = "El producto ya no está disponible.";
+                errorMessage =
+                    "El producto ya no está disponible.";
+
                 return;
             }
 
             successMessage =
                 $"Stock de {productName} actualizado de " +
-                $"{movement.StockBefore:N2} a {movement.StockAfter:N2}.";
+                $"{movement.StockBefore:N2} a " +
+                $"{movement.StockAfter:N2}.";
 
             selectedProductForAdjustment = null;
+
             await RefreshDataAfterMutationAsync();
         }
         catch (HttpRequestException exception)
         {
-            errorMessage = $"No se pudo guardar el ajuste. {exception.Message}";
+            errorMessage =
+                $"No se pudo guardar el ajuste. {exception.Message}";
         }
         finally
         {
@@ -782,24 +1125,33 @@
         }
     }
 
-    private async Task DiscontinueProductAsync(ProductListItemResponse product)
+    private async Task DiscontinueProductAsync(
+        ProductListItemResponse product)
     {
         ClearMessages();
+
         isSaving = true;
+
         try
         {
-            if (!await ProductApi.DeleteAsync(product.Id))
+            if (!await ProductApi.DeleteAsync(
+                    product.Id))
             {
-                errorMessage = "El producto ya no está disponible.";
+                errorMessage =
+                    "El producto ya no está disponible.";
+
                 return;
             }
 
-            successMessage = $"{product.Name} fue descontinuado.";
+            successMessage =
+                $"{product.Name} fue descontinuado.";
+
             await RefreshDataAfterMutationAsync();
         }
         catch (HttpRequestException exception)
         {
-            errorMessage = $"No se pudo descontinuar el producto. {exception.Message}";
+            errorMessage =
+                $"No se pudo descontinuar el producto. {exception.Message}";
         }
         finally
         {
@@ -807,24 +1159,34 @@
         }
     }
 
-    private async Task ReactivateProductAsync(ProductListItemResponse product)
+    private int? pendingPermanentDeleteProductId;
+    private async Task ReactivateProductAsync(
+        ProductListItemResponse product)
     {
         ClearMessages();
+
         isSaving = true;
+
         try
         {
-            if (!await ProductApi.ReactivateAsync(product.Id))
+            if (!await ProductApi.ReactivateAsync(
+                    product.Id))
             {
-                errorMessage = "El producto ya no está disponible.";
+                errorMessage =
+                    "El producto ya no está disponible.";
+
                 return;
             }
 
-            successMessage = $"{product.Name} fue reactivado.";
+            successMessage =
+                $"{product.Name} fue reactivado.";
+
             await RefreshDataAfterMutationAsync();
         }
         catch (HttpRequestException exception)
         {
-            errorMessage = $"No se pudo reactivar el producto. {exception.Message}";
+            errorMessage =
+                $"No se pudo reactivar el producto. {exception.Message}";
         }
         finally
         {
@@ -832,17 +1194,81 @@
         }
     }
 
-    private void OnInventoryUnitChanged(ChangeEventArgs args)
+    private async Task ArchivePermanentlyAsync(
+        ProductListItemResponse product)
+    {
+        ClearMessages();
+
+        if (pendingPermanentDeleteProductId != product.Id)
+        {
+            pendingPermanentDeleteProductId = product.Id;
+            errorMessage =
+                $"Presiona nuevamente 'Confirmar eliminación' para borrar permanentemente '{product.Name}'. Esta acción no se puede deshacer.";
+            return;
+        }
+
+        isSaving = true;
+
+        try
+        {
+            if (!await ProductApi.ArchivePermanentlyAsync(
+                    product.Id))
+            {
+                errorMessage =
+                    "El producto ya no está disponible.";
+
+                pendingPermanentDeleteProductId = null;
+                return;
+            }
+
+            pendingPermanentDeleteProductId = null;
+
+            successMessage =
+                $"{product.Name} fue eliminado definitivamente.";
+
+            await RefreshDataAfterMutationAsync();
+        }
+        catch (InvalidOperationException exception)
+        {
+            pendingPermanentDeleteProductId = null;
+            errorMessage = exception.Message;
+        }
+        catch (HttpRequestException exception)
+        {
+            pendingPermanentDeleteProductId = null;
+
+            errorMessage =
+                $"No se pudo eliminar definitivamente el producto. {exception.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void OnInventoryUnitChanged(
+        ChangeEventArgs args)
     {
         productRequest.InventoryUnitId =
-            int.TryParse(args.Value?.ToString(), out var value) ? value : 0;
+            int.TryParse(
+                args.Value?.ToString(),
+                out var value)
+                ? value
+                : 0;
+
         NormalizeConversionForEqualUnits();
     }
 
-    private void OnCommercialUnitChanged(ChangeEventArgs args)
+    private void OnCommercialUnitChanged(
+        ChangeEventArgs args)
     {
         productRequest.CommercialUnitId =
-            int.TryParse(args.Value?.ToString(), out var value) ? value : 0;
+            int.TryParse(
+                args.Value?.ToString(),
+                out var value)
+                ? value
+                : 0;
+
         NormalizeConversionForEqualUnits();
     }
 
@@ -850,19 +1276,24 @@
     {
         if (AreProductUnitsEqual)
         {
-            productRequest.CommercialUnitsPerInventoryUnit = 1m;
+            productRequest.CommercialUnitsPerInventoryUnit =
+                1m;
         }
     }
 
     private async Task RefreshDataAfterMutationAsync()
     {
-        summary = await InventoryApi.GetSummaryAsync();
+        summary =
+            await InventoryApi.GetSummaryAsync();
+
         await LoadProductsAsync();
     }
 
     private void CloseAllModals()
     {
-        if (isSaving) return;
+        if (isSaving)
+            return;
+
         selectedProductForAdjustment = null;
         isProductFormOpen = false;
         editingProductId = null;
@@ -874,46 +1305,64 @@
         successMessage = null;
     }
 
-    private static ProductListRequest CreateDefaultFilters() => new()
-    {
-        ActivityStatus = ProductActivityStatus.Active,
-        StockStatus = ProductStockStatus.All,
-        SortBy = ProductSortField.Name,
-        SortDirection = SortDirection.Asc,
-        Page = 1,
-        PageSize = 20
-    };
+    private static ProductListRequest CreateDefaultFilters() =>
+        new()
+        {
+            ActivityStatus =
+                ProductActivityStatus.Active,
+            StockStatus =
+                ProductStockStatus.All,
+            SortBy =
+                ProductSortField.Name,
+            SortDirection =
+                SortDirection.Asc,
+            Page = 1,
+            PageSize = 20
+        };
 
     private bool AreProductUnitsEqual =>
         productRequest.InventoryUnitId > 0 &&
-        productRequest.InventoryUnitId == productRequest.CommercialUnitId;
+        productRequest.InventoryUnitId ==
+        productRequest.CommercialUnitId;
 
     private string NewProductQuantityStep =>
-        productRequest.RequiresWholeInventoryUnits ? "1" : "0.0001";
+        productRequest.RequiresWholeInventoryUnits
+            ? "1"
+            : "0.0001";
 
-    private static decimal GetCommercialStock(ProductListItemResponse product) =>
-        product.AvailableStock * product.CommercialUnitsPerInventoryUnit;
+    private static decimal GetCommercialStock(
+        ProductListItemResponse product) =>
+        product.AvailableStock *
+        product.CommercialUnitsPerInventoryUnit;
 
-    private static string GetStockLabel(ProductListItemResponse product) =>
+    private static string GetStockLabel(
+        ProductListItemResponse product) =>
         product.AvailableStock == 0m
             ? "Agotado"
-            : product.AvailableStock <= product.MinimumStock
+            : product.AvailableStock <=
+              product.MinimumStock
                 ? "Stock bajo"
                 : "En stock";
 
-    private static string GetStockBadgeClass(ProductListItemResponse product) =>
+    private static string GetStockBadgeClass(
+        ProductListItemResponse product) =>
         product.AvailableStock == 0m
             ? "stock-badge stock-badge-out"
-            : product.AvailableStock <= product.MinimumStock
+            : product.AvailableStock <=
+              product.MinimumStock
                 ? "stock-badge stock-badge-low"
                 : "stock-badge stock-badge-ok";
 
-    private static string GetQuantityStep(ProductListItemResponse product) =>
-        product.RequiresWholeInventoryUnits ? "1" : "0.0001";
+    private static string GetQuantityStep(
+        ProductListItemResponse product) =>
+        product.RequiresWholeInventoryUnits
+            ? "1"
+            : "0.0001";
 
     private bool HasAdjustmentDifference =>
         selectedProductForAdjustment is not null &&
-        adjustmentRequest.NewStockQuantity != selectedProductForAdjustment.AvailableStock;
+        adjustmentRequest.NewStockQuantity !=
+        selectedProductForAdjustment.AvailableStock;
 
     private decimal AdjustmentDifference =>
         selectedProductForAdjustment is null
@@ -936,8 +1385,13 @@
     private int TotalPages =>
         totalCount == 0
             ? 1
-            : (int)Math.Ceiling(totalCount / (double)filters.PageSize);
+            : (int)Math.Ceiling(
+                totalCount /
+                (double)filters.PageSize);
 
-    private bool CanGoPrevious => filters.Page > 1;
-    private bool CanGoNext => filters.Page < TotalPages;
+    private bool CanGoPrevious =>
+        filters.Page > 1;
+
+    private bool CanGoNext =>
+        filters.Page < TotalPages;
 }

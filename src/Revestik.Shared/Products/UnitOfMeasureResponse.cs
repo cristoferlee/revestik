@@ -6,4 +6,7 @@ public sealed record UnitOfMeasureResponse(
     string Symbol,
     bool IsActive,
     DateTime CreatedAtUtc,
-    DateTime? UpdatedAtUtc);
+    DateTime? UpdatedAtUtc)
+{
+    public bool RequiresWholeQuantity { get; init; }
+}

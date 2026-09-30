@@ -149,7 +149,11 @@ public sealed class InventoryCatalogService(
                 unit.Symbol,
                 unit.IsActive,
                 unit.CreatedAtUtc,
-                unit.UpdatedAtUtc))
+                unit.UpdatedAtUtc)
+            {
+                RequiresWholeQuantity =
+                    unit.RequiresWholeQuantity
+            })
             .ToListAsync(cancellationToken);
     }
 
@@ -166,7 +170,11 @@ public sealed class InventoryCatalogService(
                 unit.Symbol,
                 unit.IsActive,
                 unit.CreatedAtUtc,
-                unit.UpdatedAtUtc))
+                unit.UpdatedAtUtc)
+            {
+                RequiresWholeQuantity =
+                    unit.RequiresWholeQuantity
+            })
             .SingleOrDefaultAsync(cancellationToken);
     }
 
@@ -187,6 +195,8 @@ public sealed class InventoryCatalogService(
         {
             Name = name,
             Symbol = symbol,
+            RequiresWholeQuantity =
+                request.RequiresWholeQuantity,
             IsActive = request.IsActive,
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -223,8 +233,25 @@ public sealed class InventoryCatalogService(
 
         unit.Name = name;
         unit.Symbol = symbol;
+        unit.RequiresWholeQuantity =
+            request.RequiresWholeQuantity;
         unit.IsActive = request.IsActive;
         unit.UpdatedAtUtc = DateTime.UtcNow;
+
+        if (request.RequiresWholeQuantity)
+        {
+            var products = await dbContext.Products
+                .Where(product =>
+                    product.InventoryUnitId == id &&
+                    !product.RequiresWholeInventoryUnits)
+                .ToListAsync(cancellationToken);
+
+            foreach (var product in products)
+            {
+                product.RequiresWholeInventoryUnits = true;
+                product.UpdatedAtUtc = DateTime.UtcNow;
+            }
+        }
 
         await SaveChangesAsync(cancellationToken);
 
@@ -265,7 +292,8 @@ public sealed class InventoryCatalogService(
             .AnyAsync(
                 category =>
                     category.Name == name &&
-                    (!excludedId.HasValue || category.Id != excludedId),
+                    (!excludedId.HasValue ||
+                     category.Id != excludedId),
                 cancellationToken);
 
         if (exists)
@@ -284,14 +312,17 @@ public sealed class InventoryCatalogService(
         var duplicate = await dbContext.UnitsOfMeasure
             .AsNoTracking()
             .Where(unit =>
-                !excludedId.HasValue || unit.Id != excludedId)
+                !excludedId.HasValue ||
+                unit.Id != excludedId)
             .Select(unit => new
             {
                 NameExists = unit.Name == name,
                 SymbolExists = unit.Symbol == symbol
             })
             .FirstOrDefaultAsync(
-                match => match.NameExists || match.SymbolExists,
+                match =>
+                    match.NameExists ||
+                    match.SymbolExists,
                 cancellationToken);
 
         if (duplicate is null)
@@ -303,7 +334,8 @@ public sealed class InventoryCatalogService(
             ? "Ya existe una unidad con este nombre."
             : "Ya existe una unidad con este símbolo.";
 
-        throw new DuplicateInventoryCatalogValueException(message);
+        throw new DuplicateInventoryCatalogValueException(
+            message);
     }
 
     private async Task SaveChangesAsync(
@@ -311,7 +343,8 @@ public sealed class InventoryCatalogService(
     {
         try
         {
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await dbContext.SaveChangesAsync(
+                cancellationToken);
         }
         catch (DbUpdateException exception)
             when (exception.InnerException is SqlException
@@ -336,7 +369,8 @@ public sealed class InventoryCatalogService(
             category.UpdatedAtUtc);
     }
 
-    private static UnitOfMeasureResponse MapUnit(UnitOfMeasure unit)
+    private static UnitOfMeasureResponse MapUnit(
+        UnitOfMeasure unit)
     {
         return new UnitOfMeasureResponse(
             unit.Id,
@@ -344,10 +378,15 @@ public sealed class InventoryCatalogService(
             unit.Symbol,
             unit.IsActive,
             unit.CreatedAtUtc,
-            unit.UpdatedAtUtc);
+            unit.UpdatedAtUtc)
+        {
+            RequiresWholeQuantity =
+                unit.RequiresWholeQuantity
+        };
     }
 
-    private static string NormalizeRequired(string value)
+    private static string NormalizeRequired(
+        string value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {

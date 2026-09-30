@@ -18,6 +18,9 @@ public sealed class RevestikWebApplicationFactory(
     string? databaseConnectionString = null)
     : WebApplicationFactory<Program>
 {
+    private readonly string inMemoryDatabaseName =
+        $"RevestikHostingTests-{Guid.NewGuid()}";
+
     protected override void ConfigureWebHost(
         IWebHostBuilder builder)
     {
@@ -63,7 +66,7 @@ public sealed class RevestikWebApplicationFactory(
                 if (databaseConnectionString is null)
                 {
                     options.UseInMemoryDatabase(
-                        $"RevestikHostingTests-{Guid.NewGuid()}");
+                        inMemoryDatabaseName);
                 }
                 else
                 {

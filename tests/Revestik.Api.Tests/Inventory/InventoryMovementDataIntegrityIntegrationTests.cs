@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Models;
 using Revestik.Api.Models.Identity;
+using Revestik.Api.Services.Inventory;
 using Revestik.Api.Tests.Hosting;
 using Revestik.Shared.Inventory;
 
@@ -20,7 +21,11 @@ public sealed class InventoryMovementDataIntegrityIntegrationTests(
         await using var dbContext =
             sqlServerFixture.CreateDbContext();
 
+        await dbContext.InventoryCostConsumptions.ExecuteDeleteAsync();
+        await dbContext.InventoryCostLayers.ExecuteDeleteAsync();
         await dbContext.InventoryMovements.ExecuteDeleteAsync();
+        await dbContext.InventoryPhysicalCountLines.ExecuteDeleteAsync();
+        await dbContext.InventoryPhysicalCounts.ExecuteDeleteAsync();
         await dbContext.Products.ExecuteDeleteAsync();
         await dbContext.ProductCategories.ExecuteDeleteAsync();
         await dbContext.UnitsOfMeasure.ExecuteDeleteAsync();
@@ -215,6 +220,215 @@ public sealed class InventoryMovementDataIntegrityIntegrationTests(
             await verificationContext.InventoryMovements
                 .AsNoTracking()
                 .AnyAsync());
+    }
+
+    [Fact]
+    public async Task PhysicalCount_DuplicateProductLine_IsRejectedBySqlServer()
+    {
+        await using var dbContext =
+            sqlServerFixture.CreateDbContext();
+
+        var physicalCount = new InventoryPhysicalCount
+        {
+            Status = PhysicalCountStatus.Draft,
+            Notes = "Constraint test.",
+            StartedByUserId = UserId,
+            StartedAtUtc = DateTime.UtcNow,
+            Lines =
+            [
+                new InventoryPhysicalCountLine
+                {
+                    ProductId = productId,
+                    ExpectedQuantity = 0m
+                },
+                new InventoryPhysicalCountLine
+                {
+                    ProductId = productId,
+                    ExpectedQuantity = 0m
+                }
+            ]
+        };
+
+        dbContext.InventoryPhysicalCounts.Add(physicalCount);
+
+        await Assert.ThrowsAsync<DbUpdateException>(
+            () => dbContext.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task PhysicalCount_CompletedWithoutMetadata_IsRejectedBySqlServer()
+    {
+        await using var dbContext =
+            sqlServerFixture.CreateDbContext();
+
+        dbContext.InventoryPhysicalCounts.Add(
+            new InventoryPhysicalCount
+            {
+                Status = PhysicalCountStatus.Completed,
+                Notes = "Invalid completion fixture.",
+                StartedByUserId = UserId,
+                StartedAtUtc = DateTime.UtcNow
+            });
+
+        await Assert.ThrowsAsync<DbUpdateException>(
+            () => dbContext.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task PhysicalCount_WhenLaterAdjustmentFails_RollsBackEarlierAdjustment()
+    {
+        int firstProductId;
+        int secondProductId;
+        int physicalCountId;
+
+        await using (var dbContext =
+            sqlServerFixture.CreateDbContext())
+        {
+            var baseProduct = await dbContext.Products
+                .SingleAsync(item => item.Id == productId);
+
+            var categoryId = baseProduct.CategoryId;
+            var unitId = baseProduct.InventoryUnitId;
+
+            var secondProduct = new Product
+            {
+                CategoryId = categoryId,
+                Name = "Rollback Product",
+                Description = "Fixture rollback conteo físico.",
+                CabysCode = "1234567890124",
+                InventoryUnitId = unitId,
+                CommercialUnitId = unitId,
+                CommercialUnitsPerInventoryUnit = 1m,
+                RequiresWholeInventoryUnits = true,
+                SalePrice = 15000m,
+                CurrentCost = 10000m,
+                TaxRate = 13m,
+                StockQuantity = 0m,
+                MinimumStock = 0m,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+
+            dbContext.Products.Add(secondProduct);
+            await dbContext.SaveChangesAsync();
+
+            var inventoryService =
+                new InventoryService(dbContext);
+
+            await inventoryService.RegisterInitialStockAsync(
+                baseProduct.Id,
+                new InitialStockRequest
+                {
+                    Quantity = 10m,
+                    Notes = "Initial stock first rollback product."
+                },
+                UserId,
+                CancellationToken.None);
+
+            await inventoryService.RegisterInitialStockAsync(
+                secondProduct.Id,
+                new InitialStockRequest
+                {
+                    Quantity = 10m,
+                    Notes = "Initial stock second rollback product."
+                },
+                UserId,
+                CancellationToken.None);
+
+            var physicalCountService =
+                new InventoryPhysicalCountService(
+                    dbContext,
+                    inventoryService);
+
+            var started =
+                await physicalCountService.StartAsync(
+                    new PhysicalCountCreateRequest
+                    {
+                        Notes = "Rollback verification."
+                    },
+                    UserId,
+                    CancellationToken.None);
+
+            var linesByProduct = started.Lines
+                .ToDictionary(line => line.ProductId);
+
+            await physicalCountService.UpdateLinesAsync(
+                started.Id,
+                new PhysicalCountUpdateRequest
+                {
+                    Lines =
+                    [
+                        new PhysicalCountLineUpdateRequest
+                        {
+                            LineId =
+                                linesByProduct[baseProduct.Id].Id,
+                            CountedQuantity = 8m
+                        },
+                        new PhysicalCountLineUpdateRequest
+                        {
+                            LineId =
+                                linesByProduct[secondProduct.Id].Id,
+                            CountedQuantity = 8m
+                        }
+                    ]
+                },
+                UserId,
+                CancellationToken.None);
+
+            var secondLayer =
+                await dbContext.InventoryCostLayers
+                    .SingleAsync(
+                        layer =>
+                            layer.ProductId ==
+                            secondProduct.Id);
+
+            secondLayer.RemainingQuantity = 9m;
+            await dbContext.SaveChangesAsync();
+
+            firstProductId = baseProduct.Id;
+            secondProductId = secondProduct.Id;
+            physicalCountId = started.Id;
+
+            await Assert.ThrowsAsync<InventoryCostIntegrityException>(
+                () => physicalCountService.CompleteAsync(
+                    started.Id,
+                    UserId,
+                    CancellationToken.None));
+        }
+
+        await using var verificationContext =
+            sqlServerFixture.CreateDbContext();
+
+        var firstProduct = await verificationContext.Products
+            .AsNoTracking()
+            .SingleAsync(item =>
+                item.Id == firstProductId);
+
+        var secondProductPersisted =
+            await verificationContext.Products
+                .AsNoTracking()
+                .SingleAsync(item =>
+                    item.Id == secondProductId);
+
+        var persistedCount =
+            await verificationContext.InventoryPhysicalCounts
+                .AsNoTracking()
+                .SingleAsync(count =>
+                    count.Id == physicalCountId);
+
+        Assert.Equal(10m, firstProduct.StockQuantity);
+        Assert.Equal(10m, secondProductPersisted.StockQuantity);
+        Assert.Equal(
+            PhysicalCountStatus.Draft,
+            persistedCount.Status);
+        Assert.Null(persistedCount.CompletedAtUtc);
+        Assert.Null(persistedCount.CompletedByUserId);
+
+        Assert.False(
+            await verificationContext.InventoryMovements
+                .AsNoTracking()
+                .AnyAsync(movement =>
+                    movement.PhysicalCountId ==
+                    physicalCountId));
     }
 
     private InventoryMovement CreateInitialStockMovement(

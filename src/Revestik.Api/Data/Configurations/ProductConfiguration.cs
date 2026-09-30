@@ -80,6 +80,8 @@ public sealed class ProductConfiguration
 
         builder.Property(product => product.IsDeleted)
             .HasDefaultValue(false);
+        builder.Property(product => product.IsArchived)
+            .HasDefaultValue(false);
 
         builder.Property(product => product.CreatedAtUtc)
             .HasColumnType("datetime2");

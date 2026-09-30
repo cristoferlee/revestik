@@ -50,7 +50,9 @@ public sealed class InventoryCostService(RevestikDbContext dbContext)
             cancellationToken);
 
         var layers = await dbContext.InventoryCostLayers
-            .Where(x => x.ProductId == product.Id && x.RemainingQuantity > 0m)
+            .Where(x =>
+                x.ProductId == product.Id &&
+                x.RemainingQuantity > 0m)
             .OrderBy(x => x.CreatedAtUtc)
             .ThenBy(x => x.Id)
             .ToListAsync(cancellationToken);
@@ -62,7 +64,11 @@ public sealed class InventoryCostService(RevestikDbContext dbContext)
             if (remaining == 0m)
                 break;
 
-            var consumed = Math.Min(layer.RemainingQuantity, remaining);
+            var consumed =
+                Math.Min(
+                    layer.RemainingQuantity,
+                    remaining);
+
             layer.RemainingQuantity -= consumed;
             remaining -= consumed;
 
@@ -72,7 +78,9 @@ public sealed class InventoryCostService(RevestikDbContext dbContext)
                     InventoryMovement = movement,
                     InventoryCostLayer = layer,
                     Quantity = consumed,
-                    UnitCostSnapshot = layer.UnitCost,
+                    UnitCostSnapshot =
+                        layer.UnitCost ??
+                        layer.ResolvedUnitCost,
                     CreatedAtUtc = createdAtUtc
                 });
         }
@@ -104,22 +112,28 @@ public sealed class InventoryCostService(RevestikDbContext dbContext)
             .ToArray();
 
         var consumptions = await dbContext.InventoryCostConsumptions
-            .Include(consumption => consumption.InventoryCostLayer)
+            .Include(consumption =>
+                consumption.InventoryCostLayer)
             .Where(consumption =>
-                movementIds.Contains(consumption.InventoryMovementId))
+                movementIds.Contains(
+                    consumption.InventoryMovementId))
             .ToListAsync(cancellationToken);
 
         foreach (var movement in saleMovements)
         {
             var movementConsumptions = consumptions
                 .Where(consumption =>
-                    consumption.InventoryMovementId == movement.Id)
+                    consumption.InventoryMovementId ==
+                    movement.Id)
                 .ToList();
 
-            var consumedQuantity = movementConsumptions
-                .Sum(consumption => consumption.Quantity);
+            var consumedQuantity =
+                movementConsumptions
+                    .Sum(consumption =>
+                        consumption.Quantity);
 
-            if (consumedQuantity != Math.Abs(movement.QuantityChange))
+            if (consumedQuantity !=
+                Math.Abs(movement.QuantityChange))
             {
                 throw new InventoryCostIntegrityException(
                     $"FIFO consumption history does not match sale inventory movement {movement.Id}.");
@@ -139,11 +153,15 @@ public sealed class InventoryCostService(RevestikDbContext dbContext)
                      .GroupBy(consumption =>
                          consumption.InventoryCostLayerId))
         {
-            var layer = layerGroup.First().InventoryCostLayer;
-            var quantityToRestore = layerGroup
-                .Sum(consumption => consumption.Quantity);
+            var layer =
+                layerGroup.First().InventoryCostLayer;
 
-            if (layer.RemainingQuantity + quantityToRestore >
+            var quantityToRestore =
+                layerGroup.Sum(consumption =>
+                    consumption.Quantity);
+
+            if (layer.RemainingQuantity +
+                quantityToRestore >
                 layer.OriginalQuantity)
             {
                 throw new InventoryCostIntegrityException(
@@ -161,10 +179,12 @@ public sealed class InventoryCostService(RevestikDbContext dbContext)
                      .GroupBy(consumption =>
                          consumption.InventoryCostLayerId))
         {
-            var layer = layerGroup.First().InventoryCostLayer;
+            var layer =
+                layerGroup.First().InventoryCostLayer;
 
-            layer.RemainingQuantity += layerGroup
-                .Sum(consumption => consumption.Quantity);
+            layer.RemainingQuantity +=
+                layerGroup.Sum(consumption =>
+                    consumption.Quantity);
         }
     }
 
@@ -173,13 +193,18 @@ public sealed class InventoryCostService(RevestikDbContext dbContext)
         decimal expectedStock,
         CancellationToken cancellationToken)
     {
-        var remaining = await dbContext.InventoryCostLayers
-            .Where(x => x.ProductId == productId)
-            .SumAsync(x => (decimal?)x.RemainingQuantity, cancellationToken)
+        var remaining =
+            await dbContext.InventoryCostLayers
+                .Where(x => x.ProductId == productId)
+                .SumAsync(
+                    x => (decimal?)x.RemainingQuantity,
+                    cancellationToken)
             ?? 0m;
 
         if (remaining != expectedStock)
+        {
             throw new InventoryCostIntegrityException(
                 $"FIFO cost layers are out of balance for product {productId}. Expected {expectedStock}, found {remaining}.");
+        }
     }
 }

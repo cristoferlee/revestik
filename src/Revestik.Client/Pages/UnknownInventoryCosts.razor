@@ -1,0 +1,325 @@
+@page "/inventory/unknown-costs"
+@using Microsoft.AspNetCore.Authorization
+@using Revestik.Client.Services.Inventory
+@using Revestik.Shared.Inventory
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales,Warehouse")]
+@inject IInventoryCostApiService InventoryCostApi
+
+<PageTitle>Costos pendientes | Revestik</PageTitle>
+
+<section class="unknown-cost-page">
+    <header class="unknown-cost-header">
+        <div>
+            <a class="back-link" href="/inventory">← Inventario</a>
+            <h1>Costos pendientes</h1>
+            <p>
+                Existencias reales que entraron mediante un ajuste positivo
+                sin un costo de compra conocido.
+            </p>
+        </div>
+
+        <button type="button"
+                class="secondary-button"
+                disabled="@isBusy"
+                @onclick="LoadAsync">
+            @(isLoading ? "Actualizando..." : "Actualizar")
+        </button>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message" role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="status-message" role="status">
+            @successMessage
+        </div>
+    }
+
+    <section class="unknown-cost-summary">
+        <article>
+            <span>Cantidad pendiente</span>
+            <strong>@TotalQuantity.ToString("N4")</strong>
+        </article>
+        <article>
+            <span>Productos afectados</span>
+            <strong>@ProductCount</strong>
+        </article>
+        <article>
+            <span>Capas pendientes</span>
+            <strong>@layers.Count</strong>
+        </article>
+    </section>
+
+    @if (isLoading && layers.Count == 0)
+    {
+        <section class="unknown-cost-card empty-state">
+            Cargando costos pendientes...
+        </section>
+    }
+    else if (layers.Count == 0)
+    {
+        <section class="unknown-cost-card empty-state">
+            <h2>No hay costos pendientes</h2>
+            <p>
+                Todas las existencias actuales tienen un costo conocido.
+            </p>
+        </section>
+    }
+    else
+    {
+        <section class="unknown-cost-card table-card">
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Cantidad pendiente</th>
+                            <th>Origen</th>
+                            <th>Fecha</th>
+                            <th>Costo unitario</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var layer in layers)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@layer.ProductName</strong>
+                                    <small>
+                                        Capa #@layer.LayerId · movimiento #@layer.SourceMovementId
+                                    </small>
+                                </td>
+                                <td>
+                                    @layer.RemainingQuantity.ToString("N4")
+                                    @layer.InventoryUnitSymbol
+                                </td>
+                                <td>
+                                    <strong>@GetOrigin(layer)</strong>
+                                    @if (!string.IsNullOrWhiteSpace(layer.Notes))
+                                    {
+                                        <small>@layer.Notes</small>
+                                    }
+                                </td>
+                                <td>
+                                    @layer.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                </td>
+                                <td>
+                                    <input type="number"
+                                           min="0.01"
+                                           step="0.01"
+                                           value="@GetCostValue(layer.LayerId)"
+                                           @onchange="args => SetCost(layer.LayerId, args.Value?.ToString())"
+                                           aria-label="Costo unitario de @layer.ProductName" />
+                                </td>
+                                <td>
+                                    <button type="button"
+                                            class="primary-button"
+                                            disabled="@(isBusy || !CanResolve(layer.LayerId))"
+                                            @onclick="() => ResolveAsync(layer)">
+                                        Resolver costo
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+</section>
+
+@code {
+    private readonly List<UnknownCostLayerResponse> layers = [];
+    private readonly Dictionary<int, decimal?> costs = [];
+
+    private string? errorMessage;
+    private string? successMessage;
+    private bool isLoading;
+    private int? resolvingLayerId;
+
+    private bool isBusy =>
+        isLoading || resolvingLayerId.HasValue;
+
+    private decimal TotalQuantity =>
+        layers.Sum(layer => layer.RemainingQuantity);
+
+    private int ProductCount =>
+        layers
+            .Select(layer => layer.ProductId)
+            .Distinct()
+            .Count();
+
+    protected override async Task OnInitializedAsync() =>
+        await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var result =
+                await InventoryCostApi.GetUnresolvedAsync();
+
+            layers.Clear();
+            layers.AddRange(result);
+
+            var activeIds = layers
+                .Select(layer => layer.LayerId)
+                .ToHashSet();
+
+            foreach (var key in costs.Keys
+                         .Where(key => !activeIds.Contains(key))
+                         .ToList())
+            {
+                costs.Remove(key);
+            }
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage =
+                $"No se pudieron cargar los costos pendientes. {exception.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ResolveAsync(
+        UnknownCostLayerResponse layer)
+    {
+        if (!costs.TryGetValue(
+                layer.LayerId,
+                out var unitCost) ||
+            !unitCost.HasValue ||
+            unitCost.Value <= 0m)
+        {
+            errorMessage =
+                "Ingresa un costo unitario mayor que cero.";
+            return;
+        }
+
+        resolvingLayerId = layer.LayerId;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var resolved =
+                await InventoryCostApi.ResolveAsync(
+                    layer.LayerId,
+                    new ResolveInventoryCostRequest
+                    {
+                        UnitCost = unitCost.Value
+                    });
+
+            if (resolved is null)
+            {
+                errorMessage =
+                    "La capa ya no está disponible.";
+                return;
+            }
+
+            successMessage =
+                $"Costo de {resolved.ProductName} resuelto en " +
+                $"₡{resolved.ResolvedUnitCost:N2} por unidad.";
+
+            await LoadAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage =
+                $"No se pudo resolver el costo. {exception.Message}";
+        }
+        finally
+        {
+            resolvingLayerId = null;
+        }
+    }
+
+    private void SetCost(
+        int layerId,
+        string? value)
+    {
+        errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            costs[layerId] = null;
+            return;
+        }
+
+        if (!decimal.TryParse(
+                value,
+                System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var parsed) ||
+            parsed <= 0m)
+        {
+            costs[layerId] = null;
+            errorMessage =
+                "El costo unitario debe ser mayor que cero.";
+            return;
+        }
+
+        costs[layerId] = parsed;
+    }
+
+    private string GetCostValue(int layerId)
+    {
+        return costs.TryGetValue(
+                   layerId,
+                   out var value) &&
+               value.HasValue
+            ? value.Value.ToString(
+                "0.##",
+                System.Globalization.CultureInfo.InvariantCulture)
+            : string.Empty;
+    }
+
+    private bool CanResolve(int layerId) =>
+        costs.TryGetValue(
+            layerId,
+            out var value) &&
+        value.HasValue &&
+        value.Value > 0m &&
+        resolvingLayerId != layerId;
+
+    private static string GetOrigin(
+        UnknownCostLayerResponse layer)
+    {
+        if (layer.PhysicalCountId.HasValue)
+        {
+            return $"Conteo físico #{layer.PhysicalCountId.Value}";
+        }
+
+        if (layer.AdjustmentReason.HasValue)
+        {
+            return $"Ajuste · {GetReasonLabel(layer.AdjustmentReason.Value)}";
+        }
+
+        return layer.MovementType.ToString();
+    }
+
+    private static string GetReasonLabel(
+        InventoryAdjustmentReason reason) =>
+        reason switch
+        {
+            InventoryAdjustmentReason.PhysicalCount => "Conteo físico",
+            InventoryAdjustmentReason.Damage => "Daño",
+            InventoryAdjustmentReason.Loss => "Pérdida",
+            InventoryAdjustmentReason.Theft => "Robo",
+            InventoryAdjustmentReason.InternalUse => "Uso interno",
+            InventoryAdjustmentReason.RegistrationError => "Error de registro",
+            InventoryAdjustmentReason.Other => "Otro",
+            _ => reason.ToString()
+        };
+}
