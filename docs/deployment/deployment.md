@@ -23,6 +23,20 @@ Revestik can currently:
 
 The application is therefore **publishable**, but this document does not claim that Revestik currently has a complete production environment.
 
+Implemented business areas currently include:
+
+* Customers.
+* Quotations.
+* Sales.
+* Payments.
+* Product management.
+* Inventory.
+* FIFO inventory behavior.
+* Physical inventory counts.
+* Inventory cost resolution.
+
+Because Revestik now manages transactional stock and historical inventory information, production database lifecycle, backup, migration, and recovery requirements are increasingly important.
+
 ## 3. Production Architecture
 
 The intended hosted application model is:
@@ -79,6 +93,8 @@ https://localhost:7126
 
 Because these are different browser origins, development requires explicit CORS configuration.
 
+The HTTPS development profiles should be used for authentication flows that depend on secure cookie and redirect behavior.
+
 ### Production
 
 The published client is hosted by the ASP.NET Core application.
@@ -89,8 +105,8 @@ Conceptually:
 Browser
    ↓
 ASP.NET Core
-   ├── Blazor static assets
-   └── /api/*
+    ├── Blazor static assets
+    └── /api/*
 ```
 
 This reduces production cross-origin complexity.
@@ -124,6 +140,12 @@ dotnet test Revestik.sln `
 ```
 
 A successful test run does not guarantee production readiness, but a known failing test suite should block a normal deployment.
+
+The current verified complete-suite baseline is:
+
+**439 passed, 0 failed.**
+
+This baseline includes coverage for Customers, Quotations, Sales, Inventory, SQL Server persistence, security boundaries, concurrency-sensitive behavior, physical counts, inventory costs, and hosting.
 
 Additional testing guidance is documented in:
 
@@ -212,6 +234,8 @@ For example:
 /customers
 /settings
 /quotations
+/sales
+/inventory
 ```
 
 may not correspond to physical server files.
@@ -248,7 +272,7 @@ Production configuration must be supplied independently from development configu
 
 Environment-specific values should not be hard-coded into application source.
 
-Typical production configuration includes:
+Typical current production configuration includes:
 
 ```text
 ConnectionStrings:DefaultConnection
@@ -260,6 +284,12 @@ Authentication:BootstrapAdministratorEmail
 
 Authentication:ClientBaseUrl
 ```
+
+Future integrations may introduce additional server-side configuration.
+
+For example, purchase-document email ingestion may eventually require mail-account or provider credentials.
+
+Such settings must not be added until the corresponding integration is actually implemented.
 
 Actual configuration requirements should always be verified against the current application before deployment.
 
@@ -281,6 +311,15 @@ Examples include:
 * Protected environment configuration.
 * Managed application configuration.
 
+Current or future sensitive values may include:
+
+* Database credentials.
+* Google authentication secrets.
+* Administrative bootstrap credentials.
+* Third-party API credentials.
+* Future business-email credentials.
+* Future fiscal certificates/signing secrets.
+
 The specific production secret-management platform will be documented after the hosting platform is selected.
 
 ## 15. Client Configuration Boundary
@@ -300,6 +339,7 @@ It must not contain:
 * Private API keys.
 * Signing keys.
 * Server credentials.
+* Email-account credentials.
 
 Sensitive configuration belongs exclusively to trusted server-side components.
 
@@ -319,6 +359,17 @@ Possible environments could include managed SQL Server-compatible infrastructure
 
 No provider is considered selected by this document.
 
+The database now contains operational history beyond ordinary master data, including:
+
+* Commercial documents.
+* Payments.
+* Inventory movements.
+* FIFO cost layers.
+* Physical inventory counts.
+* Product lifecycle history.
+
+This increases the importance of durable production storage and tested recovery procedures.
+
 ## 17. Database Migrations
 
 Database migrations must be treated independently from application binary deployment.
@@ -329,9 +380,15 @@ Before applying a production migration, review:
 * New required fields.
 * New constraints.
 * Unique indexes.
+* Filtered indexes.
+* Foreign keys.
+* Default values.
 * Data transformations.
 * Compatibility between old and new application versions.
+* Historical records affected by the change.
 * Recovery strategy.
+
+Inventory development introduced persistence structures where migration review is especially important, including movement relationships, cost layers, physical-count records, concurrency-related fields, and product lifecycle state.
 
 A migration should not be applied to production merely because:
 
@@ -355,7 +412,24 @@ For an early controlled deployment, migrations may still be executed as part of 
 
 As operational requirements increase, database migrations should become an explicit deployment stage with appropriate safeguards.
 
-## 19. Authentication Configuration
+A migration affecting inventory or historical transactional data should receive additional review because rollback may involve data semantics rather than only schema reversal.
+
+## 19. Migration Compatibility
+
+Production migrations should consider whether the currently deployed application and the new application can safely operate against the schema during the deployment transition.
+
+Potential risks include:
+
+* Adding required columns to existing rows.
+* Introducing new uniqueness rules.
+* Changing relationships used by historical records.
+* Introducing new lifecycle states.
+* Altering inventory quantity or cost semantics.
+* Removing data expected by a previous application version.
+
+Where practical, schema evolution should prefer compatible transitions rather than requiring an instantaneous destructive switch.
+
+## 20. Authentication Configuration
 
 Google authentication requires production-specific OAuth configuration.
 
@@ -371,7 +445,7 @@ The exact URI must be registered with the external identity provider.
 
 Localhost redirect URIs must not be assumed to work in production.
 
-## 20. HTTPS
+## 21. HTTPS
 
 Production Revestik must be served through HTTPS.
 
@@ -384,7 +458,7 @@ The production environment should provide:
 * HTTP-to-HTTPS redirection where appropriate.
 * Secure cookie compatibility.
 
-## 21. Authentication Cookies
+## 22. Authentication Cookies
 
 Production authentication cookies should retain appropriate security properties, including:
 
@@ -396,17 +470,19 @@ Appropriate SameSite behavior
 
 Changing the production origin topology requires reviewing cookie and antiforgery behavior.
 
-## 22. CSRF Protection
+## 23. CSRF Protection
 
 Revestik uses cookie-based authentication.
 
 Applicable state-changing authenticated requests require antiforgery protection.
 
+This includes critical commercial and inventory operations.
+
 A deployment must not disable CSRF protections merely to resolve an environment or configuration issue.
 
 If deployment topology changes, the authentication and antiforgery model must be reviewed intentionally.
 
-## 23. Health Check
+## 24. Health Check
 
 Revestik exposes:
 
@@ -420,7 +496,9 @@ A production hosting platform may use this endpoint for health monitoring, provi
 
 Health checks should not expose sensitive configuration or diagnostic information.
 
-## 24. Logging
+A successful health response should not be interpreted as proof that every business workflow is operational.
+
+## 25. Logging
 
 Production logging should provide enough information to diagnose application failures without exposing sensitive information.
 
@@ -432,10 +510,14 @@ Logs must avoid intentionally recording:
 * Antiforgery tokens.
 * Authentication cookies.
 * Sensitive personal information without a justified operational requirement.
+* Future email credentials.
+* Future signing credentials.
+
+Inventory and commercial failures should be diagnosable without logging unnecessary copies of complete sensitive business records.
 
 Production logging configuration should be reviewed when the hosting environment is selected.
 
-## 25. Observability
+## 26. Observability
 
 A complete production environment should eventually provide visibility into:
 
@@ -447,9 +529,17 @@ A complete production environment should eventually provide visibility into:
 * Resource utilization.
 * Deployment health.
 
+Operationally important failures may eventually include:
+
+* Inventory transaction failures.
+* Concurrency conflicts.
+* Failed purchase-document ingestion.
+* External integration failures.
+* Background-processing failures if background workloads are introduced.
+
 The specific observability platform has not yet been selected for Revestik.
 
-## 26. CI Verification
+## 27. CI Verification
 
 The GitHub Actions pipeline verifies the application before changes are accepted into shared history.
 
@@ -475,7 +565,7 @@ This provides continuous integration.
 
 It should not be confused with continuous deployment.
 
-## 27. CI vs CD
+## 28. CI vs CD
 
 Revestik currently distinguishes:
 
@@ -497,9 +587,9 @@ automatically release verified changes
 
 The existence of a GitHub Actions workflow does not by itself mean the application has automated production deployment.
 
-Production CD should be introduced only after the hosting environment, secret management, database migration process, and rollback expectations are defined.
+Production CD should be introduced only after the hosting environment, secret management, database migration process, backup/recovery strategy, and rollback expectations are defined.
 
-## 28. Deployment Verification
+## 29. Deployment Verification
 
 A production deployment should eventually include verification of at least:
 
@@ -513,11 +603,37 @@ A production deployment should eventually include verification of at least:
 8. Authentication flow completes.
 9. Authorization is enforced.
 10. CSRF-protected operations work.
-11. Basic critical business operations succeed.
+11. Customer retrieval/management works.
+12. A quotation workflow works.
+13. A Sale workflow works.
+14. Inventory data can be retrieved correctly.
+15. A safe inventory workflow can be exercised without corrupting stock.
+16. Critical historical records remain accessible after deployment.
 
 These checks may initially be manual and later become automated smoke tests.
 
-## 29. Rollback
+Production smoke verification should avoid destructive actions on real business data merely to prove that a deployment works.
+
+Where mutation is required, use a controlled test record or dedicated safe verification process.
+
+## 30. Inventory Deployment Considerations
+
+Inventory introduces additional deployment sensitivity because stock quantities, movement history, and historical costs must remain mutually consistent.
+
+Deployment must not introduce a state where:
+
+* Product stock is updated without corresponding movement history.
+* FIFO layer quantities disagree with persisted inventory behavior.
+* Sale reversals lose their relationship to original movements.
+* Physical-count relationships become invalid.
+* Archived products lose historical references.
+* New application code expects a schema that has not yet been migrated.
+
+Inventory-related deployment failures can affect operational truth, not merely UI behavior.
+
+Database migrations and rollback plans should therefore consider both schema and business-data compatibility.
+
+## 31. Rollback
 
 A production deployment strategy must define how to recover from an unsuccessful release.
 
@@ -537,7 +653,9 @@ Safer deployment
 
 The exact rollback mechanism will depend on the selected production platform.
 
-## 30. Deployment Versioning
+For transactional domains such as Inventory, rollback must not assume that reversing a schema migration automatically reverses business operations performed while the newer application version was active.
+
+## 32. Deployment Versioning
 
 Production releases should be traceable to source control.
 
@@ -555,7 +673,9 @@ latest
 
 because they do not uniquely identify the deployed source.
 
-## 31. Production Data
+A database migration applied to production should also be traceable to the application/repository version that introduced it.
+
+## 33. Production Data
 
 Production data must never be casually copied into development environments.
 
@@ -563,7 +683,16 @@ If production-like data is required for troubleshooting or testing, personally i
 
 Development convenience does not justify exposing customer information.
 
-## 32. Backup and Recovery
+The same principle applies to:
+
+* Sales.
+* Payments.
+* Inventory history.
+* Inventory costs.
+* Supplier information when introduced.
+* Purchase documents when introduced.
+
+## 34. Backup and Recovery
 
 Before Revestik manages important production business data, the database environment must have an explicit backup and recovery strategy.
 
@@ -574,10 +703,23 @@ This should define:
 * Recovery process.
 * Recovery testing.
 * Responsibility for recovery.
+* Expected recovery point objective where appropriate.
+* Expected recovery time objective where appropriate.
+
+Backups must protect not only current master data but also historical transactional information such as:
+
+* Quotations.
+* Sales.
+* Payments.
+* Inventory movements.
+* FIFO cost layers.
+* Physical inventory counts.
 
 A database existing in the cloud does not automatically mean the application's recovery requirements have been satisfied.
 
-## 33. Future Production Infrastructure
+Backup restoration must eventually be tested rather than assumed to work.
+
+## 35. Future Production Infrastructure
 
 The final production platform has not yet been selected in this document.
 
@@ -601,8 +743,10 @@ That ADR should compare relevant alternatives according to actual requirements s
 * Backup.
 * Recovery.
 * Expected traffic.
+* Authentication integration.
+* Future email/document-ingestion requirements where relevant.
 
-## 34. Future Containerization
+## 36. Future Containerization
 
 Revestik does not require containerization merely because containers are commonly used in production systems.
 
@@ -616,10 +760,12 @@ That decision should consider:
 * Image security.
 * Image size.
 * Deployment workflow.
+* Secret injection.
+* Database migration workflow.
 
 Containerization should solve an operational requirement rather than exist only as a portfolio technology.
 
-## 35. Future Continuous Deployment
+## 37. Future Continuous Deployment
 
 After a production environment exists, a future CD pipeline may follow:
 
@@ -643,14 +789,60 @@ flowchart LR
 
 The exact ordering of application deployment and database migration depends on migration compatibility requirements.
 
+Some schema changes may require a migrate-before-deploy strategy, while backward-compatible changes may allow different sequencing.
+
 This diagram represents a target process, not the current production implementation.
 
-## 36. Current Deployment Readiness
+## 38. Future Purchase and Email Integration
+
+Purchases / Suppliers are the next major planned business domain.
+
+Purchase invoice processing is expected to eventually include Costa Rican XML 4.4 documents received through a business email workflow.
+
+When that functionality is implemented, deployment requirements may expand to include:
+
+* Business-email credentials or delegated authorization.
+* Provider-specific configuration.
+* Secure token storage.
+* XML ingestion limits.
+* Background processing if justified.
+* Failure/retry behavior.
+* Observability for document ingestion.
+* Safe handling of malformed or unexpected external documents.
+
+These requirements are future concerns and must not be represented as currently implemented infrastructure.
+
+Inventory should remain isolated from direct email access and XML ingestion.
+
+The Purchases workflow should validate and accept documents before producing valid Inventory effects.
+
+## 39. Public RevestikCR.com Deployment Boundary
+
+A future public `RevestikCR.com` customer-facing experience is planned separately from the internal operational application.
+
+Its final hosting topology has not yet been selected.
+
+The public site must not accidentally expose internal authenticated Revestik routes, APIs, administrative functions, or configuration.
+
+Whether the public experience eventually shares infrastructure with the internal application should be decided according to actual deployment and security requirements rather than assumed in advance.
+
+## 40. Test-Suite Runtime and Deployment
+
+The current automated suite prioritizes correctness and regression protection over execution speed.
+
+Test-suite runtime optimization is not currently a deployment blocker.
+
+Optimization may be revisited during production hardening, after the public RevestikCR.com work, or when CI/deployment feedback time becomes an operational constraint.
+
+Deployment architecture should not remove meaningful SQL Server integration coverage merely to shorten the pipeline.
+
+## 41. Current Deployment Readiness
 
 Revestik currently has several foundations required for deployment:
 
 * Release build.
 * Automated tests.
+* 439-test verified baseline.
 * Publish pipeline.
 * Hosted Blazor architecture.
 * Static asset verification.
@@ -660,6 +852,10 @@ Revestik currently has several foundations required for deployment:
 * Authentication.
 * Authorization.
 * CSRF protection.
+* SQL Server persistence.
+* EF Core migrations.
+* Transactional Inventory behavior.
+* Inventory integrity tests.
 
 Remaining production work includes infrastructure decisions such as:
 
@@ -674,13 +870,16 @@ Remaining production work includes infrastructure decisions such as:
 * Deployment automation.
 * Migration process.
 * Rollback process.
+* Production smoke-test procedure.
 
-## 37. Deployment Principle
+These remaining tasks are production-infrastructure work rather than evidence that the application cannot currently be built or published.
+
+## 42. Deployment Principle
 
 The deployment principle for Revestik is:
 
 > A successful `dotnet publish` produces a deployable artifact, not a complete production system.
 
-Production readiness also requires secure configuration, persistent infrastructure, database lifecycle management, observability, recovery, and a repeatable release process.
+Production readiness also requires secure configuration, persistent infrastructure, database lifecycle management, observability, recovery, transactional-data protection, and a repeatable release process.
 
 These concerns will be implemented and documented incrementally as Revestik approaches its first production deployment.
