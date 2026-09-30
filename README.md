@@ -6,7 +6,7 @@ It is designed to centralize operational workflows such as customer management, 
 
 The project originates from real small-business operational requirements and is developed incrementally, with an emphasis on business rules, data integrity, security, testing, and maintainable architecture.
 
-> **Project status:** Active development. The application foundation, Customer Management, Quotations, and Sales workflows are implemented and verified. Inventory is the next major business domain.
+> **Project status:** Active development. The application foundation, Customer Management, Quotations, Sales, and the Inventory core are implemented and verified. Purchases and Suppliers are the next major business domain.
 
 ---
 
@@ -176,20 +176,48 @@ Current capabilities include:
 * Linked replacement Draft that can be edited and issued with a new VEN
 * Traceability between quotation and sale
 * Traceability between original and replacement sales
+* Inventory consumption for product-linked issued sales
+* Exact inventory restoration when an issued sale is voided
 * Role/policy authorization and antiforgery protection
 
 Sales are internal commercial documents. Direct Costa Rican electronic invoicing remains outside the current Sales scope.
 
-### Product Support
+### Inventory Management
 
-A focused product lookup capability supports commercial entry without turning the current implementation into the complete Inventory domain.
+The Inventory core is implemented and verified.
 
-Current support includes:
+Current capabilities include:
 
-* Product persistence
-* Product search/pagination
-* Product-assisted quotation and sale entry
-* Authorization and pagination tests
+* Configurable product categories
+* Product catalog with search, filtering, pagination, and ordering
+* CABYS support for physical products
+* Physical inventory units and commercial units
+* Unit conversion rules between inventory and commercial quantities
+* Whole-unit quantity enforcement where required
+* Current stock tracking
+* Initial stock registration
+* Immutable inventory movements
+* Manual stock increases and decreases
+* FIFO inventory consumption
+* FIFO cost layers
+* Current product cost reference
+* Unknown historical cost tracking
+* Explicit resolution of unknown inventory costs without overwriting the original cost source
+* Product-linked sale consumption
+* Prevention of negative inventory
+* Exact FIFO layer restoration when a sale is voided
+* Provenance between sale movements and reversal movements
+* Physical inventory counts
+* Physical-count adjustments with traceability
+* Product deactivation and reactivation
+* Permanent removal from normal product UI through logical archival while retaining historical database records
+* Concurrency and data-integrity safeguards for critical inventory operations
+* Dedicated inventory, physical-count, and unknown-cost UI workflows
+* Authorization and antiforgery protection for protected inventory operations
+
+Inventory tracks physical materials only. Services and commercial charges are not stock items.
+
+Purchases will become a separate domain that feeds inventory through valid stock-entry operations rather than embedding purchase processing directly inside Inventory.
 
 ### External Integrations
 
@@ -202,8 +230,11 @@ Current support includes:
 * Automated request-validation tests
 * Customer service and pagination tests
 * Quotation calculation, service, authorization, API, persistence, and concurrency tests
-* Sales calculation, lifecycle, endpoint, query, payment, PDF, validation, persistence, and concurrency tests
-* Product authorization and pagination tests
+* Sales calculation, lifecycle, endpoint, query, payment, PDF, validation, persistence, concurrency, inventory-consumption, and reversal tests
+* Product authorization, pagination, unit-rule, and lifecycle tests
+* Inventory movement and data-integrity tests
+* Inventory cost-resolution tests
+* Physical-count service and endpoint tests
 * CSRF tests for protected mutable endpoints
 * Hosting integration tests
 * CI on pull requests and `main`
@@ -269,6 +300,17 @@ Current examples include:
 * Corrections use a linked replacement sale instead of overwriting the original.
 * Converting a quotation to a sale preserves the quotation as historical source.
 * Direct electronic invoicing is outside the current Sales domain.
+* Inventory represents physical materials; services and charges do not create stock.
+* Physical inventory is the source of truth for stock quantities.
+* Product-linked issued sales consume inventory through FIFO.
+* Inventory cannot become negative.
+* A sale shortage is not represented as artificial stock.
+* Voiding a sale restores the exact inventory quantities and FIFO layers originally consumed.
+* Historical inventory movements are retained for traceability.
+* Physical counts generate traceable inventory adjustments.
+* Unknown historical costs can be resolved without replacing the original recorded cost source.
+* Products may be discontinued and reactivated.
+* Products permanently removed from normal product workflows are archived rather than physically deleted, preserving historical records and references.
 
 See:
 
@@ -294,7 +336,14 @@ Current automated coverage includes:
 * Sale payment and payment-void behavior
 * Sale PDF behavior
 * SQL Server VEN sequence generation and concurrency
+* Sale inventory consumption and exact reversal behavior
 * Product authorization and pagination
+* Product unit-quantity rules
+* Inventory movement integrity
+* FIFO and cost behavior
+* Unknown inventory cost resolution
+* Physical-count service behavior
+* Physical-count endpoint behavior
 * CSRF behavior
 * Protected mutable endpoints
 * Development and production hosting
@@ -303,7 +352,7 @@ Current automated coverage includes:
 
 SQL Server-specific behavior is tested against an isolated SQL Server instance using Testcontainers.
 
-> **Current automated test baseline:** 257 passing tests, 0 failed.
+> **Current automated test baseline:** 439 passing tests, 0 failed.
 
 Run the complete suite:
 
@@ -403,9 +452,12 @@ The persistence layer uses:
 * Required-field constraints
 * Maximum lengths
 * Check constraints
-* Unique indexes
+* Unique and filtered indexes
 * ASP.NET Core Identity persistence
 * SQL Server sequences for commercial document numbering
+* Inventory movement provenance
+* FIFO cost layers
+* Concurrency protection where required
 
 Important business invariants are protected at more than one level where appropriate:
 
@@ -454,30 +506,49 @@ See:
 * Customer Management
 * Quotations
 * Sales
+* Inventory Core
 
 ### Current Focus
 
-**Inventory — next major business domain**
+**Purchases / Suppliers — next major business domain**
 
-The next phase should define stock quantities, movement rules, sale-related decreases, purchase-related increases, adjustments, and safeguards against invalid stock transitions.
+The next phase will introduce a dedicated purchase workflow rather than placing purchase processing inside Inventory.
+
+Planned scope includes:
+
+* Supplier management
+* Manual purchase registration
+* Purchase lines linked to products
+* Inventory increases produced by accepted purchases
+* Purchase cost capture for FIFO inventory layers
+* A purchase-invoice section for received Costa Rican XML 4.4 documents
+* XML 4.4 deserialization and document classification
+* Handling of purchase invoices, credit notes, invalid/error cases, and applicable tax rates
+* Reception of purchase documents from the business email workflow
+* Explicit acceptance/processing before purchase documents affect operational records
 
 ### Planned Domains
 
-* Inventory
-* Purchases
-* Suppliers
+* Purchases / Suppliers
 * Expenses
+* Reports
 * Dashboard and analytics
 * Administrative configuration
+* Public `RevestikCR.com` project/customer-facing website
 
 Payment tracking is already present inside Sales; broader accounts-receivable behavior may be expanded later if requirements go beyond the current sale-balance model.
+
+Reports are expected to aggregate data already owned by their source domains, including purchases, sales, and inventory value.
+
+The Dashboard/Main area will surface the most important current-period operational indicators rather than owning transactional business logic.
 
 ### Deferred / Future
 
 * Direct Costa Rican electronic invoicing integration with Ministerio de Hacienda
-* Automated email distribution
+* Automated outbound email distribution
 * WhatsApp distribution
 * AI-assisted expense ingestion and classification
+* Test-suite performance optimization and broader production hardening
 
 See:
 
@@ -562,15 +633,19 @@ Quotations
         ↓
 Sales
         ↓
-Inventory
+Inventory Core
         ↓
 Purchases / Suppliers
         ↓
 Expenses
         ↓
+Reports
+        ↓
 Dashboard / Analytics
+        ↓
+RevestikCR.com
         ↓
 Production hardening
 ```
 
-Direct electronic invoicing, automated email delivery, WhatsApp distribution, and AI-assisted expense ingestion remain future capabilities rather than current MVP blockers.
+Direct electronic invoicing, automated outbound email delivery, WhatsApp distribution, and AI-assisted expense ingestion remain future capabilities rather than current MVP blockers.
