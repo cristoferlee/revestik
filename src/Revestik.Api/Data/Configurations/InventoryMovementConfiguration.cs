@@ -49,6 +49,18 @@ public sealed class InventoryMovementConfiguration
                     "CK_InventoryMovements_AdjustmentDecrease",
                     "[Type] <> 'AdjustmentDecrease' OR " +
                     "([QuantityChange] < 0 AND [UnitCost] IS NULL)");
+
+                tableBuilder.HasCheckConstraint(
+                    "CK_InventoryMovements_Purchase",
+                    "[Type] <> 'Purchase' OR " +
+                    "([PurchaseLineId] IS NOT NULL AND " +
+                    "[QuantityChange] > 0 AND " +
+                    "[UnitCost] IS NOT NULL AND [UnitCost] > 0 AND " +
+                    "[AdjustmentReason] IS NULL)");
+
+                tableBuilder.HasCheckConstraint(
+                    "CK_InventoryMovements_PurchaseLine",
+                    "[PurchaseLineId] IS NULL OR [Type] = 'Purchase'");
             });
 
         builder.HasKey(movement => movement.Id);
@@ -98,6 +110,12 @@ public sealed class InventoryMovementConfiguration
             .HasForeignKey(movement => movement.SaleId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(movement => movement.PurchaseLine)
+            .WithOne()
+            .HasForeignKey<InventoryMovement>(
+                movement => movement.PurchaseLineId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasOne(movement => movement.PhysicalCount)
             .WithMany(count => count.Movements)
             .HasForeignKey(movement => movement.PhysicalCountId)
@@ -117,6 +135,12 @@ public sealed class InventoryMovementConfiguration
         builder.HasIndex(movement => movement.ProductId);
 
         builder.HasIndex(movement => movement.SaleId);
+
+        builder.HasIndex(movement => movement.PurchaseLineId)
+            .HasDatabaseName(
+                "UX_InventoryMovements_PurchaseLineId")
+            .IsUnique()
+            .HasFilter("[PurchaseLineId] IS NOT NULL");
 
         builder.HasIndex(movement => movement.PhysicalCountId);
 

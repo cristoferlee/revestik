@@ -15,7 +15,7 @@ public sealed class SaleLineRequest : IValidatableObject
     [StringLength(50, ErrorMessage = "La unidad de medida no puede superar los 50 caracteres.")]
     public string Unit { get; set; } = string.Empty;
 
-    [Range(typeof(decimal), "0.01", "9999999999999.99", ErrorMessage = "La cantidad debe ser mayor que cero.")]
+    [Range(typeof(decimal), "0.0001", "9999999999999.9999", ErrorMessage = "La cantidad debe ser mayor que cero.")]
     public decimal Quantity { get; set; }
 
     [Range(typeof(decimal), "0.01", "9999999999999.99", ErrorMessage = "El precio unitario debe ser mayor que cero.")]
@@ -33,8 +33,8 @@ public sealed class SaleLineRequest : IValidatableObject
         if (!string.IsNullOrWhiteSpace(CabysCode) && !IsValidCabysCode(CabysCode))
             yield return new ValidationResult("El código CABYS debe contener exactamente 13 dígitos.", [nameof(CabysCode)]);
 
-        if (HasMoreThanTwoDecimalPlaces(Quantity))
-            yield return new ValidationResult("La cantidad no puede tener más de 2 decimales.", [nameof(Quantity)]);
+        if (ProductId.HasValue ? HasMoreThanFourDecimalPlaces(Quantity) : HasMoreThanTwoDecimalPlaces(Quantity))
+            yield return new ValidationResult(ProductId.HasValue ? "La cantidad no puede tener más de 4 decimales." : "La cantidad no puede tener más de 2 decimales.", [nameof(Quantity)]);
 
         if (HasMoreThanTwoDecimalPlaces(UnitPrice))
             yield return new ValidationResult("El precio unitario no puede tener más de 2 decimales.", [nameof(UnitPrice)]);
@@ -65,4 +65,5 @@ public sealed class SaleLineRequest : IValidatableObject
     }
 
     private static bool HasMoreThanTwoDecimalPlaces(decimal value) => decimal.Round(value, 2) != value;
+    private static bool HasMoreThanFourDecimalPlaces(decimal value) => decimal.Round(value, 4) != value;
 }

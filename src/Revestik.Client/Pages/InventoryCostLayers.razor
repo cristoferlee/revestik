@@ -1,0 +1,341 @@
+@page "/inventory/cost-layers"
+@using Revestik.Client.Services.Inventory
+@using Revestik.Client.Services.Products
+@using Revestik.Shared.Inventory
+@using Revestik.Shared.Products
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales,Warehouse")]
+@inject IInventoryCostApiService CostApi
+@inject IProductApiService ProductApi
+
+<PageTitle>Lotes de costo | Revestik</PageTitle>
+
+<section class="cost-layers-page">
+    <header class="cost-layers-header">
+        <div>
+            <h1>Lotes de costo</h1>
+            <p>Consulta el origen, costo y existencias restantes de cada entrada de inventario.</p>
+        </div>
+
+        <div class="cost-layers-header-actions">
+            <a class="secondary-button" href="/inventory">
+                Volver a inventario
+            </a>
+
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@isLoadingLayers"
+                    @onclick="LoadLayersAsync">
+                @(isLoadingLayers ? "Actualizando..." : "Actualizar")
+            </button>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message" role="alert">
+            @errorMessage
+        </div>
+    }
+
+    <section class="cost-layers-kpis" aria-label="Resumen de lotes de costo">
+        <article class="cost-layer-kpi">
+            <span>Lotes mostrados</span>
+            <strong>@layers.Count</strong>
+        </article>
+
+        <article class="cost-layer-kpi">
+            <span>Con existencias</span>
+            <strong>@ActiveLayerCount</strong>
+        </article>
+
+        <article class="cost-layer-kpi">
+            <span>Agotados</span>
+            <strong>@DepletedLayerCount</strong>
+        </article>
+
+        <article class="cost-layer-kpi">
+            <span>Costo pendiente</span>
+            <strong>@UnknownCostLayerCount</strong>
+        </article>
+    </section>
+
+    <section class="cost-layers-filters">
+        <div class="cost-layers-section-heading">
+            <div>
+                <h2>Filtrar por producto</h2>
+                <p>Busca un producto específico o consulta todos los lotes registrados.</p>
+            </div>
+
+            @if (selectedProduct is not null)
+            {
+                <span class="selected-product-badge">
+                    @selectedProduct.Name
+                </span>
+            }
+        </div>
+
+        <form class="cost-layers-filter-grid"
+              @onsubmit="SearchProductsAsync"
+              @onsubmit:preventDefault>
+            <div class="form-group cost-layers-search">
+                <label>Buscar</label>
+                <input type="search"
+                       maxlength="150"
+                       placeholder="Nombre, descripción o CABYS"
+                       @bind="search" />
+            </div>
+
+            <div class="cost-layers-filter-actions">
+                <button type="submit"
+                        class="primary-button"
+                        disabled="@isLoadingProducts">
+                    @(isLoadingProducts ? "Buscando..." : "Buscar")
+                </button>
+
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@(selectedProduct is null && string.IsNullOrWhiteSpace(search))"
+                        @onclick="ClearProductAsync">
+                    Ver todos
+                </button>
+            </div>
+        </form>
+
+        @if (products.Count > 0)
+        {
+            <div class="product-results">
+                @foreach (var product in products)
+                {
+                    <button type="button"
+                            class="product-result"
+                            @onclick="() => SelectProductAsync(product)">
+                        <span>
+                            <strong>@product.Name</strong>
+                            <small>
+                                @product.CategoryName · @product.CabysCode
+                            </small>
+                        </span>
+
+                        <span class="product-result-action">Seleccionar</span>
+                    </button>
+                }
+            </div>
+        }
+    </section>
+
+    @if (isLoadingLayers)
+    {
+        <p class="empty-state">Cargando lotes de costo...</p>
+    }
+    else if (layers.Count == 0)
+    {
+        <p class="empty-state">No hay lotes de costo para mostrar.</p>
+    }
+    else
+    {
+        @foreach (var productGroup in layers
+            .GroupBy(layer => new
+            {
+                layer.ProductId,
+                layer.ProductName,
+                layer.InventoryUnitSymbol
+            })
+            .OrderBy(group => group.Key.ProductName))
+        {
+            <section class="cost-product-section">
+                <div class="cost-layers-section-heading cost-product-heading">
+                    <div>
+                        <h2>@productGroup.Key.ProductName</h2>
+                        <p>
+                            @productGroup.Count() lote(s) ·
+                            @productGroup.Count(layer => layer.RemainingQuantity > 0m) con existencias
+                        </p>
+                    </div>
+
+                    <span class="unit-badge">@productGroup.Key.InventoryUnitSymbol</span>
+                </div>
+
+                <div class="cost-layer-list">
+                    @foreach (var layer in productGroup.OrderBy(layer => layer.CreatedAtUtc).ThenBy(layer => layer.LayerId))
+                    {
+                        <article class="cost-layer-row @(layer.RemainingQuantity == 0m ? "cost-layer-depleted" : null)">
+                            <div class="cost-layer-origin">
+                                <strong>@GetOriginLabel(layer)</strong>
+                                <span>@layer.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                            </div>
+
+                            <dl class="cost-layer-details">
+                                <div>
+                                    <dt>Entrada</dt>
+                                    <dd>
+                                        @layer.OriginalQuantity.ToString("N4")
+                                        @layer.InventoryUnitSymbol
+                                    </dd>
+                                </div>
+
+                                <div>
+                                    <dt>Restante</dt>
+                                    <dd>
+                                        <strong>@layer.RemainingQuantity.ToString("N4")</strong>
+                                        @layer.InventoryUnitSymbol
+                                    </dd>
+                                </div>
+
+                                <div>
+                                    <dt>Costo unitario</dt>
+                                    <dd>
+                                        @(layer.UnitCost.HasValue
+                                            ? $"₡{layer.UnitCost.Value:N2}"
+                                            : "Costo pendiente")
+                                    </dd>
+                                </div>
+
+                                <div>
+                                    <dt>Movimiento</dt>
+                                    <dd>#@layer.SourceMovementId</dd>
+                                </div>
+                            </dl>
+
+                            <div class="cost-layer-status">
+                                <span class="@GetStatusBadgeClass(layer)">
+                                    @GetStatusLabel(layer)
+                                </span>
+                            </div>
+                        </article>
+                    }
+                </div>
+            </section>
+        }
+    }
+</section>
+
+@code {
+    private readonly List<ProductListItemResponse> products = [];
+    private IReadOnlyList<InventoryCostLayerResponse> layers = [];
+    private ProductListItemResponse? selectedProduct;
+
+    private string search = string.Empty;
+    private bool isLoadingProducts;
+    private bool isLoadingLayers;
+    private string? errorMessage;
+
+    private int ActiveLayerCount =>
+        layers.Count(layer => layer.RemainingQuantity > 0m);
+
+    private int DepletedLayerCount =>
+        layers.Count(layer => layer.RemainingQuantity == 0m);
+
+    private int UnknownCostLayerCount =>
+        layers.Count(layer =>
+            layer.RemainingQuantity > 0m &&
+            !layer.UnitCost.HasValue);
+
+    protected override async Task OnInitializedAsync() =>
+        await LoadLayersAsync();
+
+    private async Task SearchProductsAsync()
+    {
+        isLoadingProducts = true;
+        errorMessage = null;
+
+        try
+        {
+            var result = await ProductApi.GetPageAsync(
+                new ProductListRequest
+                {
+                    Search = string.IsNullOrWhiteSpace(search)
+                        ? null
+                        : search.Trim(),
+                    ActivityStatus = ProductActivityStatus.All,
+                    SortBy = ProductSortField.Name,
+                    SortDirection = SortDirection.Asc,
+                    Page = 1,
+                    PageSize = 20
+                });
+
+            products.Clear();
+            products.AddRange(result.Items);
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "No fue posible buscar productos.";
+        }
+        finally
+        {
+            isLoadingProducts = false;
+        }
+    }
+
+    private async Task SelectProductAsync(ProductListItemResponse product)
+    {
+        selectedProduct = product;
+        products.Clear();
+        await LoadLayersAsync();
+    }
+
+    private async Task ClearProductAsync()
+    {
+        selectedProduct = null;
+        products.Clear();
+        search = string.Empty;
+        await LoadLayersAsync();
+    }
+
+    private async Task LoadLayersAsync()
+    {
+        isLoadingLayers = true;
+        errorMessage = null;
+
+        try
+        {
+            layers = await CostApi.GetLayersAsync(selectedProduct?.Id);
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "No fue posible cargar los lotes de costo.";
+        }
+        finally
+        {
+            isLoadingLayers = false;
+        }
+    }
+
+    private static string GetOriginLabel(InventoryCostLayerResponse layer)
+    {
+        if (layer.PurchaseId.HasValue)
+        {
+            return $"Compra #{layer.PurchaseId.Value}";
+        }
+
+        if (layer.SaleId.HasValue)
+        {
+            return $"Venta #{layer.SaleId.Value}";
+        }
+
+        if (layer.PhysicalCountId.HasValue)
+        {
+            return $"Conteo físico #{layer.PhysicalCountId.Value}";
+        }
+
+        return layer.MovementType switch
+        {
+            InventoryMovementType.InitialStock => "Inventario inicial",
+            InventoryMovementType.AdjustmentIncrease => "Ajuste de aumento",
+            _ => layer.MovementType.ToString()
+        };
+    }
+
+    private static string GetStatusLabel(InventoryCostLayerResponse layer) =>
+        layer.RemainingQuantity == 0m
+            ? "Agotado"
+            : !layer.UnitCost.HasValue
+                ? "Costo pendiente"
+                : "Disponible";
+
+    private static string GetStatusBadgeClass(InventoryCostLayerResponse layer) =>
+        layer.RemainingQuantity == 0m
+            ? "cost-status cost-status-depleted"
+            : !layer.UnitCost.HasValue
+                ? "cost-status cost-status-pending"
+                : "cost-status cost-status-available";
+}

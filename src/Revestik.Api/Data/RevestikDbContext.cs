@@ -11,6 +11,11 @@ public sealed class RevestikDbContext(
     : IdentityDbContext<ApplicationUser, IdentityRole, string>(options)
 {
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+
+    public DbSet<Purchase> Purchases => Set<Purchase>();
+    public DbSet<PurchaseLine> PurchaseLines => Set<PurchaseLine>();
+    public DbSet<PurchasePayment> PurchasePayments => Set<PurchasePayment>();
 
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();

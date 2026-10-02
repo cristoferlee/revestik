@@ -20,6 +20,9 @@ public static class PolicyNames
     public const string ManageQuotations =
         "ManageQuotations";
 
+    public const string ManagePurchases =
+        "ManagePurchases";
+
     public const string ViewAuditLog =
         "ViewAuditLog";
 }

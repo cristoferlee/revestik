@@ -117,6 +117,9 @@ public static class AuthenticationExtensions
                     RoleNames.Accountant,
                     RoleNames.Sales))
             .AddPolicy(
+                PolicyNames.ManagePurchases,
+                policy => policy.RequireRole(RoleNames.All))
+            .AddPolicy(
                 PolicyNames.ViewAuditLog,
                 policy => policy.RequireRole(
                     RoleNames.Administrator));

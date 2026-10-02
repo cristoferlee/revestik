@@ -1,0 +1,680 @@
+@page "/purchases/history"
+
+@using Revestik.Shared.Purchases
+@using Revestik.Shared.Sales
+
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales,Warehouse")]
+
+<PageTitle>Compras y cuentas por pagar | Revestik</PageTitle>
+
+<section class="purchases-history-page">
+    <header class="page-header">
+        <div>
+            <h1>Compras y cuentas por pagar</h1>
+            <p>
+                Consulta compras, vencimientos, pagos e historial por proveedor.
+            </p>
+        </div>
+
+        <a class="primary-button"
+           href="/purchases">
+            Nueva compra
+        </a>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message" role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="status-message success-message" role="status">
+            @successMessage
+        </div>
+    }
+
+    <section class="history-card">
+        <div class="section-heading">
+            <div>
+                <h2>Cuentas por pagar</h2>
+                <p>Los montos se mantienen separados por moneda.</p>
+            </div>
+
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@isLoadingSummary"
+                    @onclick="LoadSummaryAsync">
+                @(isLoadingSummary ? "Actualizando..." : "Actualizar")
+            </button>
+        </div>
+
+        @if (summaryCurrencies.Count == 0)
+        {
+            <p class="empty-state">
+                No hay saldos pendientes.
+            </p>
+        }
+        else
+        {
+            <div class="summary-grid">
+                @foreach (var summary in summaryCurrencies)
+                {
+                    <article class="summary-card">
+                        <span>@summary.Currency</span>
+                        <strong>
+                            @summary.OutstandingTotal.ToString("N2")
+                        </strong>
+                        <small>
+                            @summary.PurchaseCount compra(s) pendiente(s) ·
+                            @summary.OverdueCount vencida(s) ·
+                            @summary.OverdueTotal.ToString("N2") vencido
+                        </small>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="history-card">
+        <div class="section-heading">
+            <div>
+                <h2>Alertas de vencimiento</h2>
+                <p>Ventanas editables para esta consulta.</p>
+            </div>
+        </div>
+
+        <div class="filters-grid">
+            <div class="form-group">
+                <label>Ventana corta (días)</label>
+                <InputNumber @bind-Value="alertRequest.ShortWindowDays"
+                             min="1"
+                             max="365" />
+            </div>
+
+            <div class="form-group">
+                <label>Ventana larga (días)</label>
+                <InputNumber @bind-Value="alertRequest.LongWindowDays"
+                             min="1"
+                             max="365" />
+            </div>
+        </div>
+
+        <div class="filter-actions">
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@isLoadingAlerts"
+                    @onclick="LoadAlertsAsync">
+                @(isLoadingAlerts ? "Actualizando..." : "Actualizar alertas")
+            </button>
+        </div>
+
+        @if (alerts.Count == 0)
+        {
+            <p class="empty-state">
+                No hay compras pendientes dentro de estas ventanas.
+            </p>
+        }
+        else
+        {
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Proveedor</th>
+                            <th>Compra</th>
+                            <th>Vence</th>
+                            <th>Saldo</th>
+                            <th>Alerta</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var alert in alerts)
+                        {
+                            <tr>
+                                <td data-label="Proveedor">
+                                    @alert.SupplierName
+                                </td>
+                                <td data-label="Compra">
+                                    #@alert.PurchaseId
+                                </td>
+                                <td data-label="Vence">
+                                    @alert.DueDate.ToString("dd/MM/yyyy")
+                                </td>
+                                <td data-label="Saldo">
+                                    @alert.Currency
+                                    @alert.OutstandingAmount.ToString("N2")
+                                </td>
+                                <td data-label="Alerta">
+                                    <span class="@GetAlertCssClass(alert.AlertType)">
+                                        @GetAlertLabel(alert)
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <section class="history-card">
+        <div class="section-heading">
+            <div>
+                <h2>Historial de compras</h2>
+                <p>Filtra por proveedor, fechas, moneda y estado financiero.</p>
+            </div>
+        </div>
+
+        <div class="filters-grid">
+            <div class="form-group">
+                <label>Proveedor ID</label>
+                <InputNumber @bind-Value="listRequest.SupplierId"
+                             min="1" />
+            </div>
+
+            <div class="form-group">
+                <label>Desde</label>
+                <InputDate @bind-Value="listRequest.DateFrom" />
+            </div>
+
+            <div class="form-group">
+                <label>Hasta</label>
+                <InputDate @bind-Value="listRequest.DateTo" />
+            </div>
+
+            <div class="form-group">
+                <label>Moneda</label>
+                <InputSelect @bind-Value="listRequest.Currency">
+                    <option value="">Todas</option>
+                    <option value="@PurchaseCurrency.CRC">CRC</option>
+                    <option value="@PurchaseCurrency.USD">USD</option>
+                </InputSelect>
+            </div>
+
+            <div class="form-group">
+                <label>Condición</label>
+                <InputSelect @bind-Value="listRequest.PaymentType">
+                    <option value="">Todas</option>
+                    <option value="@PurchasePaymentType.Cash">Contado</option>
+                    <option value="@PurchasePaymentType.Credit">Crédito</option>
+                </InputSelect>
+            </div>
+
+            <div class="form-group">
+                <label>Saldo</label>
+                <InputSelect @bind-Value="listRequest.BalanceStatus">
+                    <option value="">Todos</option>
+                    <option value="@PurchaseBalanceStatus.Pending">Pendiente</option>
+                    <option value="@PurchaseBalanceStatus.PartiallyPaid">Abonada parcialmente</option>
+                    <option value="@PurchaseBalanceStatus.Paid">Pagada</option>
+                </InputSelect>
+            </div>
+
+            <label class="checkbox-row">
+                <InputCheckbox @bind-Value="overdueOnly" />
+                Solo vencidas
+            </label>
+        </div>
+
+        <div class="filter-actions">
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@isLoadingPurchases"
+                    @onclick="ClearFiltersAsync">
+                Limpiar
+            </button>
+
+            <button type="button"
+                    class="primary-button"
+                    disabled="@isLoadingPurchases"
+                    @onclick="SearchAsync">
+                @(isLoadingPurchases ? "Buscando..." : "Aplicar filtros")
+            </button>
+        </div>
+
+        @if (purchases.Count == 0)
+        {
+            <p class="empty-state">
+                No se encontraron compras.
+            </p>
+        }
+        else
+        {
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Compra</th>
+                            <th>Fecha</th>
+                            <th>Proveedor</th>
+                            <th>Moneda</th>
+                            <th>Total</th>
+                            <th>Pagado</th>
+                            <th>Saldo</th>
+                            <th>Estado</th>
+                            <th>Vence</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var purchase in purchases)
+                        {
+                            <tr>
+                                <td data-label="Compra">
+                                    <strong>#@purchase.Id</strong>
+                                </td>
+                                <td data-label="Fecha">
+                                    @purchase.PurchaseDate.ToString("dd/MM/yyyy")
+                                </td>
+                                <td data-label="Proveedor">
+                                    @purchase.SupplierName
+                                </td>
+                                <td data-label="Moneda">
+                                    @purchase.Currency
+                                </td>
+                                <td data-label="Total">
+                                    @purchase.Total.ToString("N2")
+                                </td>
+                                <td data-label="Pagado">
+                                    @purchase.PaidTotal.ToString("N2")
+                                </td>
+                                <td data-label="Saldo">
+                                    @purchase.OutstandingAmount.ToString("N2")
+                                </td>
+                                <td data-label="Estado">
+                                    <span class="@GetBalanceCssClass(purchase)">
+                                        @GetBalanceLabel(purchase)
+                                    </span>
+                                </td>
+                                <td data-label="Vence">
+                                    @(purchase.DueDate.HasValue
+                                        ? purchase.DueDate.Value.ToString("dd/MM/yyyy")
+                                        : "—")
+                                </td>
+                                <td data-label="Acción">
+                                    <button type="button"
+                                            class="secondary-button"
+                                            disabled="@isLoadingDetail"
+                                            @onclick="() => OpenPurchaseAsync(purchase.Id)">
+                                        Ver detalle
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination-controls">
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@(!CanGoPrevious)"
+                        @onclick="PreviousPageAsync">
+                    Anterior
+                </button>
+
+                <span>
+                    Página @listRequest.Page de @totalPages
+                </span>
+
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@(!CanGoNext)"
+                        @onclick="NextPageAsync">
+                    Siguiente
+                </button>
+            </div>
+        }
+    </section>
+
+    @if (selectedPurchase is not null)
+    {
+        <section class="history-card detail-card">
+            <div class="section-heading">
+                <div>
+                    <h2>Compra #@selectedPurchase.Id</h2>
+                    <p>
+                        @selectedPurchase.SupplierName ·
+                        @selectedPurchase.PurchaseDate.ToString("dd/MM/yyyy")
+                    </p>
+                </div>
+
+                <div class="detail-actions">
+                    <button type="button"
+                            class="secondary-button"
+                            @onclick="LoadSupplierHistoryAsync">
+                        Historial del proveedor
+                    </button>
+
+                    <button type="button"
+                            class="secondary-button"
+                            @onclick="CloseDetail">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+
+            <div class="detail-meta-grid">
+                <div>
+                    <span>Condición</span>
+                    <strong>
+                        @GetPaymentTypeLabel(selectedPurchase.PaymentType)
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Total</span>
+                    <strong>
+                        @selectedPurchase.Currency
+                        @selectedPurchase.Total.ToString("N2")
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Pagado</span>
+                    <strong>
+                        @selectedPurchase.PaidTotal.ToString("N2")
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Saldo</span>
+                    <strong>
+                        @selectedPurchase.OutstandingAmount.ToString("N2")
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Vencimiento</span>
+                    <strong>
+                        @(selectedPurchase.DueDate.HasValue
+                            ? selectedPurchase.DueDate.Value.ToString("dd/MM/yyyy")
+                            : "No aplica")
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Registrada por</span>
+                    <strong>
+                        @selectedPurchase.CreatedByDisplayName
+                    </strong>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(selectedPurchase.Notes))
+            {
+                <div class="read-only-note">
+                    <strong>Notas</strong>
+                    <p>@selectedPurchase.Notes</p>
+                </div>
+            }
+
+            <h3>Líneas</h3>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Unidad</th>
+                            <th>Cantidad</th>
+                            <th>Costo</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in selectedPurchase.Lines)
+                        {
+                            <tr>
+                                <td data-label="Producto">
+                                    @line.ProductName
+                                </td>
+                                <td data-label="Unidad">
+                                    @line.InventoryUnitSymbol
+                                </td>
+                                <td data-label="Cantidad">
+                                    @line.Quantity.ToString("N4")
+                                </td>
+                                <td data-label="Costo">
+                                    @line.UnitCost.ToString("N2")
+                                </td>
+                                <td data-label="Total">
+                                    @((line.Quantity * line.UnitCost).ToString("N2"))
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="section-heading payment-heading">
+                <div>
+                    <h3>Pagos</h3>
+                    <p>
+                        Los pagos anulados se conservan en el historial.
+                    </p>
+                </div>
+
+                @if (selectedPurchase.OutstandingAmount > 0m)
+                {
+                    <button type="button"
+                            class="primary-button"
+                            @onclick="OpenPaymentForm">
+                        Registrar pago
+                    </button>
+                }
+            </div>
+
+            @if (isPaymentFormOpen)
+            {
+                <section class="payment-panel">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Monto</label>
+                            <InputNumber @bind-Value="paymentRequest.Amount"
+                                         min="0.01"
+                                         step="0.01" />
+                        </div>
+
+                        <div class="form-group">
+                            <label>Método</label>
+                            <InputSelect @bind-Value="paymentRequest.PaymentMethod">
+                                @foreach (var method in PaymentMethods)
+                                {
+                                    <option value="@method">
+                                        @GetPaymentMethodLabel(method)
+                                    </option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Fecha</label>
+                            <InputDate @bind-Value="paymentDate" />
+                        </div>
+
+                        @if (selectedPurchase.Currency == PurchaseCurrency.USD)
+                        {
+                            <div class="form-group">
+                                <label>Tipo de cambio del pago</label>
+                                <InputNumber @bind-Value="paymentRequest.ExchangeRate"
+                                             min="0.000001"
+                                             step="0.000001" />
+                            </div>
+                        }
+
+                        <div class="form-group">
+                            <label>Referencia</label>
+                            <InputText @bind-Value="paymentRequest.Reference"
+                                       maxlength="200" />
+                        </div>
+
+                        <div class="form-group form-wide">
+                            <label>Notas</label>
+                            <InputTextArea @bind-Value="paymentRequest.Notes"
+                                           maxlength="1000"
+                                           rows="2" />
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@isRegisteringPayment"
+                                @onclick="ClosePaymentForm">
+                            Cancelar
+                        </button>
+
+                        <button type="button"
+                                class="primary-button"
+                                disabled="@isRegisteringPayment"
+                                @onclick="RegisterPaymentAsync">
+                            @(isRegisteringPayment ? "Registrando..." : "Registrar pago")
+                        </button>
+                    </div>
+                </section>
+            }
+
+            @if (selectedPurchase.Payments.Count == 0)
+            {
+                <p class="empty-state">
+                    No hay pagos registrados.
+                </p>
+            }
+            else
+            {
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Monto</th>
+                                <th>Método</th>
+                                <th>Referencia</th>
+                                <th>Estado</th>
+                                <th>Usuario</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var payment in selectedPurchase.Payments)
+                            {
+                                <tr>
+                                    <td data-label="Fecha">
+                                        @FormatDate(payment.PaidAtUtc)
+                                    </td>
+                                    <td data-label="Monto">
+                                        @payment.Amount.ToString("N2")
+                                    </td>
+                                    <td data-label="Método">
+                                        @GetPaymentMethodLabel(payment.PaymentMethod)
+                                    </td>
+                                    <td data-label="Referencia">
+                                        @(string.IsNullOrWhiteSpace(payment.Reference)
+                                            ? "—"
+                                            : payment.Reference)
+                                    </td>
+                                    <td data-label="Estado">
+                                        @GetPaymentStatusLabel(payment.Status)
+                                    </td>
+                                    <td data-label="Usuario">
+                                        @payment.CreatedByDisplayName
+                                    </td>
+                                    <td data-label="Acción">
+                                        @if (payment.Status == PurchasePaymentStatus.Active)
+                                        {
+                                            <button type="button"
+                                                    class="secondary-button danger-button"
+                                                    @onclick="() => RequestVoidPayment(payment.Id)">
+                                                Anular
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <small>
+                                                @payment.VoidReason
+                                            </small>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (paymentPendingVoidId.HasValue)
+            {
+                <section class="payment-panel">
+                    <h3>Anular pago</h3>
+                    <div class="form-group">
+                        <label>Motivo</label>
+                        <InputTextArea @bind-Value="voidReason"
+                                       maxlength="1000"
+                                       rows="2" />
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@isVoidingPayment"
+                                @onclick="CancelVoidPayment">
+                            Cancelar
+                        </button>
+
+                        <button type="button"
+                                class="secondary-button danger-button"
+                                disabled="@isVoidingPayment"
+                                @onclick="VoidPaymentAsync">
+                            @(isVoidingPayment ? "Anulando..." : "Confirmar anulación")
+                        </button>
+                    </div>
+                </section>
+            }
+        </section>
+    }
+
+    @if (supplierHistory is not null)
+    {
+        <section class="history-card">
+            <div class="section-heading">
+                <div>
+                    <h2>Historial de @supplierHistory.SupplierName</h2>
+                    <p>
+                        @supplierHistory.PurchaseCount compra(s) ·
+                        Última:
+                        @(supplierHistory.LastPurchaseDate.HasValue
+                            ? supplierHistory.LastPurchaseDate.Value.ToString("dd/MM/yyyy")
+                            : "—")
+                    </p>
+                </div>
+
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="CloseSupplierHistory">
+                    Cerrar historial
+                </button>
+            </div>
+
+            <div class="summary-grid">
+                @foreach (var currency in supplierHistory.Currencies)
+                {
+                    <article class="summary-card">
+                        <span>@currency.Currency</span>
+                        <strong>
+                            Comprado:
+                            @currency.OperationalPurchaseTotal.ToString("N2")
+                        </strong>
+                        <small>
+                            Pendiente:
+                            @currency.OutstandingTotal.ToString("N2")
+                        </small>
+                    </article>
+                }
+            </div>
+        </section>
+    }
+</section>

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Revestik.Api.Models;
+using Revestik.Shared.Products;
 
 namespace Revestik.Api.Data.Configurations;
 
@@ -62,6 +63,11 @@ public sealed class ProductConfiguration
             .HasPrecision(18, 2)
             .IsRequired();
 
+        builder.Property(product => product.SalePriceBasis)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
         builder.Property(product => product.CurrentCost)
             .HasPrecision(18, 2)
             .IsRequired();
@@ -108,13 +114,9 @@ public sealed class ProductConfiguration
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(product => product.Name);
-
         builder.HasIndex(product => product.CabysCode);
-
         builder.HasIndex(product => product.CategoryId);
-
         builder.HasIndex(product => product.InventoryUnitId);
-
         builder.HasIndex(product => product.CommercialUnitId);
     }
 }

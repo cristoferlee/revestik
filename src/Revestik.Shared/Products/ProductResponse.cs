@@ -22,4 +22,8 @@ public sealed record ProductResponse(
     decimal MinimumStock,
     bool IsDeleted,
     DateTime CreatedAtUtc,
-    DateTime? UpdatedAtUtc);
+    DateTime? UpdatedAtUtc)
+{
+    public SalePriceBasis SalePriceBasis { get; init; } =
+        SalePriceBasis.InventoryUnit;
+}

@@ -16,4 +16,8 @@ public sealed record ProductListItemResponse(
     decimal TaxRate,
     decimal AvailableStock,
     decimal MinimumStock,
-    bool IsDeleted);
+    bool IsDeleted)
+{
+    public SalePriceBasis SalePriceBasis { get; init; } =
+        SalePriceBasis.InventoryUnit;
+}

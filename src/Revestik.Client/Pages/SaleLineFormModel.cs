@@ -10,8 +10,8 @@ public sealed class SaleLineFormModel
     public string Description { get; set; } = string.Empty;
     public string Unit { get; set; } = string.Empty;
 
-    // Manual line: commercial quantity.
-    // Inventory-linked line: physical inventory quantity.
+    // For inventory-linked lines this is always the physical warehouse quantity.
+    // Manual lines use it directly as the billable quantity.
     public decimal Quantity { get; set; } = 1m;
 
     public decimal UnitPrice { get; set; }
@@ -23,16 +23,40 @@ public sealed class SaleLineFormModel
     public string CommercialUnitSymbol { get; private set; } = string.Empty;
     public decimal CommercialUnitsPerInventoryUnit { get; private set; } = 1m;
     public bool RequiresWholeInventoryUnits { get; private set; }
+    public SalePriceBasis SalePriceBasis { get; private set; } =
+        SalePriceBasis.InventoryUnit;
 
     public bool IsLinkedToProduct => ProductId.HasValue;
 
+    // Informational content quantity used by the UI, for example
+    // 1 sack = 20 kg. It does not determine the charged quantity.
     public decimal CommercialQuantity =>
-        IsLinkedToProduct
-            ? Quantity * CommercialUnitsPerInventoryUnit
-            : Quantity;
+        !IsLinkedToProduct
+            ? Quantity
+            : decimal.Round(
+                Quantity * CommercialUnitsPerInventoryUnit,
+                4,
+                MidpointRounding.AwayFromZero);
+
+    public decimal BillableQuantity =>
+        !IsLinkedToProduct
+            ? Quantity
+            : SalePriceBasis == SalePriceBasis.CommercialUnit
+                ? CommercialQuantity
+                : Quantity;
+
+    public string BillingUnitSymbol =>
+        !IsLinkedToProduct
+            ? Unit
+            : SalePriceBasis == SalePriceBasis.CommercialUnit
+                ? CommercialUnitSymbol
+                : InventoryUnitSymbol;
 
     public decimal GrossAmount =>
-        Math.Round(CommercialQuantity * UnitPrice, 2, MidpointRounding.AwayFromZero);
+        Math.Round(
+            BillableQuantity * UnitPrice,
+            2,
+            MidpointRounding.AwayFromZero);
 
     public decimal DiscountAmount
     {
@@ -54,13 +78,17 @@ public sealed class SaleLineFormModel
         }
     }
 
-    public decimal AmountAfterDiscount => Math.Max(0m, GrossAmount - DiscountAmount);
+    public decimal AmountAfterDiscount =>
+        Math.Max(0m, GrossAmount - DiscountAmount);
 
     public decimal TaxAmount
     {
         get
         {
-            if (TaxRate != 13m) return 0m;
+            if (TaxRate != 13m)
+            {
+                return 0m;
+            }
 
             var tax = AmountAfterDiscount - AmountAfterDiscount / 1.13m;
             return Math.Round(tax, 2, MidpointRounding.AwayFromZero);
@@ -74,7 +102,6 @@ public sealed class SaleLineFormModel
         ProductId = product.Id;
         Description = product.Name;
         CabysCode = product.CabysCode;
-        Unit = product.CommercialUnitSymbol;
         UnitPrice = product.SalePrice;
         TaxRate = product.TaxRate;
 
@@ -82,27 +109,52 @@ public sealed class SaleLineFormModel
         CommercialUnitSymbol = product.CommercialUnitSymbol;
         CommercialUnitsPerInventoryUnit = product.CommercialUnitsPerInventoryUnit;
         RequiresWholeInventoryUnits = product.RequiresWholeInventoryUnits;
+        SalePriceBasis = product.SalePriceBasis;
+        Unit = InventoryUnitSymbol;
 
         Quantity = 1m;
     }
 
-    public void RestoreInventoryLink(ProductResponse product, decimal savedCommercialQuantity)
+    public void RestoreInventoryLink(
+        ProductResponse product,
+        decimal savedBillableQuantity,
+        decimal? savedInventoryQuantity = null,
+        string? savedInventoryUnit = null,
+        decimal? savedConversion = null)
     {
+        var savedBillingUnit = Unit;
+
         ProductId = product.Id;
         Description = product.Name;
         CabysCode = product.CabysCode;
-        Unit = product.CommercialUnitSymbol;
         UnitPrice = product.SalePrice;
         TaxRate = product.TaxRate;
 
-        InventoryUnitSymbol = product.InventoryUnitSymbol;
+        InventoryUnitSymbol =
+            string.IsNullOrWhiteSpace(savedInventoryUnit)
+                ? product.InventoryUnitSymbol
+                : savedInventoryUnit;
         CommercialUnitSymbol = product.CommercialUnitSymbol;
-        CommercialUnitsPerInventoryUnit = product.CommercialUnitsPerInventoryUnit;
+        CommercialUnitsPerInventoryUnit =
+            savedConversion is > 0m
+                ? savedConversion.Value
+                : product.CommercialUnitsPerInventoryUnit;
         RequiresWholeInventoryUnits = product.RequiresWholeInventoryUnits;
+        SalePriceBasis = savedBillingUnit == product.InventoryUnitSymbol
+            ? SalePriceBasis.InventoryUnit
+            : savedBillingUnit == product.CommercialUnitSymbol
+                ? SalePriceBasis.CommercialUnit
+                : product.SalePriceBasis;
 
-        Quantity = CommercialUnitsPerInventoryUnit <= 0m
-            ? savedCommercialQuantity
-            : savedCommercialQuantity / CommercialUnitsPerInventoryUnit;
+        Quantity = savedInventoryQuantity is > 0m
+            ? savedInventoryQuantity.Value
+            : SalePriceBasis == SalePriceBasis.CommercialUnit &&
+              CommercialUnitsPerInventoryUnit > 0m
+                ? savedBillableQuantity /
+                  CommercialUnitsPerInventoryUnit
+                : savedBillableQuantity;
+
+        Unit = InventoryUnitSymbol;
     }
 
     public void CopyInventoryLinkFrom(SaleLineFormModel source)
@@ -111,6 +163,7 @@ public sealed class SaleLineFormModel
         CommercialUnitSymbol = source.CommercialUnitSymbol;
         CommercialUnitsPerInventoryUnit = source.CommercialUnitsPerInventoryUnit;
         RequiresWholeInventoryUnits = source.RequiresWholeInventoryUnits;
+        SalePriceBasis = source.SalePriceBasis;
     }
 
     public void UnlinkProduct()
@@ -120,6 +173,7 @@ public sealed class SaleLineFormModel
         CommercialUnitSymbol = string.Empty;
         CommercialUnitsPerInventoryUnit = 1m;
         RequiresWholeInventoryUnits = false;
+        SalePriceBasis = SalePriceBasis.InventoryUnit;
     }
 
     public SaleLineRequest ToRequest()
@@ -129,8 +183,10 @@ public sealed class SaleLineFormModel
             ProductId = ProductId,
             CabysCode = CabysCode.Trim(),
             Description = Description.Trim(),
-            Unit = Unit.Trim(),
-            Quantity = CommercialQuantity,
+            Unit = IsLinkedToProduct
+                ? BillingUnitSymbol
+                : Unit.Trim(),
+            Quantity = BillableQuantity,
             UnitPrice = UnitPrice,
             DiscountType = DiscountType,
             DiscountValue = DiscountValue,

@@ -457,6 +457,9 @@ namespace Revestik.Api.Data.Migrations
                     b.Property<int>("ProductId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("PurchaseLineId")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("QuantityChange")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
@@ -499,6 +502,11 @@ namespace Revestik.Api.Data.Migrations
                         .HasDatabaseName("UX_InventoryMovements_Product_InitialStock")
                         .HasFilter("[Type] = 'InitialStock'");
 
+                    b.HasIndex("PurchaseLineId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_InventoryMovements_PurchaseLineId")
+                        .HasFilter("[PurchaseLineId] IS NOT NULL");
+
                     b.HasIndex("ReversesInventoryMovementId")
                         .IsUnique()
                         .HasDatabaseName("UX_InventoryMovements_ReversesInventoryMovementId")
@@ -519,6 +527,10 @@ namespace Revestik.Api.Data.Migrations
                             t.HasCheckConstraint("CK_InventoryMovements_Balance", "[StockAfter] = [StockBefore] + [QuantityChange]");
 
                             t.HasCheckConstraint("CK_InventoryMovements_InitialStock", "[Type] <> 'InitialStock' OR ([StockBefore] = 0 AND [QuantityChange] >= 0 AND [StockAfter] = [QuantityChange] AND [UnitCost] IS NOT NULL AND [UnitCost] > 0 AND [AdjustmentReason] IS NULL)");
+
+                            t.HasCheckConstraint("CK_InventoryMovements_Purchase", "[Type] <> 'Purchase' OR ([PurchaseLineId] IS NOT NULL AND [QuantityChange] > 0 AND [UnitCost] IS NOT NULL AND [UnitCost] > 0 AND [AdjustmentReason] IS NULL)");
+
+                            t.HasCheckConstraint("CK_InventoryMovements_PurchaseLine", "[PurchaseLineId] IS NULL OR [Type] = 'Purchase'");
 
                             t.HasCheckConstraint("CK_InventoryMovements_StockAfter", "[StockAfter] >= 0");
 
@@ -683,6 +695,11 @@ namespace Revestik.Api.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("SalePriceBasis")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<decimal>("StockQuantity")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
@@ -754,6 +771,205 @@ namespace Revestik.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("ProductCategories", (string)null);
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("CreditTermDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("ExchangeRate")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("PaymentType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasDefaultValue("Cash");
+
+                    b.Property<DateOnly>("PurchaseDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("Currency");
+
+                    b.HasIndex("DueDate");
+
+                    b.HasIndex("PaymentType");
+
+                    b.HasIndex("PurchaseDate");
+
+                    b.HasIndex("SupplierId");
+
+                    b.ToTable("Purchases", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Purchases_Currency", "[Currency] IN ('CRC', 'USD')");
+
+                            t.HasCheckConstraint("CK_Purchases_ExchangeRate", "([Currency] = 'CRC' AND [ExchangeRate] IS NULL) OR ([Currency] = 'USD' AND [ExchangeRate] IS NOT NULL AND [ExchangeRate] > 0)");
+
+                            t.HasCheckConstraint("CK_Purchases_PaymentTerms", "([PaymentType] = 'Cash' AND [CreditTermDays] IS NULL AND [DueDate] IS NULL) OR ([PaymentType] = 'Credit' AND [CreditTermDays] IS NOT NULL AND [CreditTermDays] > 0 AND [DueDate] IS NOT NULL AND [DueDate] = DATEADD(day, [CreditTermDays], [PurchaseDate]))");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PurchaseLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PurchaseId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PurchaseId", "ProductId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PurchaseLines_PurchaseId_ProductId");
+
+                    b.ToTable("PurchaseLines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PurchaseLines_Quantity", "[Quantity] > 0");
+
+                            t.HasCheckConstraint("CK_PurchaseLines_UnitCost", "[UnitCost] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PurchasePayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<decimal?>("ExchangeRate")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("PaidAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("PurchaseId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("VoidReason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("VoidedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VoidedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("PaidAtUtc");
+
+                    b.HasIndex("PurchaseId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("VoidedByUserId");
+
+                    b.ToTable("PurchasePayments", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PurchasePayments_Amount", "[Amount] > 0");
+
+                            t.HasCheckConstraint("CK_PurchasePayments_ExchangeRate", "[ExchangeRate] IS NULL OR [ExchangeRate] > 0");
+                        });
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Quotation", b =>
@@ -897,8 +1113,8 @@ namespace Revestik.Api.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<int>("QuotationId")
                         .HasColumnType("int");
@@ -1109,8 +1325,8 @@ namespace Revestik.Api.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<int>("SaleId")
                         .HasColumnType("int");
@@ -1208,6 +1424,54 @@ namespace Revestik.Api.Data.Migrations
                     b.HasIndex("VoidedByUserId");
 
                     b.ToTable("SalePayments", (string)null);
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.Supplier", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContactName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("nvarchar(254)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Suppliers_Name");
+
+                    b.ToTable("Suppliers", (string)null);
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.UnitOfMeasure", b =>
@@ -1368,6 +1632,11 @@ namespace Revestik.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Revestik.Api.Models.PurchaseLine", "PurchaseLine")
+                        .WithOne()
+                        .HasForeignKey("Revestik.Api.Models.InventoryMovement", "PurchaseLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Revestik.Api.Models.InventoryMovement", "ReversesInventoryMovement")
                         .WithOne("ReversalInventoryMovement")
                         .HasForeignKey("Revestik.Api.Models.InventoryMovement", "ReversesInventoryMovementId")
@@ -1383,6 +1652,8 @@ namespace Revestik.Api.Data.Migrations
                     b.Navigation("PhysicalCount");
 
                     b.Navigation("Product");
+
+                    b.Navigation("PurchaseLine");
 
                     b.Navigation("ReversesInventoryMovement");
 
@@ -1451,6 +1722,70 @@ namespace Revestik.Api.Data.Migrations
                     b.Navigation("CommercialUnit");
 
                     b.Navigation("InventoryUnit");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Supplier");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PurchaseLine", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.Purchase", "Purchase")
+                        .WithMany("Lines")
+                        .HasForeignKey("PurchaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Purchase");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PurchasePayment", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.Purchase", "Purchase")
+                        .WithMany("Payments")
+                        .HasForeignKey("PurchaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", "VoidedByUser")
+                        .WithMany()
+                        .HasForeignKey("VoidedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Purchase");
+
+                    b.Navigation("VoidedByUser");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Quotation", b =>
@@ -1618,6 +1953,13 @@ namespace Revestik.Api.Data.Migrations
             modelBuilder.Entity("Revestik.Api.Models.ProductCategory", b =>
                 {
                     b.Navigation("Products");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
+                {
+                    b.Navigation("Lines");
+
+                    b.Navigation("Payments");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Quotation", b =>

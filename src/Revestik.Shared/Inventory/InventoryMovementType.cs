@@ -6,5 +6,6 @@ public enum InventoryMovementType
     AdjustmentIncrease = 2,
     AdjustmentDecrease = 3,
     Sale = 4,
-    SaleReversal = 5
+    SaleReversal = 5,
+    Purchase = 6
 }

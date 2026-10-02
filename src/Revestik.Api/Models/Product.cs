@@ -1,3 +1,5 @@
+using Revestik.Shared.Products;
+
 namespace Revestik.Api.Models;
 
 public sealed class Product
@@ -27,6 +29,9 @@ public sealed class Product
     public bool RequiresWholeInventoryUnits { get; set; }
 
     public decimal SalePrice { get; set; }
+
+    public SalePriceBasis SalePriceBasis { get; set; } =
+        SalePriceBasis.CommercialUnit;
 
     public decimal CurrentCost { get; set; }
 

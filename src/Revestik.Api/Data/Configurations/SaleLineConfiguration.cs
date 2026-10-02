@@ -14,7 +14,7 @@ public sealed class SaleLineConfiguration : IEntityTypeConfiguration<SaleLine>
         builder.Property(line => line.Description).HasMaxLength(500).IsRequired();
         builder.Property(line => line.Unit).HasMaxLength(50).IsRequired();
         builder.Property(line => line.DiscountType).HasConversion<string>().HasMaxLength(20);
-        builder.Property(line => line.Quantity).HasPrecision(18, 2);
+        builder.Property(line => line.Quantity).HasPrecision(18, 4);
         builder.Property(line => line.UnitPrice).HasPrecision(18, 2);
         builder.Property(line => line.DiscountValue).HasPrecision(18, 2);
         builder.Property(line => line.TaxRate).HasPrecision(5, 2);

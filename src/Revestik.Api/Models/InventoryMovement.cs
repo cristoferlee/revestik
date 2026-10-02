@@ -15,6 +15,10 @@ public sealed class InventoryMovement
 
     public Sale? Sale { get; set; }
 
+    public int? PurchaseLineId { get; set; }
+
+    public PurchaseLine? PurchaseLine { get; set; }
+
     public int? PhysicalCountId { get; set; }
 
     public InventoryPhysicalCount? PhysicalCount { get; set; }

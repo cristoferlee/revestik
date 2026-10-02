@@ -58,7 +58,10 @@ public sealed class ProductService(RevestikDbContext dbContext)
                         product.TaxRate,
                         product.StockQuantity,
                         product.MinimumStock,
-                        product.IsDeleted))
+                        product.IsDeleted)
+                    {
+                        SalePriceBasis = product.SalePriceBasis
+                    })
                 .ToListAsync(cancellationToken);
         }
 
@@ -101,7 +104,10 @@ public sealed class ProductService(RevestikDbContext dbContext)
                     product.MinimumStock,
                     product.IsDeleted,
                     product.CreatedAtUtc,
-                    product.UpdatedAtUtc))
+                    product.UpdatedAtUtc)
+                {
+                    SalePriceBasis = product.SalePriceBasis
+                })
             .SingleOrDefaultAsync(cancellationToken);
     }
 
@@ -121,6 +127,7 @@ public sealed class ProductService(RevestikDbContext dbContext)
 
         var product = new Product
         {
+            SalePriceBasis = request.SalePriceBasis ?? SalePriceBasis.InventoryUnit,
             StockQuantity = 0m,
             IsDeleted = false,
             IsArchived = false,
@@ -139,8 +146,8 @@ public sealed class ProductService(RevestikDbContext dbContext)
             cancellationToken);
 
         return await GetByIdAsync(
-                product.Id,
-                cancellationToken)
+            product.Id,
+            cancellationToken)
             ?? throw new InvalidOperationException(
                 "The created product could not be loaded.");
     }
@@ -185,8 +192,8 @@ public sealed class ProductService(RevestikDbContext dbContext)
             cancellationToken);
 
         return await GetByIdAsync(
-                product.Id,
-                cancellationToken)
+            product.Id,
+            cancellationToken)
             ?? throw new InvalidOperationException(
                 "The updated product could not be loaded.");
     }
@@ -533,6 +540,11 @@ public sealed class ProductService(RevestikDbContext dbContext)
 
         product.SalePrice =
             request.SalePrice;
+
+        if (request.SalePriceBasis.HasValue)
+        {
+            product.SalePriceBasis = request.SalePriceBasis.Value;
+        }
 
         product.CurrentCost =
             request.CurrentCost;

@@ -1,0 +1,367 @@
+@page "/settings/suppliers"
+@using Microsoft.AspNetCore.Authorization
+@using Revestik.Client.Services.Suppliers
+@using Revestik.Shared.Suppliers
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales,Warehouse")]
+@inject ISupplierApiService SupplierApi
+
+<PageTitle>Proveedores | Revestik</PageTitle>
+
+<section class="suppliers-page">
+    <header class="suppliers-header">
+        <div>
+            <h1>Proveedores</h1>
+            <p>Administra los proveedores disponibles para Compras.</p>
+        </div>
+
+        <button type="button"
+                class="primary-button"
+                disabled="@isBusy"
+                @onclick="OpenNewSupplier">
+            Nuevo proveedor
+        </button>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message" role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="status-message" role="status">
+            @successMessage
+        </div>
+    }
+
+    <section class="suppliers-card">
+        <div class="supplier-search-row">
+            <div class="form-group supplier-search">
+                <label>Buscar proveedor</label>
+                <input type="text"
+                       value="@search"
+                       @oninput="SearchChangedAsync"
+                       maxlength="150"
+                       placeholder="Escribe el nombre comercial" />
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <p class="empty-state">Cargando proveedores...</p>
+        }
+        else if (suppliers.Count == 0)
+        {
+            <p class="empty-state">No hay proveedores para mostrar.</p>
+        }
+        else
+        {
+            <div class="supplier-list">
+                @foreach (var supplier in suppliers)
+                {
+                    <article class="supplier-row">
+                        <div class="supplier-details">
+                            <div>
+                                <strong>@supplier.Name</strong>
+                                <span class="supplier-status">
+                                    @(supplier.IsActive ? "Activo" : "Inactivo")
+                                </span>
+                            </div>
+                            <span>@supplier.ContactName</span>
+                            <span>@supplier.PhoneNumber</span>
+                            <span>@supplier.Email</span>
+                        </div>
+
+                        <div class="supplier-actions">
+                            <button type="button"
+                                    class="secondary-button"
+                                    disabled="@isBusy"
+                                    @onclick="() => OpenEditSupplier(supplier)">
+                                Editar
+                            </button>
+
+                            @if (supplier.IsActive)
+                            {
+                                <button type="button"
+                                        class="secondary-button danger-button"
+                                        disabled="@isBusy"
+                                        @onclick="() => DeactivateAsync(supplier)">
+                                    Desactivar
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button"
+                                        class="primary-button"
+                                        disabled="@isBusy"
+                                        @onclick="() => ReactivateAsync(supplier)">
+                                    Reactivar
+                                </button>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+
+    @if (isFormOpen)
+    {
+        <div class="supplier-modal-backdrop" @onclick="CloseForm">
+            <section class="supplier-modal"
+                     role="dialog"
+                     aria-modal="true"
+                     @onclick:stopPropagation>
+                <div class="supplier-modal-heading">
+                    <h2>@(editingSupplierId.HasValue ? "Editar proveedor" : "Nuevo proveedor")</h2>
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@isBusy"
+                            @onclick="CloseForm">
+                        Cerrar
+                    </button>
+                </div>
+
+                <EditForm Model="supplierRequest"
+                          OnValidSubmit="SaveSupplierAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="form-grid">
+                        <div class="form-group form-wide">
+                            <label>Nombre comercial</label>
+                            <InputText @bind-Value="supplierRequest.Name"
+                                       maxlength="150" />
+                            <ValidationMessage For="@(() => supplierRequest.Name)" />
+                        </div>
+
+                        <div class="form-group form-wide">
+                            <label>Nombre de contacto</label>
+                            <InputText @bind-Value="supplierRequest.ContactName"
+                                       maxlength="150" />
+                            <ValidationMessage For="@(() => supplierRequest.ContactName)" />
+                        </div>
+
+                        <div class="form-group">
+                            <label>Teléfono</label>
+                            <InputText @bind-Value="supplierRequest.PhoneNumber"
+                                       maxlength="20" />
+                            <ValidationMessage For="@(() => supplierRequest.PhoneNumber)" />
+                        </div>
+
+                        <div class="form-group">
+                            <label>Correo electrónico</label>
+                            <InputText @bind-Value="supplierRequest.Email"
+                                       maxlength="254" />
+                            <ValidationMessage For="@(() => supplierRequest.Email)" />
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button"
+                                class="secondary-button"
+                                disabled="@isBusy"
+                                @onclick="CloseForm">
+                            Cancelar
+                        </button>
+                        <button type="submit"
+                                class="primary-button"
+                                disabled="@isBusy">
+                            @(isSaving ? "Guardando..." : "Guardar")
+                        </button>
+                    </div>
+                </EditForm>
+            </section>
+        </div>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<SupplierListItemResponse> suppliers = [];
+    private SupplierUpsertRequest supplierRequest = new();
+    private string search = string.Empty;
+    private int? editingSupplierId;
+    private bool isFormOpen;
+    private bool isLoading;
+    private bool isSaving;
+    private string? errorMessage;
+    private string? successMessage;
+
+    private bool isBusy => isLoading || isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSuppliersAsync();
+    }
+
+    private async Task SearchChangedAsync(ChangeEventArgs args)
+    {
+        search = args.Value?.ToString() ?? string.Empty;
+        await LoadSuppliersAsync();
+    }
+
+    private async Task LoadSuppliersAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var page = await SupplierApi.GetPageAsync(
+                new SupplierListRequest
+                {
+                    Search = search,
+                    IncludeInactive = true,
+                    Page = 1,
+                    PageSize = 100
+                });
+
+            suppliers = page.Items;
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = $"No se pudieron cargar los proveedores. {exception.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OpenNewSupplier()
+    {
+        ClearMessages();
+        editingSupplierId = null;
+        supplierRequest = new SupplierUpsertRequest();
+        isFormOpen = true;
+    }
+
+    private void OpenEditSupplier(SupplierListItemResponse supplier)
+    {
+        ClearMessages();
+        editingSupplierId = supplier.Id;
+        supplierRequest = new SupplierUpsertRequest
+        {
+            Name = supplier.Name,
+            ContactName = supplier.ContactName,
+            PhoneNumber = supplier.PhoneNumber,
+            Email = supplier.Email
+        };
+        isFormOpen = true;
+    }
+
+    private async Task SaveSupplierAsync()
+    {
+        isSaving = true;
+        ClearMessages();
+
+        try
+        {
+            if (editingSupplierId.HasValue)
+            {
+                var updated = await SupplierApi.UpdateAsync(
+                    editingSupplierId.Value,
+                    supplierRequest);
+
+                if (updated is null)
+                {
+                    errorMessage = "El proveedor ya no existe.";
+                    return;
+                }
+
+                successMessage = $"Proveedor {updated.Name} actualizado.";
+            }
+            else
+            {
+                var created = await SupplierApi.CreateAsync(supplierRequest);
+                successMessage = $"Proveedor {created.Name} creado.";
+            }
+
+            isFormOpen = false;
+            await LoadSuppliersAsync();
+        }
+        catch (SupplierNameConflictException)
+        {
+            errorMessage = "Ya existe un proveedor con ese nombre comercial.";
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = $"No se pudo guardar el proveedor. {exception.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task DeactivateAsync(SupplierListItemResponse supplier)
+    {
+        isSaving = true;
+        ClearMessages();
+
+        try
+        {
+            if (!await SupplierApi.DeactivateAsync(supplier.Id))
+            {
+                errorMessage = "El proveedor ya no existe.";
+                return;
+            }
+
+            successMessage = $"Proveedor {supplier.Name} desactivado.";
+            await LoadSuppliersAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = $"No se pudo desactivar el proveedor. {exception.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ReactivateAsync(SupplierListItemResponse supplier)
+    {
+        isSaving = true;
+        ClearMessages();
+
+        try
+        {
+            if (!await SupplierApi.ReactivateAsync(supplier.Id))
+            {
+                errorMessage = "El proveedor ya no existe.";
+                return;
+            }
+
+            successMessage = $"Proveedor {supplier.Name} reactivado.";
+            await LoadSuppliersAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            errorMessage = $"No se pudo reactivar el proveedor. {exception.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void CloseForm()
+    {
+        if (isSaving)
+        {
+            return;
+        }
+
+        isFormOpen = false;
+        editingSupplierId = null;
+    }
+
+    private void ClearMessages()
+    {
+        errorMessage = null;
+        successMessage = null;
+    }
+}

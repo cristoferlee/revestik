@@ -39,6 +39,46 @@ public sealed class InventoryCostResolutionService(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<InventoryCostLayerResponse>>
+        GetLayersAsync(
+            int? productId,
+            CancellationToken cancellationToken)
+    {
+        var query = dbContext.InventoryCostLayers
+            .AsNoTracking()
+            .Where(layer =>
+                !layer.Product.IsArchived);
+
+        if (productId.HasValue)
+        {
+            query = query.Where(layer =>
+                layer.ProductId == productId.Value);
+        }
+
+        return await query
+            .OrderBy(layer => layer.Product.Name)
+            .ThenBy(layer => layer.CreatedAtUtc)
+            .ThenBy(layer => layer.Id)
+            .Select(layer =>
+                new InventoryCostLayerResponse(
+                    layer.Id,
+                    layer.ProductId,
+                    layer.Product.Name,
+                    layer.Product.InventoryUnit.Symbol,
+                    layer.OriginalQuantity,
+                    layer.RemainingQuantity,
+                    layer.UnitCost ?? layer.ResolvedUnitCost,
+                    layer.SourceMovementId,
+                    layer.SourceMovement.Type,
+                    layer.SourceMovement.PurchaseLine != null
+                        ? layer.SourceMovement.PurchaseLine.PurchaseId
+                        : null,
+                    layer.SourceMovement.SaleId,
+                    layer.SourceMovement.PhysicalCountId,
+                    layer.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<ResolvedInventoryCostResponse?> ResolveAsync(
         int layerId,
         ResolveInventoryCostRequest request,

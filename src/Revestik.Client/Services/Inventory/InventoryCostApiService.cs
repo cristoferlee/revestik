@@ -18,6 +18,22 @@ public sealed class InventoryCostApiService(HttpClient httpClient)
             ?? [];
     }
 
+    public async Task<IReadOnlyList<InventoryCostLayerResponse>>
+        GetLayersAsync(
+            int? productId = null,
+            CancellationToken cancellationToken = default)
+    {
+        var url = productId.HasValue
+            ? $"api/inventory/cost-layers?productId={productId.Value}"
+            : "api/inventory/cost-layers";
+
+        return await httpClient
+            .GetFromJsonAsync<List<InventoryCostLayerResponse>>(
+                url,
+                cancellationToken)
+            ?? [];
+    }
+
     public async Task<ResolvedInventoryCostResponse?> ResolveAsync(
         int layerId,
         ResolveInventoryCostRequest request,

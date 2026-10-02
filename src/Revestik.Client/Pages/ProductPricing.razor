@@ -1,0 +1,268 @@
+@page "/settings/product-pricing"
+@using Revestik.Client.Services.Products
+@using Revestik.Shared.Products
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales")]
+@inject IProductApiService ProductApi
+
+<PageTitle>Unidad del precio | Revestik</PageTitle>
+
+<section class="pricing-page">
+    <header class="page-header">
+        <div>
+            <h1>Unidad del precio de venta</h1>
+            <p>
+                Define si el precio de cada producto corresponde a la unidad física
+                o al contenido de esa unidad.
+            </p>
+        </div>
+
+        <a class="secondary-button" href="/settings">
+            Volver a configuración
+        </a>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message" role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="status-message" role="status">
+            @successMessage
+        </div>
+    }
+
+    <section class="pricing-card">
+        <form class="search-form"
+              @onsubmit="LoadAsync"
+              @onsubmit:preventDefault>
+            <input type="search"
+                   maxlength="150"
+                   placeholder="Buscar producto, descripción o CABYS"
+                   @bind="search" />
+
+            <button type="submit"
+                    class="primary-button"
+                    disabled="@isLoading">
+                @(isLoading ? "Cargando..." : "Buscar")
+            </button>
+        </form>
+
+        @if (products.Count == 0)
+        {
+            <p class="empty-state">
+                No se encontraron productos activos.
+            </p>
+        }
+        else
+        {
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Presentación</th>
+                            <th>Precio</th>
+                            <th>Precio corresponde a</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var product in products)
+                        {
+                            <tr>
+                                <td data-label="Producto">
+                                    <strong>@product.Name</strong>
+                                    <small class="table-secondary-text">
+                                        @product.CabysCode
+                                    </small>
+                                </td>
+                                <td data-label="Presentación">
+                                    1 @product.InventoryUnitSymbol =
+                                    @product.CommercialUnitsPerInventoryUnit.ToString("N4")
+                                    @product.CommercialUnitSymbol
+                                </td>
+                                <td data-label="Precio">
+                                    ₡@product.SalePrice.ToString("N2")
+                                </td>
+                                <td data-label="Precio corresponde a">
+                                    @if (product.InventoryUnitSymbol == product.CommercialUnitSymbol)
+                                    {
+                                        <span>@product.InventoryUnitSymbol</span>
+                                    }
+                                    else
+                                    {
+                                        <select value="@pendingBasis[product.Id]"
+                                                @onchange="args => OnBasisChanged(product.Id, args)">
+                                            <option value="@SalePriceBasis.InventoryUnit">
+                                                Unidad física (@product.InventoryUnitSymbol)
+                                            </option>
+                                            <option value="@SalePriceBasis.CommercialUnit">
+                                                Contenido (@product.CommercialUnitSymbol)
+                                            </option>
+                                        </select>
+                                    }
+                                </td>
+                                <td data-label="Acción">
+                                    <button type="button"
+                                            class="primary-button @(savedProductIds.Contains(product.Id) ? "saved-button" : null)"
+                                            disabled="@(isSavingProductId == product.Id || savedProductIds.Contains(product.Id))"
+                                            @onclick="() => SaveAsync(product)">
+                                        @(isSavingProductId == product.Id
+                                            ? "Guardando..."
+                                            : savedProductIds.Contains(product.Id)
+                                                ? "Guardado ✓"
+                                                : "Guardar")
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</section>
+
+@code {
+    private readonly List<ProductListItemResponse> products = [];
+    private readonly Dictionary<int, SalePriceBasis> pendingBasis = [];
+    private readonly HashSet<int> savedProductIds = [];
+
+    private string search = string.Empty;
+    private bool isLoading;
+    private int? isSavingProductId;
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync() =>
+        await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var result = await ProductApi.GetPageAsync(
+                new ProductListRequest
+                {
+                    Search = string.IsNullOrWhiteSpace(search)
+                        ? null
+                        : search.Trim(),
+                    ActivityStatus = ProductActivityStatus.Active,
+                    SortBy = ProductSortField.Name,
+                    SortDirection = SortDirection.Asc,
+                    Page = 1,
+                    PageSize = 100
+                });
+
+            products.Clear();
+            products.AddRange(result.Items);
+
+            pendingBasis.Clear();
+            foreach (var product in products)
+            {
+                pendingBasis[product.Id] = product.SalePriceBasis;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "No fue posible cargar los productos.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OnBasisChanged(
+        int productId,
+        ChangeEventArgs args)
+    {
+        if (Enum.TryParse<SalePriceBasis>(args.Value?.ToString(), out var basis))
+        {
+            pendingBasis[productId] = basis;
+            savedProductIds.Remove(productId);
+        }
+        successMessage = null;
+        errorMessage = null;
+    }
+
+    private async Task SaveAsync(
+        ProductListItemResponse listItem)
+    {
+        isSavingProductId = listItem.Id;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var product = await ProductApi.GetByIdAsync(listItem.Id);
+
+            if (product is null)
+            {
+                errorMessage = "El producto ya no está disponible.";
+                return;
+            }
+
+            var basis = product.InventoryUnitId == product.CommercialUnitId
+                ? SalePriceBasis.InventoryUnit
+                : pendingBasis.GetValueOrDefault(
+                    product.Id,
+                    product.SalePriceBasis);
+
+            var updated = await ProductApi.UpdateAsync(
+                product.Id,
+                new ProductUpsertRequest
+                {
+                    CategoryId = product.CategoryId,
+                    Name = product.Name,
+                    Description = product.Description,
+                    CabysCode = product.CabysCode,
+                    InventoryUnitId = product.InventoryUnitId,
+                    CommercialUnitId = product.CommercialUnitId,
+                    CommercialUnitsPerInventoryUnit =
+                        product.CommercialUnitsPerInventoryUnit,
+                    RequiresWholeInventoryUnits =
+                        product.RequiresWholeInventoryUnits,
+                    SalePrice = product.SalePrice,
+                    SalePriceBasis = basis,
+                    CurrentCost = product.CurrentCost,
+                    TaxRate = product.TaxRate,
+                    MinimumStock = product.MinimumStock
+                });
+
+            if (updated is null)
+            {
+                errorMessage = "El producto ya no está disponible.";
+                return;
+            }
+
+            savedProductIds.Add(updated.Id);
+
+            successMessage =
+                $"{updated.Name}: el precio ahora corresponde a " +
+                GetBasisLabel(updated) + ".";
+
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "No fue posible actualizar la unidad del precio.";
+        }
+        finally
+        {
+            isSavingProductId = null;
+        }
+    }
+
+    private static string GetBasisLabel(ProductResponse product) =>
+        product.SalePriceBasis == SalePriceBasis.CommercialUnit
+            ? $"{product.CommercialUnitSymbol}"
+            : $"{product.InventoryUnitSymbol}";
+}

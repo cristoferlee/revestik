@@ -1,6 +1,656 @@
 @page "/purchases"
 
+@using Revestik.Client.Components.Commercial
+@using Revestik.Shared.Products
+@using Revestik.Shared.Purchases
+@using Revestik.Shared.Sales
+@using Revestik.Shared.Suppliers
+
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales,Warehouse")]
+
 <PageTitle>Compras | Revestik</PageTitle>
 
-<h1>Compras</h1>
-<p>La administración de compras se encuentra en desarrollo.</p>
+<section class="purchases-page">
+    <header class="page-header purchases-hero">
+        <div>
+            <h1>Compras</h1>
+            <p>
+                Registra compras para bodega. Al confirmar, el inventario
+                se actualizará automáticamente.
+            </p>
+        </div>
+
+        <a class="secondary-button"
+           href="/purchases/history">
+            Historial y cuentas por pagar
+        </a>
+    </header>
+
+    <section class="purchase-overview" aria-label="Resumen de la compra en curso">
+        <div class="overview-item">
+            <span>Proveedor</span>
+            <strong>@(selectedSupplier?.Name ?? "Sin seleccionar")</strong>
+        </div>
+        <div class="overview-item">
+            <span>Productos</span>
+            <strong>@lines.Count</strong>
+        </div>
+        <div class="overview-item">
+            <span>Condición</span>
+            <strong>@GetPaymentTypeLabel(paymentType)</strong>
+        </div>
+        <div class="overview-item overview-total">
+            <span>Total actual</span>
+            <strong>@currency @PurchaseTotal.ToString("N2")</strong>
+        </div>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message" role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="status-message success-message" role="status">
+            @successMessage
+        </div>
+    }
+
+    <section class="purchase-card purchase-step-card">
+        <div class="section-heading">
+            <div>
+                <span class="step-kicker">Paso 1</span>
+                <h2>Proveedor</h2>
+                <p>Selecciona un proveedor activo ya configurado.</p>
+            </div>
+
+            <a class="secondary-button"
+               href="/settings/suppliers">
+                Configurar proveedores
+            </a>
+        </div>
+
+        @if (selectedSupplier is not null)
+        {
+            <div class="selected-entity">
+                <div>
+                    <strong>@selectedSupplier.Name</strong>
+                    <span>
+                        @selectedSupplier.ContactName ·
+                        @selectedSupplier.PhoneNumber
+                    </span>
+                </div>
+
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@isSaving"
+                        @onclick="ClearSupplier">
+                    Cambiar
+                </button>
+            </div>
+        }
+        else
+        {
+            <form class="search-form"
+                  @onsubmit="SearchSuppliersAsync"
+                  @onsubmit:preventDefault>
+                <input type="search"
+                       maxlength="150"
+                       placeholder="Nombre comercial o contacto"
+                       aria-label="Buscar proveedor"
+                       @bind="supplierSearch" />
+
+                <button type="submit"
+                        class="primary-button"
+                        disabled="@isSearchingSuppliers">
+                    @(isSearchingSuppliers ? "Buscando..." : "Buscar")
+                </button>
+            </form>
+
+            @if (isSearchingSuppliers)
+            {
+                <p class="empty-state">Cargando proveedores...</p>
+            }
+            else if (supplierResults.Count == 0)
+            {
+                <p class="empty-state">
+                    No hay proveedores para mostrar.
+                </p>
+            }
+            else
+            {
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Proveedor</th>
+                                <th>Contacto</th>
+                                <th>Teléfono</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var supplier in supplierResults)
+                            {
+                                <tr>
+                                    <td data-label="Proveedor">
+                                        <strong>@supplier.Name</strong>
+                                    </td>
+                                    <td data-label="Contacto">
+                                        @supplier.ContactName
+                                    </td>
+                                    <td data-label="Teléfono">
+                                        @supplier.PhoneNumber
+                                    </td>
+                                    <td data-label="Acción">
+                                        <button type="button"
+                                                class="secondary-button"
+                                                @onclick="() => SelectSupplier(supplier)">
+                                            Seleccionar
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </section>
+
+    <section class="purchase-card purchase-step-card">
+        <div class="section-heading">
+            <div>
+                <span class="step-kicker">Paso 2</span>
+                <h2>Compra</h2>
+                <p>Los costos ingresados incluyen IVA.</p>
+            </div>
+        </div>
+
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Fecha de compra</label>
+                <InputDate @bind-Value="purchaseDate" />
+            </div>
+
+            <div class="form-group">
+                <label>Moneda</label>
+                <InputSelect @bind-Value="currency">
+                    <option value="@PurchaseCurrency.CRC">CRC</option>
+                    <option value="@PurchaseCurrency.USD">USD</option>
+                </InputSelect>
+            </div>
+
+            @if (currency == PurchaseCurrency.USD)
+            {
+                <div class="form-group">
+                    <label>Tipo de cambio de la compra</label>
+                    <InputNumber @bind-Value="exchangeRate"
+                                 min="0.000001"
+                                 step="0.000001" />
+                </div>
+            }
+
+            <div class="form-group">
+                <label>Condición de pago</label>
+                <InputSelect @bind-Value="paymentType">
+                    <option value="@PurchasePaymentType.Cash">Contado</option>
+                    <option value="@PurchasePaymentType.Credit">Crédito</option>
+                </InputSelect>
+            </div>
+
+            @if (paymentType == PurchasePaymentType.Credit)
+            {
+                <div class="form-group">
+                    <label>Plazo de crédito (días)</label>
+                    <InputNumber @bind-Value="creditTermDays"
+                                 min="1"
+                                 step="1" />
+                </div>
+            }
+
+            <div class="form-group form-wide">
+                <label>Notas</label>
+                <InputTextArea @bind-Value="notes"
+                               maxlength="2000"
+                               rows="3" />
+            </div>
+        </div>
+    </section>
+
+    <section class="purchase-card purchase-step-card">
+        <div class="section-heading">
+            <div>
+                <span class="step-kicker">Paso 3</span>
+                <h2>Productos</h2>
+                <p>
+                    Cada producto puede aparecer una sola vez en la compra.
+                </p>
+            </div>
+
+            <div class="product-actions">
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@isSaving"
+                        @onclick="OpenProductSelector">
+                    Buscar producto
+                </button>
+
+                <AuthorizeView Roles="Administrator,Accountant,Sales">
+                    <button type="button"
+                            class="primary-button"
+                            disabled="@isSaving"
+                            @onclick="OpenNewProductAsync">
+                        Crear producto nuevo
+                    </button>
+                </AuthorizeView>
+            </div>
+        </div>
+
+        @if (isProductSelectorOpen)
+        {
+            <ProductSelector ProductSelected="SelectProduct"
+                             OnClose="CloseProductSelector" />
+        }
+
+        @if (isNewProductOpen)
+        {
+            <section class="line-editor new-product-editor">
+                <div class="section-heading">
+                    <div>
+                        <h3>Nuevo producto</h3>
+                        <p>Configura el producto; la cantidad y el costo se registran como parte de esta compra.</p>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Categoría</label>
+                        <InputSelect @bind-Value="newProduct.CategoryId">
+                            <option value="0">Seleccione</option>
+                            @foreach (var category in categories)
+                            {
+                                <option value="@category.Id">@category.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Nombre</label>
+                        <InputText @bind-Value="newProduct.Name" maxlength="150" />
+                    </div>
+
+                    <div class="form-group form-wide">
+                        <label>Descripción</label>
+                        <InputTextArea @bind-Value="newProduct.Description" maxlength="500" rows="2" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>CABYS</label>
+                        <InputText @bind-Value="newProduct.CabysCode" maxlength="13" inputmode="numeric" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Unidad física</label>
+                        <select value="@newProduct.InventoryUnitId" @onchange="OnNewProductInventoryUnitChanged">
+                            <option value="0">Seleccione</option>
+                            @foreach (var unit in units)
+                            {
+                                <option value="@unit.Id">@unit.Name (@unit.Symbol)</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Unidad de contenido</label>
+                        <select value="@newProduct.CommercialUnitId" @onchange="OnNewProductCommercialUnitChanged">
+                            <option value="0">Seleccione</option>
+                            @foreach (var unit in units)
+                            {
+                                <option value="@unit.Id">@unit.Name (@unit.Symbol)</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Contenido por unidad física</label>
+                        <InputNumber @bind-Value="newProduct.CommercialUnitsPerInventoryUnit" min="0.0001" step="0.0001"
+                                     disabled="@(newProduct.InventoryUnitId > 0 && newProduct.InventoryUnitId == newProduct.CommercialUnitId)" />
+                        <small class="field-guidance">Ej.: 1 caja = 1.44 m² o 1 saco = 20 kg.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Precio de venta</label>
+                        <InputNumber @bind-Value="newProduct.SalePrice" min="0.01" step="0.01" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>El precio corresponde a</label>
+                        <InputSelect @bind-Value="newProduct.SalePriceBasis"
+                                     disabled="@(newProduct.InventoryUnitId > 0 && newProduct.InventoryUnitId == newProduct.CommercialUnitId)">
+                            <option value="@SalePriceBasis.InventoryUnit">Unidad física</option>
+                            <option value="@SalePriceBasis.CommercialUnit">Unidad de contenido</option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="form-group">
+                        <label>IVA</label>
+                        <InputSelect @bind-Value="newProduct.TaxRate">
+                            <option value="13">13%</option>
+                            <option value="0">0%</option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Inventario mínimo</label>
+                        <InputNumber @bind-Value="newProduct.MinimumStock" min="0" step="0.0001" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <InputCheckbox @bind-Value="newProduct.RequiresWholeInventoryUnits" />
+                            Solo unidades físicas completas
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="secondary-button" @onclick="CloseNewProduct">Cancelar</button>
+                    <button type="button" class="primary-button" @onclick="AddNewProductLine">Continuar con cantidad y costo</button>
+                </div>
+            </section>
+        }
+
+        @if (lineEditor is not null)
+        {
+            <section class="line-editor">
+                <div class="section-heading">
+                    <div>
+                        <h3>@lineEditor.ProductName</h3>
+                        <p>
+                            Unidad de inventario:
+                            @lineEditor.InventoryUnitSymbol
+                        </p>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Cantidad</label>
+                        <InputNumber @bind-Value="lineEditor.Quantity"
+                                     min="@(lineEditor.RequiresWholeUnits ? "1" : "0.0001")"
+                                     step="@(lineEditor.RequiresWholeUnits ? "1" : "0.0001")" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            Costo unitario (@currency)
+                        </label>
+                        <InputNumber @bind-Value="lineEditor.UnitCost"
+                                     min="0.01"
+                                     step="0.01" />
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button"
+                            class="secondary-button"
+                            @onclick="CancelLineEditor">
+                        Cancelar
+                    </button>
+
+                    <button type="button"
+                            class="primary-button"
+                            @onclick="ConfirmLine">
+                        Agregar línea
+                    </button>
+                </div>
+            </section>
+        }
+
+        @if (lines.Count == 0)
+        {
+            <p class="empty-state">
+                Todavía no hay productos agregados.
+            </p>
+        }
+        else
+        {
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Unidad</th>
+                            <th>Cantidad</th>
+                            <th>Costo unitario</th>
+                            <th>Total</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in lines)
+                        {
+                            <tr>
+                                <td data-label="Producto">
+                                    <strong>@line.ProductName</strong>
+                                </td>
+                                <td data-label="Unidad">
+                                    @line.InventoryUnitSymbol
+                                </td>
+                                <td data-label="Cantidad">
+                                    @line.Quantity.ToString("N4")
+                                </td>
+                                <td data-label="Costo unitario">
+                                    @line.UnitCost.ToString("N2")
+                                </td>
+                                <td data-label="Total">
+                                    <strong>
+                                        @line.LineTotal.ToString("N2")
+                                    </strong>
+                                </td>
+                                <td data-label="Acción">
+                                    <button type="button"
+                                            class="secondary-button danger-button"
+                                            disabled="@isSaving"
+                                            @onclick="() => RemoveLine(line)">
+                                        Eliminar
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <div class="purchase-total">
+            <span>Total de compra</span>
+            <strong class="purchase-total-value">
+                @currency @PurchaseTotal.ToString("N2")
+            </strong>
+        </div>
+    </section>
+
+    <section class="purchase-card purchase-step-card">
+        <div class="section-heading">
+            <div>
+                <span class="step-kicker">Paso 4</span>
+                <h2>Pago inicial</h2>
+                <p>
+                    @(paymentType == PurchasePaymentType.Cash
+                        ? "La compra de contado debe quedar totalmente pagada al confirmar."
+                        : "El adelanto es opcional para compras a crédito.")
+                </p>
+            </div>
+        </div>
+
+        @if (paymentType == PurchasePaymentType.Credit)
+        {
+            <label class="checkbox-row">
+                <InputCheckbox @bind-Value="hasInitialPayment" />
+                Registrar adelanto inicial
+            </label>
+        }
+
+        @if (paymentType == PurchasePaymentType.Cash || hasInitialPayment)
+        {
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Monto</label>
+                    <InputNumber @bind-Value="initialPaymentAmount"
+                                 disabled="@(paymentType == PurchasePaymentType.Cash)"
+                                 min="0.01"
+                                 step="0.01" />
+                </div>
+
+                <div class="form-group">
+                    <label>Método</label>
+                    <InputSelect @bind-Value="initialPaymentMethod">
+                        @foreach (var method in PaymentMethods)
+                        {
+                            <option value="@method">
+                                @GetPaymentMethodLabel(method)
+                            </option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="form-group">
+                    <label>Fecha del pago</label>
+                    <InputDate @bind-Value="initialPaymentDate" />
+                </div>
+
+                @if (currency == PurchaseCurrency.USD)
+                {
+                    <div class="form-group">
+                        <label>Tipo de cambio del pago</label>
+                        <InputNumber @bind-Value="initialPaymentExchangeRate"
+                                     min="0.000001"
+                                     step="0.000001" />
+                        <small class="field-guidance">
+                            Si el pago se realiza al registrar la compra,
+                            normalmente coincide con el tipo de cambio de la compra.
+                        </small>
+                    </div>
+                }
+
+                <div class="form-group">
+                    <label>Referencia</label>
+                    <InputText @bind-Value="initialPaymentReference"
+                               maxlength="200" />
+                </div>
+
+                <div class="form-group form-wide">
+                    <label>Notas del pago</label>
+                    <InputTextArea @bind-Value="initialPaymentNotes"
+                                   maxlength="1000"
+                                   rows="2" />
+                </div>
+            </div>
+        }
+    </section>
+
+    <section class="purchase-card purchase-step-card confirmation-card">
+        <div class="section-heading">
+            <div>
+                <span class="step-kicker">Paso 5</span>
+                <h2>Confirmación</h2>
+                <p>
+                    Después de confirmar, las líneas, costos y notas de esta compra
+                    quedan congelados.
+                </p>
+            </div>
+        </div>
+
+        <button type="button"
+                class="primary-button"
+                disabled="@isSaving"
+                @onclick="OpenConfirmation">
+            Revisar y confirmar compra
+        </button>
+    </section>
+
+    @if (isConfirmationOpen)
+    {
+        <div class="purchase-modal-backdrop">
+            <section class="purchase-modal"
+                     role="dialog"
+                     aria-modal="true">
+                <div class="section-heading">
+                    <div>
+                        <h2>Confirmar compra</h2>
+                        <p>
+                            Revisa los datos antes de registrar la compra y actualizar el inventario.
+                        </p>
+                    </div>
+                </div>
+
+                <dl class="confirmation-grid">
+                    <div>
+                        <dt>Proveedor</dt>
+                        <dd>@selectedSupplier?.Name</dd>
+                    </div>
+                    <div>
+                        <dt>Fecha</dt>
+                        <dd>@purchaseDate.ToString("dd/MM/yyyy")</dd>
+                    </div>
+                    <div>
+                        <dt>Moneda</dt>
+                        <dd>@currency</dd>
+                    </div>
+                    <div>
+                        <dt>Condición</dt>
+                        <dd>@GetPaymentTypeLabel(paymentType)</dd>
+                    </div>
+                    @if (paymentType == PurchasePaymentType.Credit)
+                    {
+                        <div>
+                            <dt>Plazo</dt>
+                            <dd>@creditTermDays días</dd>
+                        </div>
+                        <div>
+                            <dt>Vence</dt>
+                            <dd>@purchaseDate.AddDays(creditTermDays).ToString("dd/MM/yyyy")</dd>
+                        </div>
+                    }
+                    <div>
+                        <dt>Líneas</dt>
+                        <dd>@lines.Count</dd>
+                    </div>
+                    <div>
+                        <dt>Total</dt>
+                        <dd>@currency @PurchaseTotal.ToString("N2")</dd>
+                    </div>
+                    <div>
+                        <dt>Pago inicial</dt>
+                        <dd>
+                            @(HasInitialPaymentForSubmit
+                                ? $"{currency} {InitialPaymentForSubmit.ToString("N2")}"
+                                : "Sin adelanto")
+                        </dd>
+                    </div>
+                </dl>
+
+                <div class="form-actions">
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@isSaving"
+                            @onclick="CloseConfirmation">
+                        Volver
+                    </button>
+
+                    <button type="button"
+                            class="primary-button"
+                            disabled="@isSaving"
+                            @onclick="ConfirmPurchaseAsync">
+                        @(isSaving ? "Registrando..." : "Confirmar compra")
+                    </button>
+                </div>
+            </section>
+        </div>
+    }
+</section>

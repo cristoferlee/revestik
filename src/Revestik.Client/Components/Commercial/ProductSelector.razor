@@ -79,7 +79,10 @@
                                 @product.CommercialUnitSymbol
                             </td>
                             <td data-label="Precio">
-                                ₡@product.SalePrice.ToString("N2") / @product.CommercialUnitSymbol
+                                ₡@product.SalePrice.ToString("N2") /
+                                @(product.SalePriceBasis == SalePriceBasis.CommercialUnit
+                                    ? product.CommercialUnitSymbol
+                                    : product.InventoryUnitSymbol)
                             </td>
                             <td data-label="IVA">@product.TaxRate.ToString("N0")%</td>
                             <td data-label="Stock">

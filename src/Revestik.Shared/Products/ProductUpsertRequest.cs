@@ -46,6 +46,8 @@ public sealed class ProductUpsertRequest : IValidatableObject
         ErrorMessage = "El precio de venta debe ser mayor que cero.")]
     public decimal SalePrice { get; set; }
 
+    public SalePriceBasis? SalePriceBasis { get; set; }
+
     [Range(
         typeof(decimal),
         "0.01",
@@ -65,6 +67,14 @@ public sealed class ProductUpsertRequest : IValidatableObject
     public IEnumerable<ValidationResult> Validate(
         ValidationContext validationContext)
     {
+        if (SalePriceBasis.HasValue &&
+            !Enum.IsDefined(SalePriceBasis.Value))
+        {
+            yield return new ValidationResult(
+                "La unidad del precio de venta no es válida.",
+                [nameof(SalePriceBasis)]);
+        }
+
         if (TaxRate is not 0m and not 13m)
         {
             yield return new ValidationResult(

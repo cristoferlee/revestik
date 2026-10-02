@@ -9,10 +9,12 @@ using Revestik.Api.Integrations.Locations;
 using Revestik.Api.Services.Customers;
 using Revestik.Api.Services.Inventory;
 using Revestik.Api.Services.Products;
+using Revestik.Api.Services.Purchases;
 using Revestik.Api.Services.Quotations;
 using Revestik.Api.Services.Quotations.Pdf;
 using Revestik.Api.Services.Sales;
 using Revestik.Api.Services.Sales.Pdf;
+using Revestik.Api.Services.Suppliers;
 
 const string ClientCorsPolicy = "ClientCorsPolicy";
 
@@ -76,8 +78,15 @@ builder.Services.AddRevestikAuthentication(
     builder.Configuration);
 
 builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<IProductService, ProductService>();
-builder.Services.AddScoped<IInventoryService, InventoryService>();
+builder.Services.AddScoped<IPurchaseService, PurchaseService>();
+builder.Services.AddScoped<IPurchaseQueryService, PurchaseQueryService>();
+builder.Services.AddScoped<InventoryService>();
+builder.Services.AddScoped<IInventoryService, PricingAwareInventoryService>();
+builder.Services.AddScoped<
+    IInventoryPurchaseReceiptService,
+    InventoryPurchaseReceiptService>();
 
 builder.Services.AddScoped<
     IInventoryCostResolutionService,
@@ -201,9 +210,12 @@ app.MapGet(
     .AllowAnonymous();
 
 app.MapCustomerEndpoints();
+app.MapSupplierEndpoints();
+app.MapPurchaseEndpoints();
 app.MapProductEndpoints();
 app.MapInventoryCatalogEndpoints();
 app.MapInventoryEndpoints();
+app.MapInventoryCostLayerEndpoints();
 app.MapQuotationEndpoints();
 app.MapSaleEndpoints();
 app.MapTaxpayerEndpoints();
