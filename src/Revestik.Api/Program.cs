@@ -137,6 +137,7 @@ app.MapCustomerEndpoints();
 app.MapSupplierEndpoints();
 app.MapPurchaseEndpoints();
 app.MapElectronicDocumentEndpoints();
+app.MapElectronicDocumentPeriodSummaryEndpoints();
 app.MapGmailIntegrationEndpoints();
 app.MapProductEndpoints();
 app.MapInventoryCatalogEndpoints();

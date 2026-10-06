@@ -1,12 +1,14 @@
 @page "/purchases/received-documents"
 
 @using Microsoft.AspNetCore.Components.Forms
+@using System.Net.Http.Json
 @using Revestik.Client.Services.ElectronicDocuments
 @using Revestik.Shared.ElectronicDocuments
 
 @attribute [Authorize(Roles = "Administrator,Accountant,Sales,Warehouse")]
 @implements IDisposable
 @inject IElectronicDocumentApiService ElectronicDocumentApi
+@inject HttpClient Http
 @inject IGmailIntegrationApiService GmailIntegrationApi
 @inject NavigationManager Navigation
 
@@ -34,7 +36,7 @@
                 class="@(showHistory ? "workflow-tab module-nav-button" : "workflow-tab module-nav-button active")"
                 disabled="@isBusy"
                 @onclick="ShowPendingAsync">
-            Pendientes (@summary.PendingCount)
+            Pendientes (@pendingWorkCount)
         </button>
         <button type="button"
                 class="@(showHistory ? "workflow-tab module-nav-button active" : "workflow-tab module-nav-button")"
@@ -62,24 +64,40 @@
         <div class="status-message" role="status">@successMessage</div>
     }
 
-    <section class="received-kpis" aria-label="Resumen de documentos recibidos">
-        <article class="received-kpi">
-            <span>Pendientes</span>
-            <strong>@summary.PendingCount</strong>
-        </article>
-        <article class="received-kpi">
-            <span>Procesados</span>
-            <strong>@summary.ProcessedCount</strong>
-        </article>
-        <article class="received-kpi">
-            <span>Sin acción requerida</span>
-            <strong>@summary.NoActionRequiredCount</strong>
-        </article>
-        <article class="received-kpi">
-            <span>Con respuesta Hacienda</span>
-            <strong>@summary.WithHaciendaResponseCount</strong>
-        </article>
-    </section>
+    @if (!showHistory)
+    {
+        <section class="received-kpis" aria-label="Resumen de documentos recibidos">
+            <article class="received-kpi">
+                <span>Pendientes</span>
+                <strong>@summary.PendingCount</strong>
+            </article>
+            <article class="received-kpi">
+                <span>Procesados</span>
+                <strong>@summary.ProcessedCount</strong>
+            </article>
+            <article class="received-kpi">
+                <span>Sin acción requerida</span>
+                <strong>@summary.NoActionRequiredCount</strong>
+            </article>
+            <article class="received-kpi">
+                <span>Con respuesta Hacienda</span>
+                <strong>@summary.WithHaciendaResponseCount</strong>
+            </article>
+        </section>
+    }
+    else
+    {
+        <section class="received-kpis history-kpis" aria-label="Resumen del período consultado">
+            <article class="received-kpi">
+                <span>Documentos del período</span>
+                <strong>@totalCount</strong>
+            </article>
+            <article class="received-kpi history-period-kpi">
+                <span>Período por FechaEmision</span>
+                <strong>@FormatDateRange(filters.DateFrom, filters.DateTo)</strong>
+            </article>
+        </section>
+    }
 
     @if (summary.AccountingTotals is { Count: > 0 })
     {
@@ -244,15 +262,20 @@
         </div>
 
         <div class="import-row">
-            <InputFile OnChange="HandleFileSelected"
-                       accept=".xml,text/xml,application/xml" />
-            <div class="selected-file">
-                @(selectedFile is null
-                    ? "Ningún archivo seleccionado"
-                    : $"{selectedFile.Name} · {FormatFileSize(selectedFile.Size)}")
+            <div class="file-picker-shell">
+                <div class="file-picker-copy">
+                    <span class="file-picker-icon" aria-hidden="true">XML</span>
+                    <div>
+                        <strong>@(selectedFile is null ? "Selecciona un comprobante XML" : selectedFile.Name)</strong>
+                        <span>@(selectedFile is null ? "Factura electrónica o Mensaje Hacienda · máximo 5 MB" : FormatFileSize(selectedFile.Size))</span>
+                    </div>
+                </div>
+                <InputFile class="file-picker-input"
+                           OnChange="HandleFileSelected"
+                           accept=".xml,text/xml,application/xml" />
             </div>
             <button type="button"
-                    class="primary-button"
+                    class="primary-button import-action-button"
                     disabled="@(selectedFile is null || isImporting)"
                     @onclick="ImportAsync">
                 @(isImporting ? "Importando..." : "Importar XML")
@@ -403,8 +426,10 @@
             <div class="filters-secondary-row">
                 <div class="date-filter-group" aria-label="Rango de fechas">
                     <div class="date-filter-heading">
-                        <strong>Fecha de emisión</strong>
-                        <span>Filtra por un período específico.</span>
+                        <strong>@(showHistory ? "Período por fecha de emisión" : "Fecha de emisión")</strong>
+                        <span>@(showHistory
+                            ? $"Período activo: {FormatDateRange(filters.DateFrom, filters.DateTo)}. El historial usa FechaEmision."
+                            : "Filtra por un período específico.")</span>
                     </div>
 
                     <div class="date-filter-fields">
@@ -433,7 +458,13 @@
         }
         else if (documents.Count == 0)
         {
-            <p class="empty-state">@(showHistory ? "No se encontraron documentos." : "No hay documentos pendientes por categorizar.")</p>
+            <div class="empty-state empty-state-panel">
+                <span class="empty-state-icon" aria-hidden="true">@(showHistory ? "⌕" : "✓")</span>
+                <strong>@(showHistory ? "No encontramos documentos en este período" : "Todo está al día")</strong>
+                <span>@(showHistory
+                    ? "Prueba otro rango de fechas o ajusta los filtros de búsqueda."
+                    : "No hay documentos pendientes por categorizar. Los próximos comprobantes que requieran revisión aparecerán aquí.")</span>
+            </div>
         }
         else
         {
@@ -483,13 +514,13 @@
     {
         <div class="modal-backdrop" @onclick="CloseCategoryManager">
             <section class="received-modal category-modal" role="dialog" aria-modal="true" @onclick:stopPropagation>
-                <div class="section-heading">
+                <div class="section-heading category-modal-heading">
                     <div>
                         <span class="section-kicker">Configuración</span>
                         <h2>Categorías contables</h2>
                         <p>Las categorías desactivadas conservan su historial y dejan de aparecer en nuevas clasificaciones.</p>
                     </div>
-                    <div class="header-actions">
+                    <div class="header-actions category-modal-actions">
                         <button type="button" class="secondary-button" @onclick="() => showLearningRules = !showLearningRules">
                             @(showLearningRules ? "Ocultar reglas" : "Reglas aprendidas")
                         </button>
@@ -561,7 +592,8 @@
                     </section>
                 }
 
-                <EditForm Model="categoryForm" OnValidSubmit="SaveCategoryAsync" class="category-editor-card">
+                <div class="category-editor-card">
+                    <EditForm Model="categoryForm" OnValidSubmit="SaveCategoryAsync" class="category-editor-form">
                     <DataAnnotationsValidator />
 
                     <div class="category-editor-heading">
@@ -602,9 +634,9 @@
                         </div>
 
                         <div class="form-group sort-order-field">
-                            <label>Orden de visualización</label>
+                            <label>Posición en la lista</label>
                             <InputNumber @bind-Value="categoryForm.SortOrder" min="0" step="10" />
-                            <small class="field-guidance">Solo controla la posición dentro del grupo. Un número menor aparece primero.</small>
+                            <small class="field-guidance">Un número menor aparece primero dentro del grupo.</small>
                         </div>
 
                         <div class="category-suggestion-setting">
@@ -628,7 +660,8 @@
                             <button type="button" class="secondary-button" disabled="@isSavingCategory" @onclick="ResetCategoryForm">Cancelar edición</button>
                         }
                     </div>
-                </EditForm>
+                    </EditForm>
+                </div>
 
                 <div class="category-list">
                     @foreach (var group in categories.OrderBy(x => x.AccountingNature).ThenBy(x => x.SortOrder).ThenBy(x => x.Name).GroupBy(x => x.AccountingNature))
@@ -889,6 +922,7 @@
     private IBrowserFile? selectedFile;
     private readonly Dictionary<int, LineClassificationDraft> lineDrafts = [];
     private int totalCount;
+    private int pendingWorkCount;
     private int classificationCategoryId;
     private OperationalDestination? classificationDestination;
     private int? editingCategoryId;
@@ -932,15 +966,29 @@
         {
             var token = cancellationTokenSource.Token;
             var pageTask = ElectronicDocumentApi.GetPageAsync(filters, token);
-            var summaryTask = ElectronicDocumentApi.GetSummaryAsync(token);
+            var summaryTask = showHistory
+                ? GetPeriodSummaryAsync(filters.DateFrom, filters.DateTo, token)
+                : ElectronicDocumentApi.GetSummaryAsync(token);
+            var pendingSummaryTask = showHistory
+                ? ElectronicDocumentApi.GetSummaryAsync(token)
+                : summaryTask;
             var categoriesTask = ElectronicDocumentApi.GetCategoriesAsync(true, token);
             var inboxTask = ElectronicDocumentApi.GetInboxAsync(token);
             var gmailStatusTask = GmailIntegrationApi.GetStatusAsync(token);
-            await Task.WhenAll(pageTask, summaryTask, categoriesTask, inboxTask, gmailStatusTask);
+
+            await Task.WhenAll(
+                pageTask,
+                summaryTask,
+                pendingSummaryTask,
+                categoriesTask,
+                inboxTask,
+                gmailStatusTask);
+
             var page = await pageTask;
             documents = page.Items;
             totalCount = page.TotalCount;
             summary = await summaryTask;
+            pendingWorkCount = (await pendingSummaryTask).PendingCount;
             categories = await categoriesTask;
             inboxItems = await inboxTask;
             gmailStatus = await gmailStatusTask;
@@ -1066,6 +1114,38 @@
         finally { isImporting = false; }
     }
 
+    private async Task<ElectronicDocumentSummaryResponse> GetPeriodSummaryAsync(
+        DateOnly? dateFrom,
+        DateOnly? dateTo,
+        CancellationToken cancellationToken)
+    {
+        var parameters = new List<string>();
+
+        if (dateFrom.HasValue)
+        {
+            parameters.Add($"DateFrom={Uri.EscapeDataString(dateFrom.Value.ToString("yyyy-MM-dd"))}");
+        }
+
+        if (dateTo.HasValue)
+        {
+            parameters.Add($"DateTo={Uri.EscapeDataString(dateTo.Value.ToString("yyyy-MM-dd"))}");
+        }
+
+        var url = "api/purchases/received-documents/summary-period";
+        if (parameters.Count > 0)
+        {
+            url += $"?{string.Join("&", parameters)}";
+        }
+
+        using var response = await Http.GetAsync(url, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<ElectronicDocumentSummaryResponse>(
+                   cancellationToken)
+               ?? throw new InvalidOperationException(
+                   "La API devolvió un resumen vacío para el período seleccionado.");
+    }
+
     private async Task ShowPendingAsync()
     {
         showHistory = false;
@@ -1076,20 +1156,33 @@
     private async Task ShowHistoryAsync()
     {
         showHistory = true;
-        filters = new ElectronicDocumentListRequest();
+        filters = CreateCurrentMonthHistoryFilters();
         await RefreshAsync();
     }
 
     private async Task ApplyFiltersAsync()
     {
+        if (!IsValidDateRange(filters.DateFrom, filters.DateTo))
+        {
+            errorMessage = "La fecha inicial no puede ser posterior a la fecha final.";
+            return;
+        }
+
         filters.Page = 1;
-        if (!showHistory) filters.ProcessingStatus = ElectronicDocumentProcessingStatus.Pending;
+        if (!showHistory)
+        {
+            filters.ProcessingStatus = ElectronicDocumentProcessingStatus.Pending;
+        }
+
         await RefreshAsync();
     }
 
     private async Task ClearFiltersAsync()
     {
-        filters = showHistory ? new ElectronicDocumentListRequest() : CreatePendingFilters();
+        filters = showHistory
+            ? CreateCurrentMonthHistoryFilters()
+            : CreatePendingFilters();
+
         await RefreshAsync();
     }
 
@@ -1436,6 +1529,45 @@
         Page = 1,
         PageSize = 20
     };
+
+    private static ElectronicDocumentListRequest CreateCurrentMonthHistoryFilters()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var firstDay = new DateOnly(today.Year, today.Month, 1);
+
+        return new ElectronicDocumentListRequest
+        {
+            DateFrom = firstDay,
+            DateTo = firstDay.AddMonths(1).AddDays(-1),
+            Page = 1,
+            PageSize = 20
+        };
+    }
+
+    private static bool IsValidDateRange(DateOnly? dateFrom, DateOnly? dateTo) =>
+        !dateFrom.HasValue ||
+        !dateTo.HasValue ||
+        dateFrom.Value <= dateTo.Value;
+
+    private static string FormatDateRange(DateOnly? dateFrom, DateOnly? dateTo)
+    {
+        if (dateFrom.HasValue && dateTo.HasValue)
+        {
+            return $"{dateFrom.Value:dd/MM/yyyy} – {dateTo.Value:dd/MM/yyyy}";
+        }
+
+        if (dateFrom.HasValue)
+        {
+            return $"desde {dateFrom.Value:dd/MM/yyyy}";
+        }
+
+        if (dateTo.HasValue)
+        {
+            return $"hasta {dateTo.Value:dd/MM/yyyy}";
+        }
+
+        return "todo el historial";
+    }
 
     private static string GetAccountingNatureLabel(AccountingNature nature) => nature switch
     {
