@@ -486,3 +486,6 @@ $RECYCLE.BIN/
 
 # Local generated output
 output/
+
+# Revestik secure received-document staging
+src/Revestik.Api/App_Data/

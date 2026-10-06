@@ -1,0 +1,1523 @@
+@page "/purchases/received-documents"
+
+@using Microsoft.AspNetCore.Components.Forms
+@using Revestik.Client.Services.ElectronicDocuments
+@using Revestik.Shared.ElectronicDocuments
+
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales,Warehouse")]
+@implements IDisposable
+@inject IElectronicDocumentApiService ElectronicDocumentApi
+@inject IGmailIntegrationApiService GmailIntegrationApi
+@inject NavigationManager Navigation
+
+<PageTitle>Documentos recibidos | Revestik</PageTitle>
+
+<section class="received-documents-page">
+    <header class="received-header">
+        <div>
+            <h1>Documentos recibidos</h1>
+            <p>Importa, revisa y clasifica comprobantes electrónicos recibidos.</p>
+        </div>
+
+        <div class="header-actions">
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@isBusy"
+                    @onclick="RefreshAsync">
+                @(isLoading ? "Actualizando..." : "Actualizar")
+            </button>
+        </div>
+    </header>
+
+    <nav class="received-workflow-nav" aria-label="Navegación de compras recibidas">
+        <button type="button"
+                class="@(showHistory ? "workflow-tab module-nav-button" : "workflow-tab module-nav-button active")"
+                disabled="@isBusy"
+                @onclick="ShowPendingAsync">
+            Pendientes (@summary.PendingCount)
+        </button>
+        <button type="button"
+                class="@(showHistory ? "workflow-tab module-nav-button active" : "workflow-tab module-nav-button")"
+                disabled="@isBusy"
+                @onclick="ShowHistoryAsync">
+            Historial
+        </button>
+        <AuthorizeView Roles="Administrator,Accountant">
+            <button type="button"
+                    class="workflow-tab module-nav-button"
+                    disabled="@isBusy"
+                    @onclick="ToggleCategoryManager">
+                Categorías
+            </button>
+        </AuthorizeView>
+    </nav>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message" role="alert">@errorMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="status-message" role="status">@successMessage</div>
+    }
+
+    <section class="received-kpis" aria-label="Resumen de documentos recibidos">
+        <article class="received-kpi">
+            <span>Pendientes</span>
+            <strong>@summary.PendingCount</strong>
+        </article>
+        <article class="received-kpi">
+            <span>Procesados</span>
+            <strong>@summary.ProcessedCount</strong>
+        </article>
+        <article class="received-kpi">
+            <span>Sin acción requerida</span>
+            <strong>@summary.NoActionRequiredCount</strong>
+        </article>
+        <article class="received-kpi">
+            <span>Con respuesta Hacienda</span>
+            <strong>@summary.WithHaciendaResponseCount</strong>
+        </article>
+    </section>
+
+    @if (summary.AccountingTotals is { Count: > 0 })
+    {
+        <section class="received-card accounting-summary-card">
+            <div class="section-heading">
+                <div>
+                    <span class="section-kicker">Análisis contable</span>
+                    <h2>Totales clasificados</h2>
+                    <p>Documentos procesados. Cada moneda se analiza por separado y las líneas divididas aportan su Total de línea.</p>
+                </div>
+            </div>
+
+            <div class="accounting-summary-grid">
+                @foreach (var total in summary.AccountingTotals)
+                {
+                    <article class="accounting-currency-card">
+                        <div class="currency-card-header">
+                            <div>
+                                <span>Moneda</span>
+                                <strong>@total.CurrencyCode</strong>
+                            </div>
+                            <div class="currency-card-total">
+                                <span>Total clasificado</span>
+                                <strong>@((total.PurchasesTotal + total.ExpensesTotal + total.DirectCostsTotal + total.AssetsTotal + total.UnallocatedTotal).ToString("N2"))</strong>
+                            </div>
+                        </div>
+                        <dl class="accounting-metrics">
+                            <div><dt>Compras</dt><dd>@total.PurchasesTotal.ToString("N2")</dd></div>
+                            <div><dt>Gastos</dt><dd>@total.ExpensesTotal.ToString("N2")</dd></div>
+                            <div><dt>Costos directos</dt><dd>@total.DirectCostsTotal.ToString("N2")</dd></div>
+                            <div><dt>Activos</dt><dd>@total.AssetsTotal.ToString("N2")</dd></div>
+                            @if (total.UnallocatedTotal != 0m)
+                            {
+                                <div class="unallocated-total"><dt>No asignado</dt><dd>@total.UnallocatedTotal.ToString("N2")</dd></div>
+                            }
+                        </dl>
+                    </article>
+                }
+            </div>
+        </section>
+    }
+
+    @if (summary.FinancialTotals is { Count: > 0 })
+    {
+        <section class="received-card accounting-summary-card financial-summary-card">
+            <div class="section-heading">
+                <div>
+                    <span class="section-kicker">Condición de pago</span>
+                    <h2>Condición financiera</h2>
+                    <p>Documentos procesados y categorizados. Contado y crédito se mantienen separados de la naturaleza contable.</p>
+                </div>
+            </div>
+
+            <div class="accounting-summary-grid">
+                @foreach (var total in summary.FinancialTotals)
+                {
+                    <article class="accounting-currency-card">
+                        <div class="currency-card-header">
+                            <div>
+                                <span>Moneda</span>
+                                <strong>@total.CurrencyCode</strong>
+                            </div>
+                            <div class="currency-card-total">
+                                <span>Total categorizado</span>
+                                <strong>@((total.CashTotal + total.CreditTotal + total.OtherTotal).ToString("N2"))</strong>
+                            </div>
+                        </div>
+                        <dl class="accounting-metrics financial-metrics">
+                            <div><dt>Contado</dt><dd>@total.CashTotal.ToString("N2")</dd></div>
+                            <div><dt>Crédito</dt><dd>@total.CreditTotal.ToString("N2")</dd></div>
+                            @if (total.OtherTotal != 0m)
+                            {
+                                <div><dt>Otra / por revisar</dt><dd>@total.OtherTotal.ToString("N2")</dd></div>
+                            }
+                        </dl>
+                    </article>
+                }
+            </div>
+        </section>
+    }
+
+
+    <section class="received-card gmail-integration-card">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">Google Workspace</span>
+                <h2>Correo de facturación</h2>
+                <p>Gmail solo transporta adjuntos XML. Cada documento pasa por XSD Hacienda v4.4 y la cuarentena antes de poder incorporarse.</p>
+            </div>
+        </div>
+
+        <div class="gmail-integration-grid">
+            <div class="gmail-integration-status">
+                <span>Cuenta esperada</span>
+                <strong>@gmailStatus.ExpectedMailbox</strong>
+            </div>
+            <div class="gmail-integration-status">
+                <span>Estado</span>
+                <strong>@(gmailStatus.IsConnected ? "Conectado" : gmailStatus.IsConfigured ? "No conectado" : "Sin credenciales")</strong>
+            </div>
+            <div class="gmail-integration-status">
+                <span>Última sincronización</span>
+                <strong>@(gmailStatus.LastSuccessfulSyncUtc.HasValue
+                    ? gmailStatus.LastSuccessfulSyncUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                    : "Aún no realizada")</strong>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(gmailStatus.LastSyncError))
+        {
+            <div class="status-message error-message">
+                Última sincronización: @gmailStatus.LastSyncError
+            </div>
+        }
+
+        <div class="gmail-integration-actions">
+            <AuthorizeView Roles="Administrator">
+                @if (!gmailStatus.IsConnected)
+                {
+                    <button type="button"
+                            class="primary-button"
+                            disabled="@isBusy"
+                            @onclick="ConnectGmailAsync">
+                        Conectar Google
+                    </button>
+                }
+            </AuthorizeView>
+
+            <AuthorizeView Roles="Administrator,Accountant">
+                @if (gmailStatus.IsConnected)
+                {
+                    <button type="button"
+                            class="primary-button"
+                            disabled="@isBusy"
+                            @onclick="SyncGmailAsync">
+                        @(gmailStatus.IsSyncing ? "Sincronizando..." : "Sincronizar ahora")
+                    </button>
+                }
+            </AuthorizeView>
+
+            <AuthorizeView Roles="Administrator">
+                @if (gmailStatus.IsConnected)
+                {
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@isBusy"
+                            @onclick="DisconnectGmailAsync">
+                        Desconectar
+                    </button>
+                }
+            </AuthorizeView>
+        </div>
+    </section>
+
+    <section class="received-card import-card">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">Entrada</span>
+                <h2>Importar documento</h2>
+                <p>Factura Electrónica o Mensaje Hacienda XML 4.4. Máximo 5 MB.</p>
+            </div>
+        </div>
+
+        <div class="import-row">
+            <InputFile OnChange="HandleFileSelected"
+                       accept=".xml,text/xml,application/xml" />
+            <div class="selected-file">
+                @(selectedFile is null
+                    ? "Ningún archivo seleccionado"
+                    : $"{selectedFile.Name} · {FormatFileSize(selectedFile.Size)}")
+            </div>
+            <button type="button"
+                    class="primary-button"
+                    disabled="@(selectedFile is null || isImporting)"
+                    @onclick="ImportAsync">
+                @(isImporting ? "Importando..." : "Importar XML")
+            </button>
+        </div>
+    </section>
+
+
+    @if (!showHistory && inboxItems.Count > 0)
+    {
+        <section class="received-card secure-inbox-card">
+            <div class="section-heading">
+                <div>
+                    <span class="section-kicker">Cuarentena</span>
+                    <h2>XML pendientes de aprobación</h2>
+                    <p>Estos archivos ya pasaron las validaciones iniciales, pero todavía no forman parte de los documentos fiscales de Revestik.</p>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Proveedor</th>
+                            <th>Documento</th>
+                            <th>Total</th>
+                            <th>Validación</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var inboxItem in inboxItems)
+                        {
+                            <tr>
+                                <td data-label="Proveedor">
+                                    <strong>@inboxItem.IssuerName</strong>
+                                    <small>@inboxItem.IssuerIdentification</small>
+                                </td>
+                                <td data-label="Documento">
+                                    <strong>@inboxItem.DocumentKind</strong>
+                                    <small>@inboxItem.FileName</small>
+                                </td>
+                                <td data-label="Total">
+                                    <strong>@inboxItem.CurrencyCode @inboxItem.Total.ToString("N2")</strong>
+                                </td>
+                                <td data-label="Validación">
+                                    @if (inboxItem.Status == ReceivedDocumentInboxStatus.Duplicate)
+                                    {
+                                        <strong>Duplicado</strong>
+                                        <small>Ya existe en Revestik.</small>
+                                    }
+                                    else if (inboxItem.Status == ReceivedDocumentInboxStatus.RecognizedNotEnabled)
+                                    {
+                                        <strong>Válido · soporte pendiente</strong>
+                                        <small>Hacienda v4.4 reconocido; este tipo todavía no se procesa en Revestik.</small>
+                                    }
+                                    else if (inboxItem.RequiresHighAmountReview)
+                                    {
+                                        <strong>Revisión obligatoria</strong>
+                                        <small>Monto extraordinariamente alto.</small>
+                                    }
+                                    else
+                                    {
+                                        <strong>Listo para revisar</strong>
+                                        <small>Sin alertas críticas detectadas.</small>
+                                    }
+                                </td>
+                                <td data-label="Acción">
+                                    @if (inboxItem.Status == ReceivedDocumentInboxStatus.PendingReview)
+                                    {
+                                        <div class="inbox-actions">
+                                            <button type="button"
+                                                    class="primary-button"
+                                                    disabled="@isBusy"
+                                                    @onclick="() => AcceptInboxItemAsync(inboxItem.Id)">
+                                                Aceptar
+                                            </button>
+                                            <button type="button"
+                                                    class="secondary-button"
+                                                    disabled="@isBusy"
+                                                    @onclick="() => RejectInboxItemAsync(inboxItem.Id)">
+                                                Rechazar
+                                            </button>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span>Sin acción</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+
+    <section class="received-card">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">@(showHistory ? "Consulta" : "Bandeja de trabajo")</span>
+                <h2>@(showHistory ? "Historial de documentos" : "Pendientes por clasificar")</h2>
+                <p>@(showHistory
+                    ? "Consulta documentos pendientes, procesados y sin acción requerida."
+                    : "Esta bandeja muestra únicamente documentos que todavía requieren revisión o confirmación.")</p>
+            </div>
+        </div>
+
+        <form class="filters-panel"
+              @onsubmit="ApplyFiltersAsync"
+              @onsubmit:preventDefault>
+            <div class="filters-primary-row">
+                <div class="form-group search-field">
+                    <label>Buscar documento</label>
+                    <input type="search"
+                           maxlength="150"
+                           placeholder="Proveedor, cédula, consecutivo o clave"
+                           @bind="filters.Search"
+                           @bind:event="oninput" />
+                </div>
+
+                @if (showHistory)
+                {
+                    <div class="form-group status-filter-field">
+                        <label>Estado</label>
+                        <InputSelect @bind-Value="filters.ProcessingStatus">
+                            <option value="">Todos</option>
+                            <option value="@ElectronicDocumentProcessingStatus.Pending">Pendiente</option>
+                            <option value="@ElectronicDocumentProcessingStatus.Processed">Procesado</option>
+                            <option value="@ElectronicDocumentProcessingStatus.NoActionRequired">Sin acción requerida</option>
+                        </InputSelect>
+                    </div>
+                }
+
+                <div class="form-group category-filter-field">
+                    <label>Categoría contable</label>
+                    <InputSelect @bind-Value="filters.CategoryId">
+                        <option value="">Todas las categorías</option>
+                        @foreach (var category in activeCategories)
+                        {
+                            <option value="@category.Id">@GetAccountingNatureLabel(category.AccountingNature) · @category.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+            </div>
+
+            <div class="filters-secondary-row">
+                <div class="date-filter-group" aria-label="Rango de fechas">
+                    <div class="date-filter-heading">
+                        <strong>Fecha de emisión</strong>
+                        <span>Filtra por un período específico.</span>
+                    </div>
+
+                    <div class="date-filter-fields">
+                        <div class="form-group">
+                            <label>Desde</label>
+                            <InputDate @bind-Value="filters.DateFrom" />
+                        </div>
+
+                        <div class="form-group">
+                            <label>Hasta</label>
+                            <InputDate @bind-Value="filters.DateTo" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="filter-actions">
+                    <button type="submit" class="primary-button" disabled="@isLoading">Aplicar filtros</button>
+                    <button type="button" class="secondary-button" disabled="@isLoading" @onclick="ClearFiltersAsync">Limpiar</button>
+                </div>
+            </div>
+        </form>
+
+        @if (isLoading && documents.Count == 0)
+        {
+            <p class="empty-state">Cargando documentos...</p>
+        }
+        else if (documents.Count == 0)
+        {
+            <p class="empty-state">@(showHistory ? "No se encontraron documentos." : "No hay documentos pendientes por categorizar.")</p>
+        }
+        else
+        {
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Proveedor</th>
+                            <th>Consecutivo</th>
+                            <th>Total</th>
+                            <th>Categoría</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var document in documents)
+                        {
+                            <tr>
+                                <td>@document.FechaEmision.ToString("dd/MM/yyyy")</td>
+                                <td><strong>@document.IssuerName</strong><small>@document.IssuerIdentification</small></td>
+                                <td>@document.NumeroConsecutivo</td>
+                                <td><strong>@document.CurrencyCode @document.TotalDocument.ToString("N2")</strong></td>
+                                <td>@(document.CategoryName ?? "Sin clasificar")</td>
+                                <td><span class="@GetStatusClass(document.ProcessingStatus)">@GetStatusLabel(document.ProcessingStatus)</span></td>
+                                <td>
+                                    <button type="button" class="secondary-button" @onclick="() => OpenDetailAsync(document.Id)">
+                                        @(document.ProcessingStatus == ElectronicDocumentProcessingStatus.Pending ? "Revisar" : "Ver detalle")
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <nav class="pagination-controls">
+                <button type="button" class="secondary-button" disabled="@(filters.Page <= 1 || isLoading)" @onclick="PreviousPageAsync">Anterior</button>
+                <span>Página @filters.Page de @TotalPages · @totalCount documento(s)</span>
+                <button type="button" class="secondary-button" disabled="@(!CanGoNext || isLoading)" @onclick="NextPageAsync">Siguiente</button>
+            </nav>
+        }
+    </section>
+
+    @if (showCategoryManager)
+    {
+        <div class="modal-backdrop" @onclick="CloseCategoryManager">
+            <section class="received-modal category-modal" role="dialog" aria-modal="true" @onclick:stopPropagation>
+                <div class="section-heading">
+                    <div>
+                        <span class="section-kicker">Configuración</span>
+                        <h2>Categorías contables</h2>
+                        <p>Las categorías desactivadas conservan su historial y dejan de aparecer en nuevas clasificaciones.</p>
+                    </div>
+                    <div class="header-actions">
+                        <button type="button" class="secondary-button" @onclick="() => showLearningRules = !showLearningRules">
+                            @(showLearningRules ? "Ocultar reglas" : "Reglas aprendidas")
+                        </button>
+                        <button type="button" class="secondary-button" @onclick="CloseCategoryManager">Cerrar</button>
+                    </div>
+                </div>
+
+                @if (showLearningRules)
+                {
+                    <section class="learning-rules-panel">
+                        <div class="section-heading">
+                            <div>
+                                <h2>Reglas aprendidas</h2>
+                                <p>Editar o borrar una regla solo afecta sugerencias futuras; no cambia documentos históricos.</p>
+                            </div>
+                        </div>
+
+                        @if (learningRules.Count == 0)
+                        {
+                            <p class="empty-state">Todavía no hay reglas aprendidas.</p>
+                        }
+                        else
+                        {
+                            @foreach (var rule in learningRules)
+                            {
+                                <article class="learning-rule-row">
+                                    <div>
+                                        <strong>@GetLearningRuleLabel(rule)</strong>
+                                        <small>Proveedor @rule.IssuerIdentification · @rule.CategoryName@(rule.OperationalDestination.HasValue ? $" · {GetOperationalDestinationLabel(rule.OperationalDestination.Value)}" : string.Empty) · confirmaciones @rule.ConfirmationCount</small>
+                                    </div>
+
+                                    @if (editingLearningRuleId == rule.Id && editingLearningRuleType == rule.RuleType)
+                                    {
+                                        <div class="learning-rule-editor">
+                                            <select value="@learningRuleForm.CategoryId" @onchange="OnLearningRuleCategoryChanged">
+                                                @foreach (var group in activeCategories.GroupBy(x => x.AccountingNature).OrderBy(x => x.Key))
+                                                {
+                                                    <optgroup label="@GetAccountingNatureLabel(group.Key)">
+                                                        @foreach (var category in group.OrderBy(x => x.SortOrder).ThenBy(x => x.Name))
+                                                        {
+                                                            <option value="@category.Id">@category.Name</option>
+                                                        }
+                                                    </optgroup>
+                                                }
+                                            </select>
+                                            @if (rule.RuleType != ElectronicDocumentLearningRuleTypes.Issuer)
+                                            {
+                                                <select value="@(learningRuleForm.OperationalDestination?.ToString() ?? string.Empty)" @onchange="OnLearningRuleDestinationChanged">
+                                                    @foreach (var destination in AvailableDestinations)
+                                                    {
+                                                        <option value="@destination">@GetOperationalDestinationLabel(destination)</option>
+                                                    }
+                                                </select>
+                                            }
+                                            <button type="button" class="primary-button" disabled="@isSavingLearningRule" @onclick="SaveLearningRuleAsync">Guardar</button>
+                                            <button type="button" class="secondary-button" disabled="@isSavingLearningRule" @onclick="CancelLearningRuleEdit">Cancelar</button>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="header-actions">
+                                            <button type="button" class="secondary-button" disabled="@isSavingLearningRule" @onclick="() => EditLearningRule(rule)">Editar</button>
+                                            <button type="button" class="secondary-button" disabled="@isSavingLearningRule" @onclick="() => DeleteLearningRuleAsync(rule)">Borrar regla</button>
+                                        </div>
+                                    }
+                                </article>
+                            }
+                        }
+                    </section>
+                }
+
+                <EditForm Model="categoryForm" OnValidSubmit="SaveCategoryAsync" class="category-editor-card">
+                    <DataAnnotationsValidator />
+
+                    <div class="category-editor-heading">
+                        <div>
+                            <strong>@(editingCategoryId.HasValue ? "Editar categoría" : "Nueva categoría")</strong>
+                            <span>Define cómo se agrupa y qué destino puede sugerir Revestik.</span>
+                        </div>
+                    </div>
+
+                    <div class="category-editor-grid">
+                        <div class="form-group category-name-field">
+                            <label>Nombre</label>
+                            <InputText @bind-Value="categoryForm.Name" maxlength="100" />
+                            <ValidationMessage For="@(() => categoryForm.Name)" />
+                        </div>
+
+                        <div class="form-group">
+                            <label>Grupo principal</label>
+                            <InputSelect @bind-Value="categoryForm.AccountingNature">
+                                @foreach (var nature in Enum.GetValues<AccountingNature>())
+                                {
+                                    <option value="@nature">@GetAccountingNatureLabel(nature)</option>
+                                }
+                            </InputSelect>
+                            <small class="field-guidance">Determina en qué bloque de análisis aparecerán sus totales.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Destino sugerido</label>
+                            <InputSelect @bind-Value="categoryForm.DefaultOperationalDestination">
+                                <option value="">Sin destino predeterminado</option>
+                                @foreach (var destination in AvailableDestinations)
+                                {
+                                    <option value="@destination">@GetOperationalDestinationLabel(destination)</option>
+                                }
+                            </InputSelect>
+                            <small class="field-guidance">Se propone al clasificar y siempre puede modificarse antes de confirmar.</small>
+                        </div>
+
+                        <div class="form-group sort-order-field">
+                            <label>Orden de visualización</label>
+                            <InputNumber @bind-Value="categoryForm.SortOrder" min="0" step="10" />
+                            <small class="field-guidance">Solo controla la posición dentro del grupo. Un número menor aparece primero.</small>
+                        </div>
+
+                        <div class="category-suggestion-setting">
+                            <div>
+                                <strong>Sugerencia automática</strong>
+                                <span>Permite que Revestik proponga esta categoría cuando las señales del documento coincidan.</span>
+                            </div>
+                            <label class="checkbox-row">
+                                <InputCheckbox @bind-Value="categoryForm.AllowsAutomaticSuggestion" />
+                                Permitir sugerencia automática
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="category-editor-actions">
+                        <button type="submit" class="primary-button" disabled="@isSavingCategory">
+                            @(editingCategoryId.HasValue ? "Guardar cambios" : "Agregar categoría")
+                        </button>
+                        @if (editingCategoryId.HasValue)
+                        {
+                            <button type="button" class="secondary-button" disabled="@isSavingCategory" @onclick="ResetCategoryForm">Cancelar edición</button>
+                        }
+                    </div>
+                </EditForm>
+
+                <div class="category-list">
+                    @foreach (var group in categories.OrderBy(x => x.AccountingNature).ThenBy(x => x.SortOrder).ThenBy(x => x.Name).GroupBy(x => x.AccountingNature))
+                    {
+                        <div class="category-group-heading">@GetAccountingNatureLabel(group.Key)</div>
+                        @foreach (var category in group)
+                        {
+                            <div class="category-row">
+                                <div>
+                                    <strong>@category.Name</strong>
+                                    <small>
+                                        @(category.IsSystemDefault ? "Base Revestik" : "Personalizada") ·
+                                        @(category.IsActive ? "Activa" : "Inactiva") ·
+                                        Destino: @(category.DefaultOperationalDestination.HasValue ? GetOperationalDestinationLabel(category.DefaultOperationalDestination.Value) : "manual")
+                                    </small>
+                                </div>
+                                <div class="header-actions">
+                                    <button type="button" class="secondary-button" disabled="@isSavingCategory" @onclick="() => EditCategory(category)">Editar</button>
+                                    <button type="button" class="secondary-button" disabled="@isSavingCategory" @onclick="() => ToggleCategoryAsync(category)">
+                                        @(category.IsActive ? "Desactivar" : "Reactivar")
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </section>
+        </div>
+    }
+
+    @if (selectedDocument is not null)
+    {
+        <div class="modal-backdrop" @onclick="CloseDetail">
+            <section class="received-modal detail-modal" role="dialog" aria-modal="true" @onclick:stopPropagation>
+                <div class="section-heading">
+                    <div>
+                        <h2>@selectedDocument.IssuerName</h2>
+                        <p>@selectedDocument.NumeroConsecutivo · @selectedDocument.FechaEmision.ToString("dd/MM/yyyy HH:mm")</p>
+                    </div>
+                    <button type="button" class="secondary-button" disabled="@isClassifying" @onclick="CloseDetail">Cerrar</button>
+                </div>
+
+                <div class="detail-meta-grid">
+                    <div><span>Identificación</span><strong>@selectedDocument.IssuerIdentification</strong></div>
+                    <div><span>Condición</span><strong>@GetSaleConditionLabel(selectedDocument.SaleConditionCode)</strong></div>
+                    <div><span>Total</span><strong>@selectedDocument.CurrencyCode @selectedDocument.TotalDocument.ToString("N2")</strong></div>
+                    <div><span>Actividad emisor</span><strong>@(string.IsNullOrWhiteSpace(selectedDocument.IssuerEconomicActivityCode) ? "No informada" : selectedDocument.IssuerEconomicActivityCode)</strong></div>
+                    <div><span>Estado</span><strong>@GetStatusLabel(selectedDocument.ProcessingStatus)</strong></div>
+                    <div><span>Hacienda</span><strong>@(selectedDocument.HaciendaResponse is null ? "Sin respuesta asociada" : selectedDocument.HaciendaResponse.MessageStatus)</strong></div>
+                </div>
+
+                <section class="detail-section classification-panel">
+                    <div class="classification-heading">
+                        <div>
+                            <h3>Clasificación</h3>
+                            <p class="guidance">El documento se clasifica completo por defecto. Activa la separación por líneas solo cuando la factura realmente lo requiera.</p>
+                        </div>
+                        @if (selectedDocument.SuggestedConfidence.HasValue)
+                        {
+                            <span class="@GetConfidenceClass(selectedDocument.SuggestedConfidence.Value)">
+                                Confianza @GetConfidenceLabel(selectedDocument.SuggestedConfidence.Value)
+                            </span>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(selectedDocument.SuggestedCategoryLabel))
+                    {
+                        <div class="classification-suggestion @(selectedDocument.SuggestedHasConflict ? "suggestion-warning" : string.Empty)">
+                            <div>
+                                <span>Sugerido por Revestik</span>
+                                <strong>@selectedDocument.SuggestedCategoryLabel</strong>
+                                @if (selectedDocument.SuggestedHasConflict)
+                                {
+                                    <small>Hay señales diferentes. Revise antes de confirmar; puede separar la factura por líneas.</small>
+                                }
+                            </div>
+                            <button type="button" class="link-button" @onclick="() => showSuggestionReason = !showSuggestionReason">
+                                @(showSuggestionReason ? "Ocultar motivo" : "¿Por qué?")
+                            </button>
+                        </div>
+                        @if (showSuggestionReason && !string.IsNullOrWhiteSpace(selectedDocument.SuggestedCategoryReason))
+                        {
+                            <div class="suggestion-reason">@selectedDocument.SuggestedCategoryReason</div>
+                        }
+                    }
+
+                    <div class="classification-grid">
+                        <div class="form-group">
+                            <label>Grupo / categoría</label>
+                            <select value="@classificationCategoryId" @onchange="OnCategoryChanged">
+                                <option value="0">Seleccione</option>
+                                @foreach (var group in activeCategories.GroupBy(x => x.AccountingNature).OrderBy(x => x.Key))
+                                {
+                                    <optgroup label="@GetAccountingNatureLabel(group.Key)">
+                                        @foreach (var category in group.OrderBy(x => x.SortOrder).ThenBy(x => x.Name))
+                                        {
+                                            <option value="@category.Id">@category.Name</option>
+                                        }
+                                    </optgroup>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Destino operativo</label>
+                            <InputSelect @bind-Value="classificationDestination">
+                                <option value="">Seleccione</option>
+                                @foreach (var destination in AvailableDestinations)
+                                {
+                                    <option value="@destination">@GetOperationalDestinationLabel(destination)</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+
+                    <label class="split-toggle">
+                        <input type="checkbox" checked="@separateByLine" @onchange="OnSeparateByLineChanged" />
+                        Separar clasificación por líneas
+                    </label>
+
+                    @if (separateByLine)
+                    {
+                        <div class="line-classification-list">
+                            @foreach (var line in selectedDocument.Lines)
+                            {
+                                var draft = GetLineDraft(line);
+                                <article class="line-classification-card">
+                                    <div class="line-classification-main">
+                                        <span>Línea @line.LineNumber · @line.CabysCode</span>
+                                        <strong>@line.Description</strong>
+                                        <small>@line.Quantity.ToString("N3") @line.UnitOfMeasure · Total @selectedDocument.CurrencyCode @line.TotalLine.ToString("N2")</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Categoría</label>
+                                        <select value="@draft.CategoryId" @onchange="args => OnLineCategoryChanged(line.Id, args)">
+                                            @foreach (var group in activeCategories.GroupBy(x => x.AccountingNature).OrderBy(x => x.Key))
+                                            {
+                                                <optgroup label="@GetAccountingNatureLabel(group.Key)">
+                                                    @foreach (var category in group.OrderBy(x => x.SortOrder).ThenBy(x => x.Name))
+                                                    {
+                                                        <option value="@category.Id">@category.Name</option>
+                                                    }
+                                                </optgroup>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Destino</label>
+                                        <select value="@(draft.Destination?.ToString() ?? string.Empty)" @onchange="args => OnLineDestinationChanged(line.Id, args)">
+                                            <option value="">Seleccione</option>
+                                            @foreach (var destination in AvailableDestinations)
+                                            {
+                                                <option value="@destination">@GetOperationalDestinationLabel(destination)</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </article>
+                            }
+                        </div>
+                    }
+
+                    <div class="classification-actions">
+                        @if (selectedDocument.ProcessingStatus == ElectronicDocumentProcessingStatus.Pending)
+                        {
+                            <button type="button" class="primary-button" disabled="@(!CanConfirmClassification)" @onclick="() => ClassifyAsync(ElectronicDocumentProcessingStatus.Processed)">
+                                Confirmar clasificación
+                            </button>
+                            <button type="button" class="secondary-button" disabled="@(classificationCategoryId <= 0 || isClassifying)" @onclick="() => ClassifyAsync(ElectronicDocumentProcessingStatus.NoActionRequired)">
+                                Sin acción requerida
+                            </button>
+                        }
+                        else
+                        {
+                            <AuthorizeView Roles="Administrator,Accountant">
+                                <button type="button" class="primary-button" disabled="@(!CanConfirmClassification)" @onclick="() => ClassifyAsync(ElectronicDocumentProcessingStatus.Processed)">
+                                    Guardar corrección
+                                </button>
+                            </AuthorizeView>
+                        }
+                    </div>
+                </section>
+
+                <section class="detail-section">
+                    <h3>Líneas fiscales</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>#</th><th>CAByS</th><th>Detalle</th><th>Cantidad</th><th>Impuesto</th><th>Total línea</th></tr></thead>
+                            <tbody>
+                                @foreach (var line in selectedDocument.Lines)
+                                {
+                                    <tr>
+                                        <td>@line.LineNumber</td>
+                                        <td>
+                                            <a class="cabys-link" href="@($"/cabys?search={line.CabysCode}")">@line.CabysCode</a>
+                                            @if (!string.IsNullOrWhiteSpace(line.CabysTaxReference)) { <small>Ref.: @line.CabysTaxReference</small> }
+                                        </td>
+                                        <td>
+                                            <strong>@line.Description</strong>
+                                            @if (!string.IsNullOrWhiteSpace(line.CabysOfficialDescription) && !string.Equals(line.CabysOfficialDescription, line.Description, StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                <small>Oficial: @line.CabysOfficialDescription</small>
+                                            }
+                                            @if (line.ClassificationCategoryId.HasValue)
+                                            {
+                                                <small>Clasificación de línea: @line.ClassificationCategoryName · @GetOperationalDestinationLabel(line.OperationalDestination ?? OperationalDestination.NoAction)</small>
+                                            }
+                                        </td>
+                                        <td>@line.Quantity.ToString("N3") @line.UnitOfMeasure</td>
+                                        <td>@line.NetTax.ToString("N2")</td>
+                                        <td><strong>@selectedDocument.CurrencyCode @line.TotalLine.ToString("N2")</strong></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                @if (selectedDocument.HaciendaResponse is not null)
+                {
+                    <section class="detail-section hacienda-panel">
+                        <h3>Respuesta Hacienda</h3>
+                        <p>@FormatHaciendaDetail(selectedDocument.HaciendaResponse.MessageDetail)</p>
+                    </section>
+                }
+
+                <section class="detail-section totals-section">
+                    <h3>Totales fiscales</h3>
+                    <dl class="totals-grid">
+                        <div><dt>Venta</dt><dd>@selectedDocument.TotalSale.ToString("N2")</dd></div>
+                        <div><dt>Descuentos</dt><dd>@selectedDocument.TotalDiscounts.ToString("N2")</dd></div>
+                        <div><dt>Impuesto</dt><dd>@selectedDocument.TotalTax.ToString("N2")</dd></div>
+                        <div class="total-highlight"><dt>Total comprobante</dt><dd>@selectedDocument.CurrencyCode @selectedDocument.TotalDocument.ToString("N2")</dd></div>
+                    </dl>
+                </section>
+            </section>
+        </div>
+    }
+</section>
+
+@code {
+    private const long MaxXmlBytes = 5L * 1024L * 1024L;
+    private static readonly OperationalDestination[] AvailableDestinations =
+    [
+        OperationalDestination.InventoryWarehouse,
+        OperationalDestination.DirectCustomer,
+        OperationalDestination.InternalExpense,
+        OperationalDestination.Asset
+    ];
+
+    private readonly CancellationTokenSource cancellationTokenSource = new();
+    private ElectronicDocumentListRequest filters = CreatePendingFilters();
+    private IReadOnlyList<ElectronicDocumentListItemResponse> documents = [];
+    private IReadOnlyList<ElectronicDocumentCategoryResponse> categories = [];
+    private IReadOnlyList<ElectronicDocumentLearningRuleResponse> learningRules = [];
+    private IReadOnlyList<ReceivedDocumentInboxItemResponse> inboxItems = [];
+    private ElectronicDocumentSummaryResponse summary = new(0, 0, 0, 0);
+    private GmailIntegrationStatusResponse gmailStatus = new(false, false, "facturas@revestikcr.com", null, null, null, null, false);
+    private ElectronicDocumentDetailResponse? selectedDocument;
+    private IBrowserFile? selectedFile;
+    private readonly Dictionary<int, LineClassificationDraft> lineDrafts = [];
+    private int totalCount;
+    private int classificationCategoryId;
+    private OperationalDestination? classificationDestination;
+    private int? editingCategoryId;
+    private int? editingLearningRuleId;
+    private string? editingLearningRuleType;
+    private bool showCategoryManager;
+    private bool showLearningRules;
+    private bool showHistory;
+    private bool separateByLine;
+    private bool showSuggestionReason;
+    private bool isLoading;
+    private bool isImporting;
+    private bool isClassifying;
+    private bool isSavingCategory;
+    private bool isSavingLearningRule;
+    private bool isGmailBusy;
+    private string? errorMessage;
+    private string? successMessage;
+    private ElectronicDocumentCategoryUpsertRequest categoryForm = CreateDefaultCategoryForm();
+    private ElectronicDocumentLearningRuleUpdateRequest learningRuleForm = new();
+
+    private IReadOnlyList<ElectronicDocumentCategoryResponse> activeCategories =>
+        categories.Where(x => x.IsActive).OrderBy(x => x.AccountingNature).ThenBy(x => x.SortOrder).ThenBy(x => x.Name).ToList();
+
+    private bool isBusy => isLoading || isImporting || isClassifying || isSavingCategory || isSavingLearningRule || isGmailBusy;
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(totalCount / (double)filters.PageSize));
+    private bool CanGoNext => filters.Page < TotalPages;
+    private bool CanConfirmClassification =>
+        classificationCategoryId > 0 &&
+        classificationDestination.HasValue &&
+        !isClassifying &&
+        (!separateByLine || lineDrafts.Values.All(x => x.CategoryId > 0 && x.Destination.HasValue));
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            var token = cancellationTokenSource.Token;
+            var pageTask = ElectronicDocumentApi.GetPageAsync(filters, token);
+            var summaryTask = ElectronicDocumentApi.GetSummaryAsync(token);
+            var categoriesTask = ElectronicDocumentApi.GetCategoriesAsync(true, token);
+            var inboxTask = ElectronicDocumentApi.GetInboxAsync(token);
+            var gmailStatusTask = GmailIntegrationApi.GetStatusAsync(token);
+            await Task.WhenAll(pageTask, summaryTask, categoriesTask, inboxTask, gmailStatusTask);
+            var page = await pageTask;
+            documents = page.Items;
+            totalCount = page.TotalCount;
+            summary = await summaryTask;
+            categories = await categoriesTask;
+            inboxItems = await inboxTask;
+            gmailStatus = await gmailStatusTask;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isLoading = false; }
+    }
+
+
+
+    private async Task ConnectGmailAsync()
+    {
+        if (isGmailBusy) return;
+
+        isGmailBusy = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var authorizationUrl = await GmailIntegrationApi.GetAuthorizationUrlAsync(
+                cancellationTokenSource.Token);
+
+            Navigation.NavigateTo(authorizationUrl, forceLoad: true);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isGmailBusy = false; }
+    }
+
+    private async Task SyncGmailAsync()
+    {
+        if (isGmailBusy) return;
+
+        isGmailBusy = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var result = await GmailIntegrationApi.SyncAsync(
+                cancellationTokenSource.Token);
+
+            successMessage =
+                $"Gmail sincronizado: {result.Staged} en cuarentena, " +
+                $"{result.Duplicates} duplicados, " +
+                $"{result.RecognizedNotEnabled} válidos pendientes de soporte, " +
+                $"{result.Rejected} rechazados y {result.Failed} errores.";
+
+            await RefreshAsync();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isGmailBusy = false; }
+    }
+
+    private async Task DisconnectGmailAsync()
+    {
+        if (isGmailBusy) return;
+
+        isGmailBusy = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await GmailIntegrationApi.DisconnectAsync(
+                cancellationTokenSource.Token);
+
+            successMessage = "Gmail se desconectó de Revestik.";
+            await RefreshAsync();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isGmailBusy = false; }
+    }
+
+    private async Task AcceptInboxItemAsync(Guid inboxId)
+    {
+        if (isImporting) return;
+
+        isImporting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await ElectronicDocumentApi.AcceptInboxAsync(
+                inboxId,
+                cancellationTokenSource.Token);
+
+            successMessage = "Documento aceptado e incorporado correctamente.";
+            await RefreshAsync();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isImporting = false; }
+    }
+
+    private async Task RejectInboxItemAsync(Guid inboxId)
+    {
+        if (isImporting) return;
+
+        isImporting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var rejected = await ElectronicDocumentApi.RejectInboxAsync(
+                inboxId,
+                cancellationTokenSource.Token);
+
+            successMessage = rejected
+                ? "Documento rechazado. El XML temporal fue eliminado de la cuarentena."
+                : "El documento ya no estaba disponible.";
+
+            await RefreshAsync();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isImporting = false; }
+    }
+
+    private async Task ShowPendingAsync()
+    {
+        showHistory = false;
+        filters = CreatePendingFilters();
+        await RefreshAsync();
+    }
+
+    private async Task ShowHistoryAsync()
+    {
+        showHistory = true;
+        filters = new ElectronicDocumentListRequest();
+        await RefreshAsync();
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        filters.Page = 1;
+        if (!showHistory) filters.ProcessingStatus = ElectronicDocumentProcessingStatus.Pending;
+        await RefreshAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        filters = showHistory ? new ElectronicDocumentListRequest() : CreatePendingFilters();
+        await RefreshAsync();
+    }
+
+    private async Task PreviousPageAsync() { if (filters.Page > 1) { filters.Page--; await RefreshAsync(); } }
+    private async Task NextPageAsync() { if (CanGoNext) { filters.Page++; await RefreshAsync(); } }
+
+    private void HandleFileSelected(InputFileChangeEventArgs args)
+    {
+        errorMessage = null;
+        successMessage = null;
+        selectedFile = args.File;
+        if (selectedFile.Size > MaxXmlBytes)
+        {
+            errorMessage = "El archivo XML no puede superar 5 MB.";
+            selectedFile = null;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (selectedFile is null || isImporting) return;
+        isImporting = true;
+        errorMessage = null;
+        successMessage = null;
+        try
+        {
+            await using var stream = selectedFile.OpenReadStream(MaxXmlBytes);
+            var result = await ElectronicDocumentApi.ImportAsync(stream, selectedFile.Name, cancellationTokenSource.Token);
+            successMessage = result.Status == ReceivedDocumentInboxStatus.Duplicate
+                ? "El XML ya existe en Revestik. Se marcó como duplicado y no se volverá a importar."
+                : "XML validado y enviado a la bandeja segura. Revísalo y acéptalo antes de incorporarlo a Revestik.";
+            selectedFile = null;
+            await RefreshAsync();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isImporting = false; }
+    }
+
+    private async Task OpenDetailAsync(int id)
+    {
+        errorMessage = null;
+        try
+        {
+            selectedDocument = await ElectronicDocumentApi.GetByIdAsync(id, cancellationTokenSource.Token);
+            if (selectedDocument is null) { errorMessage = "El documento ya no está disponible."; return; }
+            classificationCategoryId = selectedDocument.CategoryId ?? selectedDocument.SuggestedCategoryId ?? 0;
+            classificationDestination = selectedDocument.OperationalDestination ?? selectedDocument.SuggestedOperationalDestination ?? GetDefaultDestinationForCategory(classificationCategoryId);
+            separateByLine = selectedDocument.HasLineOverrides;
+            showSuggestionReason = false;
+            InitializeLineDrafts();
+        }
+        catch (Exception exception) { errorMessage = exception.Message; }
+    }
+
+    private void InitializeLineDrafts()
+    {
+        lineDrafts.Clear();
+        if (selectedDocument is null) return;
+        foreach (var line in selectedDocument.Lines)
+        {
+            lineDrafts[line.Id] = new LineClassificationDraft
+            {
+                CategoryId = line.ClassificationCategoryId ?? classificationCategoryId,
+                Destination = line.OperationalDestination ?? classificationDestination
+            };
+        }
+    }
+
+    private LineClassificationDraft GetLineDraft(ElectronicDocumentLineResponse line)
+    {
+        if (!lineDrafts.TryGetValue(line.Id, out var draft))
+        {
+            draft = new LineClassificationDraft { CategoryId = classificationCategoryId, Destination = classificationDestination };
+            lineDrafts[line.Id] = draft;
+        }
+        return draft;
+    }
+
+    private void CloseDetail()
+    {
+        if (isClassifying) return;
+        selectedDocument = null;
+        classificationCategoryId = 0;
+        classificationDestination = null;
+        separateByLine = false;
+        showSuggestionReason = false;
+        lineDrafts.Clear();
+    }
+
+    private async Task ClassifyAsync(ElectronicDocumentProcessingStatus status)
+    {
+        if (selectedDocument is null || classificationCategoryId <= 0 || isClassifying) return;
+        isClassifying = true;
+        errorMessage = null;
+        try
+        {
+            var request = new ElectronicDocumentClassifyRequest
+            {
+                CategoryId = classificationCategoryId,
+                OperationalDestination = status == ElectronicDocumentProcessingStatus.NoActionRequired ? OperationalDestination.NoAction : classificationDestination,
+                ProcessingStatus = status,
+                SeparateByLine = status == ElectronicDocumentProcessingStatus.Processed && separateByLine
+            };
+
+            if (request.SeparateByLine)
+            {
+                request.LineClassifications = lineDrafts
+                    .Select(x => new ElectronicDocumentLineClassificationRequest
+                    {
+                        LineId = x.Key,
+                        CategoryId = x.Value.CategoryId,
+                        OperationalDestination = x.Value.Destination ?? OperationalDestination.NoAction
+                    })
+                    .ToList();
+            }
+
+            selectedDocument = await ElectronicDocumentApi.ClassifyAsync(selectedDocument.Id, request, cancellationTokenSource.Token);
+            successMessage = status == ElectronicDocumentProcessingStatus.Processed
+                ? "Clasificación guardada y aprendizaje actualizado."
+                : "Documento marcado sin acción requerida.";
+            await RefreshAsync();
+        }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isClassifying = false; }
+    }
+
+    private void OnCategoryChanged(ChangeEventArgs args)
+    {
+        classificationCategoryId = int.TryParse(args.Value?.ToString(), out var value) ? value : 0;
+        classificationDestination = GetDefaultDestinationForCategory(classificationCategoryId);
+        if (!separateByLine) InitializeLineDrafts();
+    }
+
+    private void OnSeparateByLineChanged(ChangeEventArgs args)
+    {
+        separateByLine = args.Value is bool value && value;
+        if (separateByLine) InitializeLineDrafts();
+    }
+
+    private void OnLineCategoryChanged(int lineId, ChangeEventArgs args)
+    {
+        var draft = lineDrafts[lineId];
+        draft.CategoryId = int.TryParse(args.Value?.ToString(), out var value) ? value : 0;
+        draft.Destination = GetDefaultDestinationForCategory(draft.CategoryId);
+    }
+
+    private void OnLineDestinationChanged(int lineId, ChangeEventArgs args)
+    {
+        var value = args.Value?.ToString();
+        lineDrafts[lineId].Destination = Enum.TryParse<OperationalDestination>(value, out var destination) ? destination : null;
+    }
+
+    private async Task ToggleCategoryManager()
+    {
+        showCategoryManager = !showCategoryManager;
+        ResetCategoryForm();
+        CancelLearningRuleEdit();
+        if (showCategoryManager)
+        {
+            await LoadLearningRulesAsync();
+        }
+    }
+
+    private void CloseCategoryManager()
+    {
+        if (isSavingCategory || isSavingLearningRule) return;
+        showCategoryManager = false;
+        showLearningRules = false;
+        CancelLearningRuleEdit();
+    }
+
+    private async Task SaveCategoryAsync()
+    {
+        isSavingCategory = true;
+        errorMessage = null;
+        try
+        {
+            ElectronicDocumentCategoryResponse? saved = editingCategoryId.HasValue
+                ? await ElectronicDocumentApi.UpdateCategoryAsync(editingCategoryId.Value, categoryForm, cancellationTokenSource.Token)
+                : await ElectronicDocumentApi.CreateCategoryAsync(categoryForm, cancellationTokenSource.Token);
+
+            if (saved is null) { errorMessage = "La categoría ya no está disponible."; return; }
+            categories = await ElectronicDocumentApi.GetCategoriesAsync(true, cancellationTokenSource.Token);
+            successMessage = editingCategoryId.HasValue ? "Categoría actualizada correctamente." : "Categoría creada correctamente.";
+            ResetCategoryForm();
+        }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isSavingCategory = false; }
+    }
+
+    private void EditCategory(ElectronicDocumentCategoryResponse category)
+    {
+        editingCategoryId = category.Id;
+        categoryForm = new ElectronicDocumentCategoryUpsertRequest
+        {
+            Name = category.Name,
+            AccountingNature = category.AccountingNature,
+            DefaultOperationalDestination = category.DefaultOperationalDestination,
+            SortOrder = category.SortOrder,
+            AllowsAutomaticSuggestion = category.AllowsAutomaticSuggestion,
+            IsActive = category.IsActive
+        };
+    }
+
+    private void ResetCategoryForm() { editingCategoryId = null; categoryForm = CreateDefaultCategoryForm(); }
+
+    private async Task ToggleCategoryAsync(ElectronicDocumentCategoryResponse category)
+    {
+        isSavingCategory = true;
+        errorMessage = null;
+        try
+        {
+            await ElectronicDocumentApi.UpdateCategoryAsync(category.Id, new ElectronicDocumentCategoryUpsertRequest
+            {
+                Name = category.Name,
+                AccountingNature = category.AccountingNature,
+                DefaultOperationalDestination = category.DefaultOperationalDestination,
+                SortOrder = category.SortOrder,
+                AllowsAutomaticSuggestion = category.AllowsAutomaticSuggestion,
+                IsActive = !category.IsActive
+            }, cancellationTokenSource.Token);
+            categories = await ElectronicDocumentApi.GetCategoriesAsync(true, cancellationTokenSource.Token);
+        }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isSavingCategory = false; }
+    }
+
+    private async Task LoadLearningRulesAsync()
+    {
+        try
+        {
+            learningRules = await ElectronicDocumentApi.GetLearningRulesAsync(
+                cancellationTokenSource.Token);
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+    }
+
+    private void EditLearningRule(ElectronicDocumentLearningRuleResponse rule)
+    {
+        editingLearningRuleId = rule.Id;
+        editingLearningRuleType = rule.RuleType;
+        learningRuleForm = new ElectronicDocumentLearningRuleUpdateRequest
+        {
+            RuleId = rule.Id,
+            RuleType = rule.RuleType,
+            CategoryId = rule.CategoryId,
+            OperationalDestination = rule.OperationalDestination ??
+                GetDefaultDestinationForCategory(rule.CategoryId)
+        };
+    }
+
+    private void CancelLearningRuleEdit()
+    {
+        editingLearningRuleId = null;
+        editingLearningRuleType = null;
+        learningRuleForm = new ElectronicDocumentLearningRuleUpdateRequest();
+    }
+
+    private async Task SaveLearningRuleAsync()
+    {
+        if (!editingLearningRuleId.HasValue || string.IsNullOrWhiteSpace(editingLearningRuleType)) return;
+        isSavingLearningRule = true;
+        errorMessage = null;
+        try
+        {
+            var updated = await ElectronicDocumentApi.UpdateLearningRuleAsync(
+                learningRuleForm,
+                cancellationTokenSource.Token);
+            if (updated is null)
+            {
+                errorMessage = "La regla aprendida ya no está disponible.";
+                return;
+            }
+            await LoadLearningRulesAsync();
+            CancelLearningRuleEdit();
+            successMessage = "Regla aprendida actualizada.";
+        }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isSavingLearningRule = false; }
+    }
+
+    private async Task DeleteLearningRuleAsync(ElectronicDocumentLearningRuleResponse rule)
+    {
+        isSavingLearningRule = true;
+        errorMessage = null;
+        try
+        {
+            await ElectronicDocumentApi.DeleteLearningRuleAsync(
+                rule.RuleType,
+                rule.Id,
+                cancellationTokenSource.Token);
+            await LoadLearningRulesAsync();
+            successMessage = "Regla aprendida eliminada.";
+        }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isSavingLearningRule = false; }
+    }
+
+    private void OnLearningRuleCategoryChanged(ChangeEventArgs args)
+    {
+        learningRuleForm.CategoryId = int.TryParse(args.Value?.ToString(), out var value) ? value : 0;
+        if (learningRuleForm.RuleType != ElectronicDocumentLearningRuleTypes.Issuer)
+        {
+            learningRuleForm.OperationalDestination = GetDefaultDestinationForCategory(learningRuleForm.CategoryId);
+        }
+    }
+
+    private void OnLearningRuleDestinationChanged(ChangeEventArgs args)
+    {
+        learningRuleForm.OperationalDestination = Enum.TryParse<OperationalDestination>(
+            args.Value?.ToString(),
+            out var destination)
+            ? destination
+            : null;
+    }
+
+    private static string GetLearningRuleLabel(ElectronicDocumentLearningRuleResponse rule) =>
+        rule.RuleType switch
+        {
+            ElectronicDocumentLearningRuleTypes.ExactCabys => $"CAByS exacto {rule.CabysCode}",
+            ElectronicDocumentLearningRuleTypes.CabysBranch => $"Rama CAByS {rule.CabysCategory4Code}",
+            _ => "Proveedor"
+        };
+
+    private OperationalDestination? GetDefaultDestinationForCategory(int categoryId) =>
+        activeCategories.FirstOrDefault(x => x.Id == categoryId)?.DefaultOperationalDestination;
+
+    private static ElectronicDocumentCategoryUpsertRequest CreateDefaultCategoryForm() => new()
+    {
+        AccountingNature = AccountingNature.OperatingExpense,
+        DefaultOperationalDestination = OperationalDestination.InternalExpense,
+        SortOrder = 500,
+        AllowsAutomaticSuggestion = true,
+        IsActive = true
+    };
+
+    private static ElectronicDocumentListRequest CreatePendingFilters() => new()
+    {
+        ProcessingStatus = ElectronicDocumentProcessingStatus.Pending,
+        Page = 1,
+        PageSize = 20
+    };
+
+    private static string GetAccountingNatureLabel(AccountingNature nature) => nature switch
+    {
+        AccountingNature.Inventory => "Compras",
+        AccountingNature.OperatingExpense => "Gastos",
+        AccountingNature.DirectCost => "Costos directos",
+        AccountingNature.FixedAsset => "Activos",
+        AccountingNature.Other => "Otros / pendiente",
+        _ => nature.ToString()
+    };
+
+    private static string GetOperationalDestinationLabel(OperationalDestination destination) => destination switch
+    {
+        OperationalDestination.InventoryWarehouse => "Inventario / bodega",
+        OperationalDestination.DirectCustomer => "Compra directa para cliente",
+        OperationalDestination.InternalExpense => "Gasto / consumo interno",
+        OperationalDestination.Asset => "Activo",
+        OperationalDestination.NoAction => "Sin acción",
+        _ => destination.ToString()
+    };
+
+    private static string GetConfidenceLabel(ClassificationConfidence confidence) => confidence switch
+    {
+        ClassificationConfidence.High => "alta",
+        ClassificationConfidence.Medium => "media",
+        ClassificationConfidence.Low => "baja",
+        _ => confidence.ToString()
+    };
+
+    private static string GetConfidenceClass(ClassificationConfidence confidence) => confidence switch
+    {
+        ClassificationConfidence.High => "confidence-badge confidence-high",
+        ClassificationConfidence.Medium => "confidence-badge confidence-medium",
+        ClassificationConfidence.Low => "confidence-badge confidence-low",
+        _ => "confidence-badge"
+    };
+
+    private static string GetStatusLabel(ElectronicDocumentProcessingStatus status) => status switch
+    {
+        ElectronicDocumentProcessingStatus.Pending => "Pendiente",
+        ElectronicDocumentProcessingStatus.Processed => "Procesado",
+        ElectronicDocumentProcessingStatus.NoActionRequired => "Sin acción",
+        _ => status.ToString()
+    };
+
+    private static string GetStatusClass(ElectronicDocumentProcessingStatus status) => status switch
+    {
+        ElectronicDocumentProcessingStatus.Pending => "status-badge status-pending",
+        ElectronicDocumentProcessingStatus.Processed => "status-badge status-processed",
+        ElectronicDocumentProcessingStatus.NoActionRequired => "status-badge status-no-action",
+        _ => "status-badge"
+    };
+
+    private static string GetSaleConditionLabel(string code) => code switch
+    {
+        "01" => "Contado",
+        "02" => "Crédito",
+        _ => $"Código {code}"
+    };
+
+    private static string FormatHaciendaDetail(string detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail)) return "Sin detalle adicional.";
+        var value = detail.Trim().Trim('"');
+        var firstQuote = value.IndexOf('"');
+        var lastQuote = value.LastIndexOf('"');
+        if (firstQuote >= 0 && lastQuote > firstQuote) return value[(firstQuote + 1)..lastQuote].Replace("\"\"", "\"").Trim();
+        var parts = value.Split(',', StringSplitOptions.TrimEntries);
+        return parts.Length >= 2 ? string.Join(",", parts.Skip(1).Take(Math.Max(1, parts.Length - 3))).Trim().Trim('"').Replace("\"\"", "\"") : value;
+    }
+
+    private static string FormatFileSize(long bytes) => bytes < 1024 ? $"{bytes} B" : bytes < 1024 * 1024 ? $"{bytes / 1024d:N1} KB" : $"{bytes / (1024d * 1024d):N1} MB";
+
+    public void Dispose()
+    {
+        cancellationTokenSource.Cancel();
+        cancellationTokenSource.Dispose();
+    }
+
+    private sealed class LineClassificationDraft
+    {
+        public int CategoryId { get; set; }
+        public OperationalDestination? Destination { get; set; }
+    }
+}

@@ -1,0 +1,91 @@
+@using Revestik.Client.Services.Cabys
+@using Revestik.Shared.Cabys
+@inject ICabysApiService CabysApi
+
+<section class="cabys-lookup">
+    <form class="cabys-search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+        <input type="search"
+               maxlength="150"
+               placeholder="Código o descripción CAByS"
+               @bind="search" />
+        <button type="submit" class="primary-button" disabled="@isLoading">
+            @(isLoading ? "Buscando..." : "Buscar")
+        </button>
+    </form>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message">@errorMessage</div>
+    }
+
+    @if (items.Count > 0)
+    {
+        <div class="cabys-results">
+            @foreach (var item in items)
+            {
+                <button type="button"
+                        class="cabys-result"
+                        @onclick="() => SelectAsync(item)">
+                    <span class="cabys-code">@item.Code</span>
+                    <strong>@item.Description</strong>
+                    <small>Impuesto: @item.TaxReference</small>
+                </button>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public EventCallback<CabysListItemResponse> CabysSelected { get; set; }
+    [Parameter] public string InitialSearch { get; set; } = string.Empty;
+
+    private string search = string.Empty;
+    private IReadOnlyList<CabysListItemResponse> items = [];
+    private bool isLoading;
+    private string? errorMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(InitialSearch) &&
+            !string.Equals(search, InitialSearch, StringComparison.Ordinal))
+        {
+            search = InitialSearch;
+            await SearchAsync();
+        }
+    }
+
+    private async Task SearchAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var result = await CabysApi.SearchAsync(
+                new CabysSearchRequest
+                {
+                    Search = search,
+                    Page = 1,
+                    PageSize = 20
+                });
+
+            items = result.Items;
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SelectAsync(CabysListItemResponse item)
+    {
+        if (CabysSelected.HasDelegate)
+        {
+            await CabysSelected.InvokeAsync(item);
+        }
+    }
+}

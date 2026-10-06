@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Revestik.Client;
 using Revestik.Client.Services.Authentication;
+using Revestik.Client.Services.Cabys;
 using Revestik.Client.Services.Customers;
+using Revestik.Client.Services.ElectronicDocuments;
 using Revestik.Client.Services.Inventory;
 using Revestik.Client.Services.Locations;
 using Revestik.Client.Services.Products;
@@ -67,64 +69,27 @@ builder.Services.AddScoped(serviceProvider =>
     };
 });
 
-builder.Services.AddScoped<
-    CookieAuthenticationStateProvider>();
+builder.Services.AddScoped<CookieAuthenticationStateProvider>();
 
 builder.Services.AddScoped<AuthenticationStateProvider>(
     serviceProvider =>
-        serviceProvider.GetRequiredService<
-            CookieAuthenticationStateProvider>());
+        serviceProvider.GetRequiredService<CookieAuthenticationStateProvider>());
 
-builder.Services.AddScoped<
-    IAuthenticationService,
-    AuthenticationService>();
-
-builder.Services.AddScoped<
-    ICustomerApiService,
-    CustomerApiService>();
-
-builder.Services.AddScoped<
-    ISupplierApiService,
-    SupplierApiService>();
-
-builder.Services.AddScoped<
-    IProductApiService,
-    ProductApiService>();
-
-builder.Services.AddScoped<
-    IInventoryCatalogApiService,
-    InventoryCatalogApiService>();
-
-builder.Services.AddScoped<
-    IInventoryApiService,
-    InventoryApiService>();
-
-builder.Services.AddScoped<
-    IPhysicalCountApiService,
-    PhysicalCountApiService>();
-
-builder.Services.AddScoped<
-    IInventoryCostApiService,
-    InventoryCostApiService>();
-
-builder.Services.AddScoped<
-    IQuotationApiService,
-    QuotationApiService>();
-
-builder.Services.AddScoped<
-    ISaleApiService,
-    SaleApiService>();
-
-builder.Services.AddScoped<
-    IPurchaseApiService,
-    PurchaseApiService>();
-
-builder.Services.AddScoped<
-    ITaxpayerApiService,
-    TaxpayerApiService>();
-
-builder.Services.AddScoped<
-    ILocationApiService,
-    LocationApiService>();
+builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
+builder.Services.AddScoped<ICabysApiService, CabysApiService>();
+builder.Services.AddScoped<ICustomerApiService, CustomerApiService>();
+builder.Services.AddScoped<ISupplierApiService, SupplierApiService>();
+builder.Services.AddScoped<IProductApiService, ProductApiService>();
+builder.Services.AddScoped<IInventoryCatalogApiService, InventoryCatalogApiService>();
+builder.Services.AddScoped<IInventoryApiService, InventoryApiService>();
+builder.Services.AddScoped<IPhysicalCountApiService, PhysicalCountApiService>();
+builder.Services.AddScoped<IInventoryCostApiService, InventoryCostApiService>();
+builder.Services.AddScoped<IQuotationApiService, QuotationApiService>();
+builder.Services.AddScoped<ISaleApiService, SaleApiService>();
+builder.Services.AddScoped<IPurchaseApiService, PurchaseApiService>();
+builder.Services.AddScoped<IElectronicDocumentApiService, ElectronicDocumentApiService>();
+builder.Services.AddScoped<IGmailIntegrationApiService, GmailIntegrationApiService>();
+builder.Services.AddScoped<ITaxpayerApiService, TaxpayerApiService>();
+builder.Services.AddScoped<ILocationApiService, LocationApiService>();
 
 await builder.Build().RunAsync();

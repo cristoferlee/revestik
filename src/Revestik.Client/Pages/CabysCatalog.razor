@@ -1,0 +1,337 @@
+@page "/cabys"
+@using Microsoft.AspNetCore.Authorization
+@using Revestik.Client.Services.Cabys
+@using Revestik.Shared.Cabys
+@using Revestik.Shared.Common
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales,Warehouse")]
+@inject ICabysApiService CabysApi
+
+<PageTitle>Catálogo CAByS | Revestik</PageTitle>
+
+<section class="cabys-page">
+    <header class="cabys-header">
+        <div>
+            <h1>Catálogo CAByS</h1>
+            <p>Consulta el catálogo oficial cargado en Revestik por código o descripción.</p>
+        </div>
+    </header>
+
+
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message" role="alert">@errorMessage</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="status-message" role="status">@successMessage</div>
+    }
+
+    <section class="cabys-status-card">
+        <div>
+            <span>Versión actual</span>
+            <strong>@(status.CurrentVersion ?? "Sin cargar")</strong>
+        </div>
+        <div>
+            <span>Registros</span>
+            <strong>@status.ItemCount.ToString("N0")</strong>
+        </div>
+        <div>
+            <span>Estado</span>
+            <strong>@(status.IsLoaded ? "Disponible" : "Pendiente de carga")</strong>
+        </div>
+        <AuthorizeView Roles="Administrator">
+            <button type="button"
+                    class="primary-button"
+                    disabled="@isLoadingCatalog"
+                    @onclick="LoadBundledCatalogAsync">
+                @(isLoadingCatalog
+                    ? "Cargando catálogo..."
+                    : status.IsLoaded
+                        ? "Verificar catálogo incluido"
+                        : "Cargar CAByS 2025")
+            </button>
+        </AuthorizeView>
+    </section>
+
+    @if (!status.IsLoaded)
+    {
+        <section class="cabys-empty-card">
+            <span class="section-kicker">Configuración inicial</span>
+            <h2>Catálogo aún no cargado</h2>
+            <p>
+                La base ya está preparada. Un administrador debe cargar una sola vez
+                los 20.506 CAByS oficiales incluidos con esta versión de Revestik.
+            </p>
+        </section>
+    }
+    else
+    {
+        <section class="cabys-search-card">
+            <div class="cabys-section-heading">
+                <div>
+                    <span class="section-kicker">Consulta oficial</span>
+                    <h2>Buscar CAByS</h2>
+                    <p>Busca por código exacto, descripción, jerarquía o términos incluidos en el catálogo.</p>
+                </div>
+            </div>
+            <form class="cabys-search-form" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+                <div class="form-group">
+                    <label>Buscar</label>
+                    <input type="search"
+                           maxlength="150"
+                           placeholder="Ej.: diésel, porcelanato o 3336001000200"
+                           @bind="searchText"
+                           @bind:event="oninput" />
+                </div>
+                <button type="submit" class="primary-button" disabled="@isSearching">
+                    @(isSearching ? "Buscando..." : "Buscar")
+                </button>
+            </form>
+
+            @if (isSearching && items.Count == 0)
+            {
+                <p class="empty-state">Buscando en CAByS...</p>
+            }
+            else if (hasSearched && items.Count == 0)
+            {
+                <p class="empty-state">No se encontraron códigos CAByS.</p>
+            }
+            else if (items.Count > 0)
+            {
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>CAByS</th>
+                                <th>Descripción oficial</th>
+                                <th>Impuesto ref.</th>
+                                <th>Rama</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in items)
+                            {
+                                <tr>
+                                    <td><code>@item.Code</code></td>
+                                    <td><strong>@item.Description</strong></td>
+                                    <td>@item.TaxReference</td>
+                                    <td>@item.Category4Description</td>
+                                    <td>
+                                        <button type="button"
+                                                class="secondary-button"
+                                                @onclick="() => OpenDetailAsync(item.Code)">
+                                            Ver detalle
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <nav class="pagination-controls">
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@(searchRequest.Page <= 1 || isSearching)"
+                            @onclick="PreviousPageAsync">
+                        Anterior
+                    </button>
+                    <span>Página @searchRequest.Page de @TotalPages · @totalCount resultado(s)</span>
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@(!CanGoNext || isSearching)"
+                            @onclick="NextPageAsync">
+                        Siguiente
+                    </button>
+                </nav>
+            }
+        </section>
+    }
+
+    @if (selected is not null)
+    {
+        <div class="cabys-modal-backdrop" @onclick="CloseDetail">
+            <section class="cabys-modal" role="dialog" aria-modal="true" @onclick:stopPropagation>
+                <div class="cabys-modal-header">
+                    <div>
+                        <span class="cabys-kicker">@selected.Code</span>
+                        <h2>@selected.Description</h2>
+                    </div>
+                    <button type="button" class="secondary-button" @onclick="CloseDetail">Cerrar</button>
+                </div>
+
+                <dl class="cabys-detail-grid">
+                    <div><dt>Impuesto de referencia</dt><dd>@selected.TaxReference</dd></div>
+                    <div><dt>Versión</dt><dd>@selected.CatalogVersion</dd></div>
+                </dl>
+
+                <section class="cabys-detail-section">
+                    <h3>Jerarquía</h3>
+                    <ol>
+                        @foreach (var level in GetHierarchy(selected))
+                        {
+                            <li><code>@level.Code</code> @level.Description</li>
+                        }
+                    </ol>
+                </section>
+
+                @if (!string.IsNullOrWhiteSpace(selected.Includes))
+                {
+                    <section class="cabys-detail-section">
+                        <h3>Incluye</h3>
+                        <p class="preserve-lines">@selected.Includes</p>
+                    </section>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(selected.Excludes))
+                {
+                    <section class="cabys-detail-section">
+                        <h3>Excluye</h3>
+                        <p class="preserve-lines">@selected.Excludes</p>
+                    </section>
+                }
+            </section>
+        </div>
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "search")]
+    public string? QuerySearch { get; set; }
+
+    private CabysCatalogStatusResponse status = new(false, null, 0, null, null, null);
+    private CabysSearchRequest searchRequest = new() { PageSize = 20 };
+    private string searchText = string.Empty;
+    private IReadOnlyList<CabysListItemResponse> items = [];
+    private CabysDetailResponse? selected;
+    private int totalCount;
+    private bool isLoadingCatalog;
+    private bool isSearching;
+    private bool hasSearched;
+    private string? errorMessage;
+    private string? successMessage;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(totalCount / (double)searchRequest.PageSize));
+    private bool CanGoNext => searchRequest.Page < TotalPages;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshStatusAsync();
+        if (!string.IsNullOrWhiteSpace(QuerySearch))
+        {
+            searchText = QuerySearch;
+            await SearchAsync();
+        }
+    }
+
+    private async Task RefreshStatusAsync()
+    {
+        try
+        {
+            status = await CabysApi.GetStatusAsync();
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+    }
+
+    private async Task LoadBundledCatalogAsync()
+    {
+        if (isLoadingCatalog) return;
+        isLoadingCatalog = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var result = await CabysApi.LoadBundledCatalogAsync();
+            successMessage = result.WasAlreadyLoaded
+                ? $"CAByS {result.Version} ya estaba cargado con {result.ItemCount:N0} registros."
+                : $"CAByS {result.Version} cargado correctamente: {result.ItemCount:N0} registros.";
+            await RefreshStatusAsync();
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isLoadingCatalog = false;
+        }
+    }
+
+    private async Task SearchAsync()
+    {
+        searchRequest.Page = 1;
+        searchRequest.Search = string.IsNullOrWhiteSpace(searchText)
+            ? null
+            : searchText.Trim();
+
+        await LoadSearchPageAsync();
+    }
+
+    private async Task LoadSearchPageAsync()
+    {
+        if (!status.IsLoaded) return;
+        isSearching = true;
+        errorMessage = null;
+        hasSearched = true;
+
+        try
+        {
+            var result = await CabysApi.SearchAsync(searchRequest);
+            items = result.Items;
+            totalCount = result.TotalCount;
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isSearching = false;
+        }
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (searchRequest.Page <= 1) return;
+        searchRequest.Page--;
+        await LoadSearchPageAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (!CanGoNext) return;
+        searchRequest.Page++;
+        await LoadSearchPageAsync();
+    }
+
+    private async Task OpenDetailAsync(string code)
+    {
+        errorMessage = null;
+        selected = await CabysApi.GetByCodeAsync(code);
+        if (selected is null)
+        {
+            errorMessage = "El código CAByS ya no está disponible en la versión actual.";
+        }
+    }
+
+    private void CloseDetail() => selected = null;
+
+    private static IEnumerable<(string Code, string Description)> GetHierarchy(CabysDetailResponse item)
+    {
+        yield return (item.Category1Code, item.Category1Description);
+        yield return (item.Category2Code, item.Category2Description);
+        yield return (item.Category3Code, item.Category3Description);
+        yield return (item.Category4Code, item.Category4Description);
+        yield return (item.Category5Code, item.Category5Description);
+        yield return (item.Category6Code, item.Category6Description);
+        yield return (item.Category7Code, item.Category7Description);
+        yield return (item.Category8Code, item.Category8Description);
+        yield return (item.Code, item.Description);
+    }
+}

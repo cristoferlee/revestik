@@ -1,0 +1,10 @@
+.cabys-lookup { display: grid; gap: 12px; }
+.cabys-search { display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 8px; }
+.cabys-search input { min-height: 38px; padding: 8px 10px; border: 1px solid #d7dde4; border-radius: 6px; }
+.cabys-results { display: grid; gap: 6px; max-height: 360px; overflow: auto; }
+.cabys-result { display: grid; gap: 3px; padding: 10px 12px; text-align: left; border: 1px solid #e1e6eb; border-radius: 7px; background: #fff; cursor: pointer; }
+.cabys-result:hover { background: #f8fafb; border-color: #b9c3ce; }
+.cabys-result strong { color: #26313d; font-size: .84rem; }
+.cabys-result small { color: #788391; }
+.cabys-code { color: #6b7280; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; }
+@media (max-width: 620px) { .cabys-search { grid-template-columns: 1fr; } }

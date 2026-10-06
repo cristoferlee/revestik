@@ -12,31 +12,42 @@
     gap: 4px;
 }
 
-.navigation-links ::deep .navigation-link {
+.navigation-links ::deep .navigation-link,
+.navigation-group-toggle {
     position: relative;
     display: flex;
+    width: 100%;
     min-height: 46px;
     align-items: center;
     gap: 12px;
     padding: 0 14px;
+    border: 0;
     border-radius: 7px;
+    background: transparent;
     color: #d6dde5;
+    cursor: pointer;
+    font: inherit;
     font-size: 0.9rem;
     font-weight: 500;
+    text-align: left;
+    text-decoration: none;
     transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.navigation-links ::deep .navigation-link:hover {
+.navigation-links ::deep .navigation-link:hover,
+.navigation-group-toggle:hover {
     background: rgb(255 255 255 / 6%);
     color: #ffffff;
 }
 
-.navigation-links ::deep .navigation-link.active {
+.navigation-links ::deep .navigation-link.active,
+.navigation-group-current > .navigation-group-toggle {
     background: rgb(245 158 11 / 12%);
     color: #ffffff;
 }
 
-.navigation-links ::deep .navigation-link.active::before {
+.navigation-links ::deep .navigation-link.active::before,
+.navigation-group-current > .navigation-group-toggle::before {
     position: absolute;
     top: 9px;
     bottom: 9px;
@@ -57,8 +68,60 @@
     font-size: 1rem;
 }
 
-.navigation-links ::deep .navigation-link.active .nav-icon {
+.navigation-links ::deep .navigation-link.active .nav-icon,
+.navigation-group-current > .navigation-group-toggle .nav-icon {
     color: var(--color-primary);
+}
+
+.navigation-group-label {
+    flex: 1;
+}
+
+.navigation-chevron {
+    color: #8f9aa6;
+    font-size: 1rem;
+    transition: transform 0.15s ease;
+}
+
+.navigation-chevron-open {
+    transform: rotate(180deg);
+}
+
+.navigation-submenu {
+    display: none;
+    gap: 2px;
+    margin: 3px 0 5px 36px;
+    padding-left: 11px;
+    border-left: 1px solid rgb(255 255 255 / 10%);
+}
+
+.navigation-submenu-open {
+    display: grid;
+}
+
+.navigation-submenu ::deep .navigation-sublink {
+    display: flex;
+    min-height: 36px;
+    align-items: center;
+    padding: 0 10px;
+    border-radius: 6px;
+    color: #aeb8c4;
+    font-size: 0.78rem;
+    font-weight: 550;
+    line-height: 1.2;
+    text-decoration: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.navigation-submenu ::deep .navigation-sublink:hover {
+    background: rgb(255 255 255 / 5%);
+    color: #ffffff;
+}
+
+.navigation-submenu ::deep .navigation-sublink.active {
+    background: rgb(255 255 255 / 5%);
+    color: var(--color-primary);
+    font-weight: 650;
 }
 
 .navigation-divider {
@@ -101,7 +164,12 @@
         display: flex;
     }
 
-    .navigation-links ::deep .navigation-link.active::before {
+    .navigation-links ::deep .navigation-link.active::before,
+    .navigation-group-current > .navigation-group-toggle::before {
         left: 0;
+    }
+
+    .navigation-submenu {
+        margin-left: 34px;
     }
 }

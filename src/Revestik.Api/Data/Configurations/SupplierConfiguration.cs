@@ -4,42 +4,27 @@ using Revestik.Api.Models;
 
 namespace Revestik.Api.Data.Configurations;
 
-public sealed class SupplierConfiguration
-    : IEntityTypeConfiguration<Supplier>
+public sealed class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
 {
     public void Configure(EntityTypeBuilder<Supplier> builder)
     {
         builder.ToTable("Suppliers");
-
         builder.HasKey(supplier => supplier.Id);
-
-        builder.Property(supplier => supplier.Name)
-            .HasMaxLength(150)
-            .IsRequired();
-
-        builder.Property(supplier => supplier.ContactName)
-            .HasMaxLength(150)
-            .IsRequired();
-
-        builder.Property(supplier => supplier.PhoneNumber)
-            .HasMaxLength(20)
-            .IsRequired();
-
-        builder.Property(supplier => supplier.Email)
-            .HasMaxLength(254)
-            .IsRequired();
-
-        builder.Property(supplier => supplier.IsActive)
-            .HasDefaultValue(true);
-
-        builder.Property(supplier => supplier.CreatedAtUtc)
-            .HasColumnType("datetime2");
-
-        builder.Property(supplier => supplier.UpdatedAtUtc)
-            .HasColumnType("datetime2");
-
-        builder.HasIndex(supplier => supplier.Name)
+        builder.Property(supplier => supplier.Name).HasMaxLength(150).IsRequired();
+        builder.Property(supplier => supplier.ContactName).HasMaxLength(150).IsRequired();
+        builder.Property(supplier => supplier.PhoneNumber).HasMaxLength(20).IsRequired();
+        builder.Property(supplier => supplier.Email).HasMaxLength(254).IsRequired();
+        builder.Property(supplier => supplier.IdentificationType).HasMaxLength(2);
+        builder.Property(supplier => supplier.IdentificationNumber).HasMaxLength(20);
+        builder.Property(supplier => supplier.CommercialName).HasMaxLength(200).IsRequired();
+        builder.Property(supplier => supplier.Address).HasMaxLength(1000).IsRequired();
+        builder.Property(supplier => supplier.IsActive).HasDefaultValue(true);
+        builder.Property(supplier => supplier.CreatedAtUtc).HasColumnType("datetime2");
+        builder.Property(supplier => supplier.UpdatedAtUtc).HasColumnType("datetime2");
+        builder.HasIndex(supplier => supplier.Name).IsUnique().HasDatabaseName("UX_Suppliers_Name");
+        builder.HasIndex(supplier => new { supplier.IdentificationType, supplier.IdentificationNumber })
             .IsUnique()
-            .HasDatabaseName("UX_Suppliers_Name");
+            .HasFilter("[IdentificationNumber] IS NOT NULL")
+            .HasDatabaseName("UX_Suppliers_Identification");
     }
 }

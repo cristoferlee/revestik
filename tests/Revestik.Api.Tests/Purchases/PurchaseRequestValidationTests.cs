@@ -83,10 +83,10 @@ public sealed class PurchaseRequestValidationTests
     }
 
     [Fact]
-    public void PurchaseLine_WithMoreThanTwoCostDecimals_IsInvalid()
+    public void PurchaseLine_WithMoreThanFiveCostDecimals_IsInvalid()
     {
         var request = CreateValidRequest();
-        request.Lines[0].UnitCost = 1000.001m;
+        request.Lines[0].UnitCost = 1000.000001m;
 
         Assert.NotEmpty(Validate(request));
     }

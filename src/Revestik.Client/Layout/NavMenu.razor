@@ -1,3 +1,6 @@
+@implements IDisposable
+@inject NavigationManager Navigation
+
 <nav class="main-navigation" aria-label="Navegación principal">
     <button class="navigation-toggle"
             type="button"
@@ -36,9 +39,44 @@
             <span class="nav-icon" aria-hidden="true">≋</span><span>Lotes de costo</span>
         </NavLink>
 
-        <NavLink class="navigation-link" href="/purchases" @onclick="CloseNavigation">
-            <span class="nav-icon" aria-hidden="true">⇣</span><span>Compras</span>
-        </NavLink>
+        <div class="navigation-group @(IsPurchasesSection ? "navigation-group-current" : null)">
+            <button type="button"
+                    class="navigation-link navigation-group-toggle"
+                    aria-expanded="@isPurchasesOpen"
+                    aria-controls="purchases-navigation"
+                    @onclick="TogglePurchasesGroup">
+                <span class="nav-icon" aria-hidden="true">⇣</span>
+                <span class="navigation-group-label">Compras</span>
+                <span class="navigation-chevron @(isPurchasesOpen ? "navigation-chevron-open" : null)" aria-hidden="true">⌄</span>
+            </button>
+
+            <div id="purchases-navigation" class="@PurchasesSubmenuCssClass">
+                <NavLink class="navigation-sublink"
+                         href="/purchases"
+                         Match="NavLinkMatch.All"
+                         @onclick="CloseNavigation">
+                    Nueva compra
+                </NavLink>
+
+                <NavLink class="navigation-sublink"
+                         href="/purchases/received-documents"
+                         @onclick="CloseNavigation">
+                    Documentos recibidos
+                </NavLink>
+
+                <NavLink class="navigation-sublink"
+                         href="/purchases/history"
+                         @onclick="CloseNavigation">
+                    Historial y cuentas por pagar
+                </NavLink>
+
+                <NavLink class="navigation-sublink"
+                         href="/cabys"
+                         @onclick="CloseNavigation">
+                    CAByS
+                </NavLink>
+            </div>
+        </div>
 
         <AuthorizeView Roles="Administrator">
             <div class="navigation-divider"></div>
@@ -52,19 +90,63 @@
 
 @code {
     private bool isNavigationOpen;
+    private bool isPurchasesOpen;
 
     private string NavigationCssClass =>
         isNavigationOpen
             ? "navigation-links navigation-links-open"
             : "navigation-links";
 
+    private string PurchasesSubmenuCssClass =>
+        isPurchasesOpen
+            ? "navigation-submenu navigation-submenu-open"
+            : "navigation-submenu";
+
+    private bool IsPurchasesSection => IsPurchasesUri(Navigation.Uri);
+
+    protected override void OnInitialized()
+    {
+        isPurchasesOpen = IsPurchasesSection;
+        Navigation.LocationChanged += HandleLocationChanged;
+    }
+
     private void ToggleNavigation()
     {
         isNavigationOpen = !isNavigationOpen;
     }
 
+    private void TogglePurchasesGroup()
+    {
+        isPurchasesOpen = !isPurchasesOpen;
+    }
+
     private void CloseNavigation()
     {
         isNavigationOpen = false;
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        if (IsPurchasesUri(args.Location))
+        {
+            isPurchasesOpen = true;
+        }
+
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private bool IsPurchasesUri(string uri)
+    {
+        var relative = Navigation.ToBaseRelativePath(uri);
+
+        return relative.Equals("purchases", StringComparison.OrdinalIgnoreCase) ||
+               relative.StartsWith("purchases/", StringComparison.OrdinalIgnoreCase) ||
+               relative.Equals("cabys", StringComparison.OrdinalIgnoreCase) ||
+               relative.StartsWith("cabys?", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= HandleLocationChanged;
     }
 }
