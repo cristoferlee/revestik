@@ -2,11 +2,11 @@
 
 Revestik is a full-stack business management application built with the Microsoft .NET ecosystem.
 
-It is designed to centralize operational workflows such as customer management, quotations, sales, inventory, purchases, expenses, accounts receivable, and business analytics within a secure and maintainable web application.
+It is designed to centralize operational workflows such as customer management, quotations, sales, inventory, suppliers, purchases, accounts payable, received electronic documents, expenses, reporting, and business analytics within a secure and maintainable web application.
 
 The project originates from real small-business operational requirements and is developed incrementally, with an emphasis on business rules, data integrity, security, testing, and maintainable architecture.
 
-> **Project status:** Active development. The application foundation, Customer Management, Quotations, Sales, and the Inventory core are implemented and verified. Purchases and Suppliers are the next major business domain.
+> **Project status:** Active development. Customer Management, Quotations, Sales, Inventory, Suppliers, Purchases, Accounts Payable, Electronic Documents, CAByS integration, accounting classification, and manual Gmail document ingestion are implemented and verified. The current focus is refining the received-document workflow.
 
 ---
 
@@ -25,6 +25,8 @@ The project originates from real small-business operational requirements and is 
 * LINQ
 * OpenAPI
 * QuestPDF
+* OAuth 2.0
+* XML/XSD processing
 
 ### Frontend
 
@@ -61,9 +63,9 @@ tests/
 ```
 
 * **Revestik.Client** — Blazor WebAssembly frontend.
-* **Revestik.Api** — ASP.NET Core API, business services, authentication, authorization, integrations, persistence, PDF generation, and production host.
+* **Revestik.Api** — ASP.NET Core API, business services, authentication, authorization, integrations, persistence, PDF generation, XML processing, and production host.
 * **Revestik.Shared** — request and response contracts shared between client and API.
-* **Revestik.Api.Tests** — automated server, security, persistence, and hosting tests.
+* **Revestik.Api.Tests** — automated server, security, persistence, integration, and hosting tests.
 
 ```mermaid
 flowchart TB
@@ -81,6 +83,8 @@ flowchart TB
     API --> External
 ```
 
+Revestik follows a pragmatic modular-monolith architecture. Business domains remain separated by responsibility without introducing microservices, CQRS, event buses, generic repositories, or additional abstraction layers without a concrete need.
+
 For the detailed architecture:
 
 [Architecture Overview](docs/architecture/architecture-overview.md)
@@ -94,154 +98,260 @@ For the detailed architecture:
 * ASP.NET Core Identity
 * Google external authentication
 * Secure cookie-based sessions
-* Protected-by-default API authorization
 * Role and policy-based authorization
-* Antiforgery protection for mutable authenticated operations
+* Antiforgery protection for authenticated mutations
 * Server-side validation
 * Development CORS restrictions
-* Secure server-side secret boundary
+* Sensitive credentials kept outside source control
+* ASP.NET Core Data Protection for persisted integration state
+* Secure XML parsing with external resource resolution disabled
 
 ### Customer Management
-
-Implemented customer capabilities include:
 
 * Create, retrieve, edit, deactivate, and reactivate customers
 * Costa Rican identification validation
 * Unique customer identification enforcement
 * Contact and structured location information
 * Pagination, filtering, search, and deterministic ordering
-* Active/inactive state
 * Server-side validation and database integrity protections
 
 ### Quotation Management
 
-The Quotations workflow is implemented end to end.
-
-Current capabilities include:
-
 * Create and edit quotations
 * `Draft` and `Issued` states
 * Existing active-customer association
-* Customer snapshot captured when a quotation is issued or reissued
-* Product-assisted and manual quotation lines
-* Optional CABYS on commercial quotation lines
-* Unit of measure
-* Decimal quantities
-* CRC and USD currencies
-* IVA-inclusive pricing
-* 0% and 13% IVA calculations
-* Percentage and fixed discounts
-* Additional charges
-* Immediate client-side calculation feedback
-* Server-authoritative monetary calculations
-* Backend-generated `COT-000001`-style consecutive numbers
-* SQL Server sequence-backed number generation
-* Preservation of quotation identity and COT number during updates and reissue
-* Backend PDF generation with QuestPDF
-* Authenticated PDF download
-* Quotation history with search, filters, pagination, and detail view
+* Customer snapshot on issue/reissue
+* Product-assisted and manual lines
+* Optional CAByS
+* CRC and USD
+* IVA-inclusive calculations
+* Discounts and additional charges
+* Backend-generated `COT-000001`-style numbering
+* QuestPDF generation
+* History, search, filters, pagination, and detail view
 * Conversion of issued quotations into linked Sale drafts
-* Preservation of the quotation as historical source after conversion
 
 Creating, editing, issuing, or reissuing a quotation does not reserve or deduct inventory.
 
 ### Sales Management
 
-The Sales workflow is implemented end to end.
-
-Current capabilities include:
-
-* Direct sale creation
-* Sale creation from issued quotations
+* Direct sales and quotation-to-sale conversion
 * `Draft`, `Issued`, and `Voided` states
 * Backend-generated `VEN-000001`-style numbering
-* VEN assignment only when a sale is issued
 * CRC and USD
-* Manual and product-assisted lines
-* Optional CABYS
-* Percentage and fixed discounts
-* General sale discount
-* Additional charges
-* IVA-inclusive calculations
-* Server-authoritative monetary calculations
+* Product-assisted and manual lines
+* Discounts, charges, and IVA-inclusive calculations
 * Customer snapshot on issue
-* Sale history with search, filters, pagination, summaries, and detail view
-* Internal sale PDF generation with QuestPDF
+* History, search, filters, summaries, and detail view
+* QuestPDF generation
 * Partial and full payments
-* Payment history
-* Payment voiding with reason
-* Outstanding-balance calculation and payment status
-* Sale voiding with reason
-* Replacement/correction workflow preserving the original sale
-* Linked replacement Draft that can be edited and issued with a new VEN
-* Traceability between quotation and sale
-* Traceability between original and replacement sales
+* Payment voiding
+* Outstanding-balance tracking
+* Sale voiding and replacement/correction workflow
 * Inventory consumption for product-linked issued sales
-* Exact inventory restoration when an issued sale is voided
-* Role/policy authorization and antiforgery protection
+* Exact FIFO inventory restoration when a sale is voided
 
 Sales are internal commercial documents. Direct Costa Rican electronic invoicing remains outside the current Sales scope.
 
 ### Inventory Management
 
-The Inventory core is implemented and verified.
+The Inventory domain is the source of truth for physical stock.
 
 Current capabilities include:
 
 * Configurable product categories
-* Product catalog with search, filtering, pagination, and ordering
-* CABYS support for physical products
-* Physical inventory units and commercial units
-* Unit conversion rules between inventory and commercial quantities
-* Whole-unit quantity enforcement where required
-* Current stock tracking
-* Initial stock registration
+* Product catalog
+* CAByS support
+* Physical and commercial units
+* Unit-conversion rules
+* Current stock
+* Initial stock
 * Immutable inventory movements
-* Manual stock increases and decreases
-* FIFO inventory consumption
+* Manual adjustments
+* FIFO consumption
 * FIFO cost layers
-* Current product cost reference
-* Unknown historical cost tracking
-* Explicit resolution of unknown inventory costs without overwriting the original cost source
-* Product-linked sale consumption
+* Unknown historical cost tracking and resolution
+* Sale-linked consumption
 * Prevention of negative inventory
-* Exact FIFO layer restoration when a sale is voided
-* Provenance between sale movements and reversal movements
+* Exact sale inventory reversal
 * Physical inventory counts
-* Physical-count adjustments with traceability
-* Product deactivation and reactivation
-* Permanent removal from normal product UI through logical archival while retaining historical database records
-* Concurrency and data-integrity safeguards for critical inventory operations
-* Dedicated inventory, physical-count, and unknown-cost UI workflows
-* Authorization and antiforgery protection for protected inventory operations
+* Traceable physical-count adjustments
+* Product deactivation/reactivation and logical archival
+* Purchase-linked stock receipt
+* Purchase-cost propagation into inventory cost layers
+* Concurrency and data-integrity safeguards
 
-Inventory tracks physical materials only. Services and commercial charges are not stock items.
+Services and commercial charges are not inventory items.
 
-Purchases will become a separate domain that feeds inventory through valid stock-entry operations rather than embedding purchase processing directly inside Inventory.
+Purchases feed Inventory through explicit stock-receipt operations rather than embedding the Purchase domain inside Inventory.
+
+### Supplier Management
+
+* Create and edit suppliers
+* Deactivate and reactivate suppliers
+* Search and paginated listing
+* Contact information
+* Unique supplier-name enforcement
+* Supplier purchase history
+* Authorization and backend validation
+
+Supplier names are unique. Product names are not used as a global inventory identity constraint.
+
+### Purchases and Accounts Payable
+
+Purchases are implemented as a separate operational domain.
+
+Current capabilities include:
+
+* Manual purchase registration
+* Existing supplier association
+* Product-linked purchase lines
+* Authorized product creation during purchase
+* CRC and USD
+* Exchange rates
+* Discounts, taxes, and totals
+* Cash and credit purchases
+* Credit terms and due dates
+* Purchase payments
+* Accounts-payable summaries
+* Upcoming and overdue alerts
+* Supplier purchase history
+* Inventory receipt from purchase lines
+* FIFO inventory cost capture
+* Prevention of duplicate inventory application
+* Transactional consistency for critical purchase operations
+
+A Purchase is an operational business record and is intentionally separate from a received Electronic Document.
+
+### Electronic Documents
+
+Revestik includes a received-electronic-document workflow for Costa Rican fiscal XML.
+
+Current capabilities include:
+
+* Manual XML import
+* Original XML preservation
+* Document, line, tax, and discount persistence
+* Hacienda response association
+* Duplicate detection
+* Issuer, receiver, currency, totals, and economic-activity data
+* Accounting classification
+* Operational destination
+* Payment-condition classification
+* Document-level and line-level classification
+* Search, history, and review workflows
+* Secure staging/quarantine before canonical acceptance
+
+Electronic Documents do not automatically create Purchases or modify Inventory.
+
+The economic date of a received document is its `FechaEmision`.
+
+### Hacienda XML 4.4
+
+Revestik uses a common Hacienda XML 4.4 platform based on document root/namespace detection and local XSD validation.
+
+Recognized document families include:
+
+* Factura Electrónica
+* Mensaje Hacienda
+* Mensaje Receptor
+* Nota de Crédito Electrónica
+* Nota de Débito Electrónica
+* Factura Electrónica de Compra
+* Factura Electrónica de Exportación
+* Recibo Electrónico de Pago
+* Tiquete Electrónico
+
+Recognition and processing support are separate concepts. A recognized document whose business processing is not yet implemented remains a valid recognized document instead of being reported as invalid XML.
+
+XML validation uses local schemas, prohibits DTD processing, disables external resolution, and does not download schemas at runtime.
+
+### CAByS and Accounting Classification
+
+Revestik includes a local versioned CAByS 2025 catalog with approximately 20,500 codes.
+
+Current capabilities include:
+
+* CAByS code and description search
+* Accent-insensitive search
+* Hierarchical category information
+* Tax references
+* Includes/excludes metadata
+* Product lookup support
+* Received-document classification support
+* Configurable accounting categories
+* Document and line classification
+* Learned classification rules
+* Confidence-based suggestions
+* Accounting and payment-condition summaries
+
+CAByS, accounting nature, operational destination, and payment condition are separate concepts.
+
+Automated suggestions remain reviewable and editable.
+
+### Gmail Integration
+
+Revestik can connect to the business Google Workspace mailbox used for received fiscal documents.
+
+Current capabilities include:
+
+* Server-side OAuth 2.0
+* `gmail.readonly` scope
+* Connect/disconnect/status endpoints
+* Message search
+* MIME traversal
+* XML attachment retrieval
+* Per-attachment processing
+* Duplicate and rejected-document tracking
+* Controlled retry of rejected attachments
+* Manual synchronization
+* Single-flight synchronization protection
+* Encrypted persisted integration state
+
+Gmail acts only as a transport mechanism:
+
+```text
+Gmail
+   ↓
+XML validation
+   ↓
+Quarantine
+   ↓
+Manual acceptance
+   ↓
+Electronic Documents
+```
+
+It does not automatically create Purchases or Inventory movements.
+
+Periodic background synchronization has not yet been implemented.
 
 ### External Integrations
 
-* Costa Rican taxpayer lookup integration
-* Location catalog integration
-* In-memory caching for location data
+* Costa Rican taxpayer lookup
+* Costa Rican location catalog
+* Google external authentication
+* Google Workspace Gmail read-only integration
+* Hacienda XML 4.4 validation
+* Local CAByS catalog
+* In-memory caching where appropriate
 
 ### Engineering Foundation
 
-* Automated request-validation tests
-* Customer service and pagination tests
-* Quotation calculation, service, authorization, API, persistence, and concurrency tests
-* Sales calculation, lifecycle, endpoint, query, payment, PDF, validation, persistence, concurrency, inventory-consumption, and reversal tests
-* Product authorization, pagination, unit-rule, and lifecycle tests
-* Inventory movement and data-integrity tests
-* Inventory cost-resolution tests
-* Physical-count service and endpoint tests
-* CSRF tests for protected mutable endpoints
-* Hosting integration tests
+* Automated request and service tests
+* HTTP integration tests
+* SQL Server/Testcontainers integration testing
+* Quotation and Sales lifecycle/concurrency tests
+* Inventory FIFO, movement, physical-count, and reversal tests
+* Supplier, Purchase, Accounts Payable, and inventory-receipt tests
+* Electronic Document import/classification tests
+* Hacienda XML parsing and schema tests
+* Gmail MIME and retry tests
+* CSRF and authorization tests
+* Development/production hosting tests
 * CI on pull requests and `main`
-* Release build verification
-* Hosted Blazor publish verification
-* Static asset verification
-* Brotli asset verification
+* Release build and publish verification
+* Hosted Blazor/static asset verification
 * Database health endpoint
 
 ---
@@ -286,31 +396,26 @@ Important business behavior is documented explicitly instead of existing only im
 Current examples include:
 
 * Customer identification must be unique.
-* Quotations belong to existing active customers.
 * Quotations do not modify inventory.
-* Quotation numbers are generated by the backend through SQL Server.
-* Issued quotations store a customer snapshot.
-* Sales may be created directly or from an issued quotation.
+* Issued quotations and sales preserve customer snapshots.
+* Sales may be created directly or from issued quotations.
 * Draft sales do not have a VEN.
-* A VEN is assigned when a sale is issued.
-* Issued sales store a customer snapshot.
-* Sales support partial and full payments.
-* Voided payments remain historical.
-* Voided sales remain historical.
-* Corrections use a linked replacement sale instead of overwriting the original.
-* Converting a quotation to a sale preserves the quotation as historical source.
-* Direct electronic invoicing is outside the current Sales domain.
-* Inventory represents physical materials; services and charges do not create stock.
+* Voided sales and payments remain historical.
+* Corrections use linked replacement sales.
 * Physical inventory is the source of truth for stock quantities.
 * Product-linked issued sales consume inventory through FIFO.
 * Inventory cannot become negative.
-* A sale shortage is not represented as artificial stock.
-* Voiding a sale restores the exact inventory quantities and FIFO layers originally consumed.
-* Historical inventory movements are retained for traceability.
+* Voiding a sale restores the exact quantities and FIFO layers originally consumed.
 * Physical counts generate traceable inventory adjustments.
-* Unknown historical costs can be resolved without replacing the original recorded cost source.
-* Products may be discontinued and reactivated.
-* Products permanently removed from normal product workflows are archived rather than physically deleted, preserving historical records and references.
+* Unknown historical costs can be resolved without replacing the original cost source.
+* Supplier names are unique.
+* Purchases and Electronic Documents represent different business concepts.
+* Electronic Documents do not automatically create Purchases or Inventory movements.
+* Gmail transports XML but does not directly create business transactions.
+* XML must pass validation and quarantine before canonical acceptance.
+* Duplicate fiscal documents are not persisted as independent economic facts.
+* `FechaEmision` is the economic date of received fiscal documents.
+* CAByS, accounting classification, operational destination, and payment condition remain separate dimensions.
 
 See:
 
@@ -320,39 +425,27 @@ See:
 
 ## Testing
 
-Revestik uses focused tests, HTTP integration tests, SQL Server integration tests, security tests, and hosting verification to protect important application behavior.
+Revestik uses focused unit tests, HTTP integration tests, SQL Server integration tests, security tests, XML-processing tests, and hosting verification.
 
-Current automated coverage includes:
+Coverage includes the major business domains and critical cross-domain behavior, including:
 
-* Customer request validation and persistence behavior
-* Customer pagination, filtering, and ordering
-* Quotation request and nested validation
-* Quotation calculations and API/service behavior
-* SQL Server COT sequence generation and concurrency
-* Sale request and nested validation
-* Sale calculations
-* Sale lifecycle behavior
-* Sale query/history behavior
-* Sale payment and payment-void behavior
-* Sale PDF behavior
-* SQL Server VEN sequence generation and concurrency
-* Sale inventory consumption and exact reversal behavior
-* Product authorization and pagination
-* Product unit-quantity rules
-* Inventory movement integrity
-* FIFO and cost behavior
-* Unknown inventory cost resolution
-* Physical-count service behavior
-* Physical-count endpoint behavior
-* CSRF behavior
-* Protected mutable endpoints
-* Development and production hosting
-* SPA/API fallback behavior
-* Published static asset verification
+* Customers
+* Quotations
+* Sales and payments
+* Inventory and FIFO
+* Physical counts
+* Suppliers
+* Purchases and Accounts Payable
+* Purchase-to-inventory receipt
+* Electronic Documents
+* Hacienda XML validation
+* Gmail attachment processing
+* Authentication, authorization, and CSRF
+* Hosting and published application behavior
 
-SQL Server-specific behavior is tested against an isolated SQL Server instance using Testcontainers.
+SQL Server-specific behavior is tested against isolated SQL Server instances using Testcontainers.
 
-> **Current automated test baseline:** 439 passing tests, 0 failed.
+> **Current automated test baseline:** 539 passing tests, 0 failed.
 
 Run the complete suite:
 
@@ -395,7 +488,7 @@ The current workflow provides continuous integration, not automated production d
 * .NET 10 SDK
 * SQL Server / SQL Server Express
 * Git
-* Google OAuth development credentials for authentication
+* Google OAuth development credentials
 
 Restore dependencies and repository tools:
 
@@ -435,6 +528,16 @@ API:    https://localhost:7126
 Client: https://localhost:7081
 ```
 
+Sensitive development credentials are stored through .NET user-secrets rather than tracked configuration files.
+
+Runtime state used by received-document staging and Gmail integration is stored under:
+
+```text
+src/Revestik.Api/App_Data/
+```
+
+`App_Data` is ignored by Git. Persisted Gmail integration state is protected using ASP.NET Core Data Protection.
+
 Complete setup instructions:
 
 [Local Development Setup](docs/development/local-setup.md)
@@ -449,17 +552,21 @@ The persistence layer uses:
 
 * EF Core migrations
 * Entity configurations
-* Required-field constraints
-* Maximum lengths
+* Required-field and length constraints
 * Check constraints
 * Unique and filtered indexes
 * ASP.NET Core Identity persistence
 * SQL Server sequences for commercial document numbering
 * Inventory movement provenance
 * FIFO cost layers
-* Concurrency protection where required
+* Purchase and Accounts Payable persistence
+* Purchase-linked inventory provenance
+* Electronic Document persistence
+* CAByS catalog/version persistence
+* Accounting classification persistence
+* Concurrency protections where required
 
-Important business invariants are protected at more than one level where appropriate:
+Important business invariants are protected at multiple levels:
 
 ```text
 Client validation
@@ -472,6 +579,8 @@ EF Core configuration
         ↓
 SQL Server constraints
 ```
+
+Critical workflows use database transactions where multiple persistence changes must succeed or fail together.
 
 ---
 
@@ -491,7 +600,7 @@ Current deployment foundations include:
 * Health checks
 * Server-side secret boundary
 
-Production infrastructure decisions such as hosting, database infrastructure, secret management, monitoring, backups, and automated deployment remain part of future production work.
+Production hosting, infrastructure, production secret management, monitoring, backups, scheduled jobs, and automated deployment remain future work.
 
 See:
 
@@ -506,49 +615,61 @@ See:
 * Customer Management
 * Quotations
 * Sales
-* Inventory Core
+* Inventory
+* Physical Counts
+* Suppliers
+* Purchases
+* Accounts Payable
+* Purchase-to-inventory receipt
+* Electronic Documents foundation
+* Hacienda XML 4.4 platform
+* CAByS
+* Accounting Classification
+* Manual Gmail document ingestion
 
 ### Current Focus
 
-**Purchases / Suppliers — next major business domain**
+**Received Documents workflow refinement**
 
-The next phase will introduce a dedicated purchase workflow rather than placing purchase processing inside Inventory.
+Near-term work includes:
 
-Planned scope includes:
+* Current-calendar-month history as the default historical view
+* Historical search and date-range filtering
+* Current-period summaries
+* Filter UI improvements
+* Accounting-category management UI improvements
+* Continued document-review UX refinement
 
-* Supplier management
-* Manual purchase registration
-* Purchase lines linked to products
-* Inventory increases produced by accepted purchases
-* Purchase cost capture for FIFO inventory layers
-* A purchase-invoice section for received Costa Rican XML 4.4 documents
-* XML 4.4 deserialization and document classification
-* Handling of purchase invoices, credit notes, invalid/error cases, and applicable tax rates
-* Reception of purchase documents from the business email workflow
-* Explicit acceptance/processing before purchase documents affect operational records
+`FechaEmision` is the date used for the economic period of received fiscal documents.
+
+### Next Integration Step
+
+Periodic Gmail background synchronization is intentionally deferred until the current manual workflow is fully refined and verified.
 
 ### Planned Domains
 
-* Purchases / Suppliers
 * Expenses
 * Reports
 * Dashboard and analytics
-* Administrative configuration
+* Broader administrative configuration
 * Public `RevestikCR.com` project/customer-facing website
 
-Payment tracking is already present inside Sales; broader accounts-receivable behavior may be expanded later if requirements go beyond the current sale-balance model.
+Payment tracking is already present in Sales.
 
-Reports are expected to aggregate data already owned by their source domains, including purchases, sales, and inventory value.
+Purchase payment and Accounts Payable behavior are already present in Purchases.
 
-The Dashboard/Main area will surface the most important current-period operational indicators rather than owning transactional business logic.
+Reports are expected to aggregate data owned by their source domains rather than becoming a separate transactional source of truth.
 
 ### Deferred / Future
 
+* Periodic Gmail background synchronization
 * Direct Costa Rican electronic invoicing integration with Ministerio de Hacienda
 * Automated outbound email distribution
 * WhatsApp distribution
 * AI-assisted expense ingestion and classification
-* Test-suite performance optimization and broader production hardening
+* Test-suite performance optimization
+* Broader production hardening
+* Production monitoring and backup automation
 
 See:
 
@@ -618,7 +739,8 @@ v0.1.0-legacy
 * Important behavior should receive automated regression coverage.
 * Documentation should describe the implemented system rather than aspirational architecture.
 * Features should be completed vertically rather than creating many partially implemented modules.
-* Deferred integrations should not delay a smaller production-ready core.
+* External integrations should use the minimum permissions required.
+* Automation should preserve explicit business control over operations that affect inventory or accounting records.
 
 ---
 
@@ -633,9 +755,15 @@ Quotations
         ↓
 Sales
         ↓
-Inventory Core
+Inventory
         ↓
-Purchases / Suppliers
+Suppliers / Purchases / Accounts Payable
+        ↓
+Electronic Documents / Hacienda XML / CAByS
+        ↓
+Received-document workflow refinement
+        ↓
+Gmail background synchronization
         ↓
 Expenses
         ↓
@@ -648,4 +776,4 @@ RevestikCR.com
 Production hardening
 ```
 
-Direct electronic invoicing, automated outbound email delivery, WhatsApp distribution, and AI-assisted expense ingestion remain future capabilities rather than current MVP blockers.
+Direct electronic invoicing, automated outbound email delivery, WhatsApp distribution, AI-assisted expense ingestion, and other broader integrations remain future capabilities rather than current MVP blockers.
