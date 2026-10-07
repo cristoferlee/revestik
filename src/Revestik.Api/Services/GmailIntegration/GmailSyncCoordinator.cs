@@ -1,6 +1,6 @@
 namespace Revestik.Api.Services.GmailIntegration;
 
-internal sealed class GmailSyncCoordinator
+internal class GmailSyncCoordinator
 {
     private readonly SemaphoreSlim gate = new(1, 1);
     private int isSyncing;
@@ -35,4 +35,8 @@ internal sealed class GmailSyncCoordinator
             Interlocked.Exchange(ref owner, null)?.Exit();
         }
     }
+}
+
+internal sealed class BankVoucherGmailSyncCoordinator : GmailSyncCoordinator
+{
 }

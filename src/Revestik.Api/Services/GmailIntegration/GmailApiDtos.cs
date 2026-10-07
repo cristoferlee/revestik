@@ -64,11 +64,23 @@ internal sealed class GmailMessagePartDto
     [JsonPropertyName("filename")]
     public string? FileName { get; set; }
 
+    [JsonPropertyName("headers")]
+    public List<GmailMessageHeaderDto> Headers { get; set; } = [];
+
     [JsonPropertyName("body")]
     public GmailMessagePartBodyDto? Body { get; set; }
 
     [JsonPropertyName("parts")]
     public List<GmailMessagePartDto> Parts { get; set; } = [];
+}
+
+internal sealed class GmailMessageHeaderDto
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("value")]
+    public string Value { get; set; } = string.Empty;
 }
 
 internal sealed class GmailMessagePartBodyDto

@@ -23,6 +23,9 @@ public static class PolicyNames
     public const string ManagePurchases =
         "ManagePurchases";
 
+    public const string ManageExpenses =
+        "ManageExpenses";
+
     public const string ManageAccountingClassification =
         "ManageAccountingClassification";
 

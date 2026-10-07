@@ -9,15 +9,59 @@ internal interface IGmailOAuthStateService
     void Validate(string protectedState, string userId);
 }
 
-internal sealed class GmailOAuthStateService(
-    IDataProtectionProvider dataProtectionProvider)
-    : IGmailOAuthStateService
+internal interface IBankVoucherGmailOAuthStateService
 {
-    private const string ProtectorPurpose = "Revestik.GmailIntegration.OAuthState.v1";
-    private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
+    string Create(string userId);
+    void Validate(string protectedState, string userId);
+}
 
-    private readonly IDataProtector protector =
-        dataProtectionProvider.CreateProtector(ProtectorPurpose);
+internal sealed class GmailOAuthStateService : IGmailOAuthStateService
+{
+    private readonly ProtectedGmailOAuthStateService inner;
+
+    public GmailOAuthStateService(IDataProtectionProvider dataProtectionProvider)
+    {
+        inner = new ProtectedGmailOAuthStateService(
+            dataProtectionProvider,
+            "Revestik.GmailIntegration.OAuthState.v1");
+    }
+
+    public string Create(string userId) => inner.Create(userId);
+
+    public void Validate(string protectedState, string userId) =>
+        inner.Validate(protectedState, userId);
+}
+
+internal sealed class BankVoucherGmailOAuthStateService
+    : IBankVoucherGmailOAuthStateService
+{
+    private readonly ProtectedGmailOAuthStateService inner;
+
+    public BankVoucherGmailOAuthStateService(
+        IDataProtectionProvider dataProtectionProvider)
+    {
+        inner = new ProtectedGmailOAuthStateService(
+            dataProtectionProvider,
+            "Revestik.BankVoucherGmailIntegration.OAuthState.v1");
+    }
+
+    public string Create(string userId) => inner.Create(userId);
+
+    public void Validate(string protectedState, string userId) =>
+        inner.Validate(protectedState, userId);
+}
+
+internal sealed class ProtectedGmailOAuthStateService
+{
+    private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
+    private readonly IDataProtector protector;
+
+    public ProtectedGmailOAuthStateService(
+        IDataProtectionProvider dataProtectionProvider,
+        string protectorPurpose)
+    {
+        protector = dataProtectionProvider.CreateProtector(protectorPurpose);
+    }
 
     public string Create(string userId)
     {

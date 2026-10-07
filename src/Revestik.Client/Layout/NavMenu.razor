@@ -78,6 +78,12 @@
             </div>
         </div>
 
+        <AuthorizeView Roles="Administrator,Accountant">
+            <NavLink class="navigation-link" href="/expenses" @onclick="CloseNavigation">
+                <span class="nav-icon" aria-hidden="true">₡</span><span>Gastos</span>
+            </NavLink>
+        </AuthorizeView>
+
         <AuthorizeView Roles="Administrator">
             <div class="navigation-divider"></div>
 

@@ -1,0 +1,219 @@
+@page "/expenses"
+@using Revestik.Shared.Expenses
+@attribute [Authorize(Roles = "Administrator,Accountant")]
+
+<PageTitle>Gastos internos | Revestik</PageTitle>
+
+<section class="expenses-page">
+    <header class="page-header">
+        <div>
+            <h1>Gastos internos</h1>
+            <p>Registra egresos que no cuentan con un XML asociado.</p>
+        </div>
+
+        <button type="button"
+                class="primary-button"
+                @onclick="ToggleForm">
+            @(isFormOpen ? "Cerrar" : "+ Agregar gasto")
+        </button>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-message error-message" role="alert">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="status-message success-message" role="status">
+            @successMessage
+        </div>
+    }
+
+    @if (isFormOpen)
+    {
+        <section class="expense-card">
+            <div class="section-heading">
+                <div>
+                    <h2>Agregar gasto</h2>
+                    <p>El total se registra con IVA incluido.</p>
+                </div>
+            </div>
+
+            <EditForm Model="formModel"
+                      OnValidSubmit="SaveExpenseAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="expense-name">Nombre del gasto</label>
+                        <InputText id="expense-name"
+                                   maxlength="150"
+                                   @bind-Value="formModel.Name" />
+                        <ValidationMessage For="@(() => formModel.Name)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="expense-total">Total con IVA</label>
+                        <InputNumber id="expense-total"
+                                     min="0.01"
+                                     step="0.01"
+                                     @bind-Value="formModel.TotalAmount" />
+                        <ValidationMessage For="@(() => formModel.TotalAmount)" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="expense-date">Fecha</label>
+                        <InputDate id="expense-date"
+                                   @bind-Value="formModel.ExpenseDate" />
+                        <ValidationMessage For="@(() => formModel.ExpenseDate)" />
+                    </div>
+
+                    <div class="form-group form-wide">
+                        <label for="expense-description">Descripción</label>
+                        <InputTextArea id="expense-description"
+                                       rows="4"
+                                       maxlength="1000"
+                                       @bind-Value="formModel.Description" />
+                        <ValidationMessage For="@(() => formModel.Description)" />
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@isSaving"
+                            @onclick="CloseForm">
+                        Cancelar
+                    </button>
+
+                    <button type="submit"
+                            class="primary-button"
+                            disabled="@isSaving">
+                        @(isSaving ? "Guardando..." : "Guardar gasto")
+                    </button>
+                </div>
+            </EditForm>
+        </section>
+    }
+
+    <section class="summary-grid" aria-label="Resumen de gastos">
+        <article class="summary-card">
+            <span>Total del período</span>
+            <strong>₡ @summary.TotalAmount.ToString("N2")</strong>
+            <small>@summary.ExpenseCount gasto(s)</small>
+        </article>
+    </section>
+
+    <section class="expense-card">
+        <div class="section-heading">
+            <div>
+                <h2>Historial de gastos</h2>
+                <p>Busca por nombre o descripción y filtra por fecha.</p>
+            </div>
+        </div>
+
+        <div class="filters-grid">
+            <div class="form-group search-group">
+                <label for="expense-search">Buscar</label>
+                <input id="expense-search"
+                       type="search"
+                       maxlength="150"
+                       placeholder="Nombre o descripción"
+                       @bind="listRequest.Search" />
+            </div>
+
+            <div class="form-group">
+                <label for="expense-date-from">Desde</label>
+                <InputDate id="expense-date-from"
+                           @bind-Value="listRequest.DateFrom" />
+            </div>
+
+            <div class="form-group">
+                <label for="expense-date-to">Hasta</label>
+                <InputDate id="expense-date-to"
+                           @bind-Value="listRequest.DateTo" />
+            </div>
+        </div>
+
+        <div class="filter-actions">
+            <button type="button"
+                    class="secondary-button"
+                    disabled="@isLoading"
+                    @onclick="ClearFiltersAsync">
+                Limpiar
+            </button>
+
+            <button type="button"
+                    class="primary-button"
+                    disabled="@isLoading"
+                    @onclick="ApplyFiltersAsync">
+                @(isLoading ? "Cargando..." : "Aplicar filtros")
+            </button>
+        </div>
+
+        @if (isLoading)
+        {
+            <p class="empty-state">Cargando gastos...</p>
+        }
+        else if (expenses.Count == 0)
+        {
+            <p class="empty-state">No se encontraron gastos.</p>
+        }
+        else
+        {
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Gasto</th>
+                            <th>Descripción</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var expense in expenses)
+                        {
+                            <tr>
+                                <td data-label="Fecha">
+                                    @expense.ExpenseDate.ToString("dd/MM/yyyy")
+                                </td>
+                                <td data-label="Gasto">
+                                    <strong>@expense.Name</strong>
+                                </td>
+                                <td data-label="Descripción">
+                                    @expense.Description
+                                </td>
+                                <td data-label="Total">
+                                    ₡ @expense.TotalAmount.ToString("N2")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <nav class="pagination-controls" aria-label="Paginación de gastos">
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@(!CanGoPrevious)"
+                        @onclick="PreviousPageAsync">
+                    Anterior
+                </button>
+
+                <span>Página @listRequest.Page de @totalPages</span>
+
+                <button type="button"
+                        class="secondary-button"
+                        disabled="@(!CanGoNext)"
+                        @onclick="NextPageAsync">
+                    Siguiente
+                </button>
+            </nav>
+        }
+    </section>
+</section>

@@ -120,6 +120,11 @@ public static class AuthenticationExtensions
                 PolicyNames.ManagePurchases,
                 policy => policy.RequireRole(RoleNames.All))
             .AddPolicy(
+                PolicyNames.ManageExpenses,
+                policy => policy.RequireRole(
+                    RoleNames.Administrator,
+                    RoleNames.Accountant))
+            .AddPolicy(
                 PolicyNames.ManageAccountingClassification,
                 policy => policy.RequireRole(
                     RoleNames.Administrator,

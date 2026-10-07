@@ -14,6 +14,7 @@ public sealed class RevestikDbContext(DbContextOptions<RevestikDbContext> option
     public DbSet<Purchase> Purchases => Set<Purchase>();
     public DbSet<PurchaseLine> PurchaseLines => Set<PurchaseLine>();
     public DbSet<PurchasePayment> PurchasePayments => Set<PurchasePayment>();
+    public DbSet<Expense> Expenses => Set<Expense>();
     public DbSet<CabysCatalogVersion> CabysCatalogVersions => Set<CabysCatalogVersion>();
     public DbSet<CabysItem> CabysItems => Set<CabysItem>();
     public DbSet<ElectronicDocument> ElectronicDocuments => Set<ElectronicDocument>();

@@ -4,14 +4,17 @@ using Revestik.Api.Configuration;
 
 namespace Revestik.Api.Services.GmailIntegration;
 
-internal sealed class GmailIntegrationStateStore : IGmailIntegrationStateStore
+internal sealed class BankVoucherGmailIntegrationStateStore
+    : IBankVoucherGmailIntegrationStateStore
 {
-    private const string ProtectorPurpose = "Revestik.GmailIntegration.State.v1";
+    private const string ProtectorPurpose =
+        "Revestik.BankVoucherGmailIntegration.State.v1";
+
     private readonly ProtectedGmailIntegrationStateStore inner;
 
-    public GmailIntegrationStateStore(
+    public BankVoucherGmailIntegrationStateStore(
         IDataProtectionProvider dataProtectionProvider,
-        IOptions<GmailIntegrationOptions> options,
+        IOptions<BankVoucherGmailIntegrationOptions> options,
         IWebHostEnvironment environment)
     {
         inner = new ProtectedGmailIntegrationStateStore(
