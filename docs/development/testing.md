@@ -28,11 +28,11 @@ SQL Server-dependent integration tests use Testcontainers so important persisten
 
 Current complete-suite verified baseline:
 
-**439 passed, 0 failed.**
+**542 passed, 0 failed.**
 
 This number is a snapshot, not a quality target.
 
-The suite has grown as Customers, Quotations, Sales, and Inventory were implemented and hardened.
+The suite has grown as Customers, Quotations, Sales, Inventory, Suppliers, Purchases, Accounts Payable, Electronic Documents, Hacienda XML, accounting classification, and Gmail ingestion were implemented and hardened.
 
 A higher test count is useful only when the tests protect meaningful behavior.
 
@@ -50,21 +50,15 @@ Revestik.Api.Tests
 ├── Inventory
 ├── Physical Counts
 ├── Inventory Cost Resolution
+├── Suppliers
+├── Purchases / Accounts Payable
+├── Electronic Documents
+├── Hacienda XML / CAByS / Classification
+├── Gmail Integration
 └── Hosting
 ```
 
-Coverage includes:
-
-* Focused business-rule tests.
-* Request-validation tests.
-* Service tests.
-* HTTP/API integration tests.
-* SQL Server integration tests.
-* Authorization and antiforgery tests.
-* Transactional/data-integrity tests.
-* Concurrency tests.
-* PDF generation tests.
-* Hosting and static-asset verification.
+Coverage includes focused business-rule tests, request validation, service tests, HTTP/API integration tests, SQL Server integration tests, authorization/antiforgery tests, transactional/data-integrity tests, concurrency tests, PDF tests, XML/XSD validation tests, Gmail MIME/attachment/retry tests, received-document period-summary tests, and hosting/static-asset verification.
 
 ## 5. Customer Tests
 
@@ -248,7 +242,23 @@ UnitCost ?? ResolvedUnitCost
 
 Tests should continue to distinguish current product cost from historical inventory cost.
 
-## 13. Authentication and CSRF Tests
+## 13. Supplier, Purchase, and Accounts Payable Tests
+
+Current coverage includes supplier lifecycle/uniqueness, Purchase validation/calculations, cash/credit behavior, due dates, payments/AP summaries, supplier history, Purchase-to-Inventory receipt, FIFO cost creation, duplicate-receipt prevention, and transactional integrity.
+
+## 14. Electronic Document and Hacienda XML Tests
+
+Current coverage includes manual XML import, secure parsing, Hacienda XML 4.4 recognition/local XSD validation, duplicate/rejected behavior, Hacienda response association, persistence, accounting classification, learned rules, and the boundary that acceptance does not automatically create a Purchase or modify Inventory.
+
+## 15. Received Documents Period Tests
+
+Current coverage includes `FechaEmision` as economic date, current-month History defaults, explicit historical ranges, empty-period behavior, invalid-range rejection, period summaries, summary independence from list filters, and global Pending behavior.
+
+## 16. Gmail Integration Tests
+
+Current coverage includes MIME traversal, XML attachment retrieval, per-attachment processing, duplicate/rejected tracking, controlled retry, manual synchronization, and single-flight protection. Periodic background synchronization is not yet part of the current baseline.
+
+## 17. Authentication and CSRF Tests
 
 Security tests verify observable behavior such as:
 
@@ -264,7 +274,7 @@ Client-side visibility is not treated as authorization.
 
 Server behavior remains authoritative.
 
-## 14. Hosting Tests
+## 18. Hosting Tests
 
 Hosting verification covers:
 
@@ -276,19 +286,19 @@ Hosting verification covers:
 
 Unknown `/api/*` routes must remain API responses and must not fall through to `index.html`.
 
-## 15. Static Asset Verification
+## 19. Static Asset Verification
 
 Published application checks include assets such as:
 
 * `wwwroot/index.html`
-* `_framework/blazor.webassembly.js`
+* `\_framework/blazor.webassembly.js`
 * .NET runtime assets
 * Brotli-compressed assets
 * Required application static assets
 
 Static-asset verification helps detect publish/deployment regressions that a successful compile alone may not reveal.
 
-## 16. Test Classification
+## 20. Test Classification
 
 ### Focused / Unit Tests
 
@@ -339,17 +349,17 @@ Used for published-application and hosting assumptions.
 
 Used for critical Blazor workflows not yet protected by browser automation.
 
-## 17. Testing Pyramid
+## 21. Testing Pyramid
 
 ```text
-             /\
-            /  \
-           / E2E\
-          /------\
-         /Integration\
-        /------------\
-       / Focused Tests \
-      /________________\
+             /\\
+            /  \\
+           / E2E\\
+          /------\\
+         /Integration\\
+        /------------\\
+       / Focused Tests \\
+      /\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\\
 ```
 
 A behavior should be tested at the lowest level capable of verifying it reliably.
@@ -358,7 +368,7 @@ Not every business rule requires an HTTP integration test.
 
 Not every persistence rule can be verified correctly with a focused/unit test.
 
-## 18. Running Tests
+## 22. Running Tests
 
 From the repository root:
 
@@ -385,7 +395,7 @@ When working on a focused area, targeted test execution may be used during imple
 
 The complete suite should still be executed before considering a substantial domain change verified.
 
-## 19. Local Verification Environment
+## 23. Local Verification Environment
 
 Current development testing uses SQL Server/Testcontainers for isolated integration scenarios.
 
@@ -395,7 +405,7 @@ Automated tests should create and manage their own required state wherever pract
 
 This helps keep tests independent from local manual-testing data.
 
-## 20. Test Naming
+## 24. Test Naming
 
 A useful pattern is:
 
@@ -405,7 +415,7 @@ MethodOrScenario_Condition_ExpectedBehavior
 
 Names should communicate the scenario and expected outcome rather than only the method under test.
 
-## 21. Regression Workflow
+## 25. Regression Workflow
 
 ```text
 Reproduce
@@ -427,7 +437,7 @@ Run complete suite
 
 A regression test should protect the business behavior that failed rather than merely reproduce incidental implementation details.
 
-## 22. Database Testing
+## 26. Database Testing
 
 SQL Server-dependent behavior is verified against an isolated SQL Server instance through Testcontainers.
 
@@ -451,7 +461,7 @@ Tests should use SQL Server when behavior depends on actual SQL Server semantics
 
 An alternative in-memory provider should not be assumed to provide equivalent behavior for relational constraints, sequences, transactions, concurrency, or SQL Server-specific indexes.
 
-## 23. Transactional Integrity Testing
+## 27. Transactional Integrity Testing
 
 Operations that modify several related records require particular attention.
 
@@ -461,12 +471,14 @@ Important examples include:
 * FIFO layer updates plus inventory movements.
 * Sale void plus exact inventory restoration.
 * Physical-count adjustment plus movement creation.
+* Purchase receipt plus Inventory movement/cost-layer creation.
+* Critical Purchase/AP updates that span multiple dependent records.
 
 Tests should verify not only successful final state but also that invalid operations do not leave partial persisted changes.
 
 Where appropriate, failure-path coverage should confirm that transactional boundaries preserve consistency.
 
-## 24. Concurrency Testing
+## 28. Concurrency Testing
 
 Concurrency tests are used where simultaneous operations could violate important guarantees.
 
@@ -479,7 +491,7 @@ Current examples include:
 
 Concurrency testing should be added only where the domain has a concrete race-condition risk.
 
-## 25. UI Testing
+## 29. UI Testing
 
 Revestik does not currently maintain a comprehensive automated browser/E2E suite.
 
@@ -500,10 +512,15 @@ Current high-value manually verified workflows include:
 * Product lifecycle operations.
 * Physical inventory counts.
 * Unknown inventory cost resolution.
+* Supplier management.
+* Purchases and Accounts Payable.
+* Received Documents and manual XML import.
+* Accounting classification.
+* Gmail connection/manual synchronization.
 
 Browser automation may be introduced selectively when a workflow becomes expensive or risky to verify manually.
 
-## 26. Performance Testing
+## 30. Performance Testing
 
 The automated regression suite is not a substitute for application load/performance testing.
 
@@ -515,7 +532,7 @@ This runtime is accepted for the current stage because correctness and regressio
 
 Test-suite performance optimization is intentionally deferred until deployment, later production hardening, or completion of higher-priority product work such as the public RevestikCR.com experience makes faster feedback materially valuable.
 
-## 27. Test-Suite Performance Strategy
+## 31. Test-Suite Performance Strategy
 
 The current approach is:
 
@@ -538,7 +555,7 @@ Future optimization may investigate:
 
 Any optimization must preserve test isolation and confidence.
 
-## 28. Security Testing Limitations
+## 32. Security Testing Limitations
 
 Automated security regression tests do not constitute a penetration test or security certification.
 
@@ -553,7 +570,7 @@ The suite does not claim comprehensive coverage for:
 
 Security tests protect known application boundaries but do not replace production security review.
 
-## 29. Continuous Integration
+## 33. Continuous Integration
 
 GitHub Actions currently performs:
 
@@ -571,7 +588,7 @@ Verify Hosted Blazor Assets
 
 CI should remain an independent verification path rather than relying only on successful local execution.
 
-## 30. Pre-Review Verification
+## 34. Pre-Review Verification
 
 ```powershell
 dotnet restore Revestik.sln
@@ -587,7 +604,7 @@ dotnet test Revestik.sln `
 
 For focused development work, narrower commands may be used before this full verification.
 
-## 31. What Should Be Tested
+## 35. What Should Be Tested
 
 Prioritize:
 
@@ -606,7 +623,7 @@ Prioritize:
 
 Avoid tests whose primary value is asserting private implementation details with no meaningful behavioral guarantee.
 
-## 32. Deterministic Tests
+## 36. Deterministic Tests
 
 Tests should avoid uncontrolled dependencies on:
 
@@ -620,34 +637,15 @@ Tests should avoid uncontrolled dependencies on:
 
 Where current time or generated values affect behavior, they should be controlled or asserted in a way that avoids brittle tests.
 
-## 33. Future Testing Priorities
+## 37. Future Testing Priorities
 
-With the Inventory core completed, the next major test expansion should follow Purchases / Suppliers.
+The current baseline already includes Suppliers, Purchases, Accounts Payable, Purchase-to-Inventory receipt, Electronic Documents, Hacienda XML 4.4, accounting classification, Gmail ingestion, and received-document period summaries.
 
-Expected priorities include:
+Expected next priorities include periodic Gmail background synchronization, scheduled execution/single-flight behavior, retry/recovery across repeated background runs, startup/restart behavior for the future worker, Expenses/Reports behavior when introduced, expanded authorization coverage, broader migration verification, and selected browser automation.
 
-1. Supplier lifecycle and validation.
-2. Purchase request validation.
-3. Purchase lifecycle behavior.
-4. Purchase-to-inventory stock increases.
-5. Purchase cost-layer creation.
-6. Purchase corrections/reversals where requirements define them.
-7. XML 4.4 deserialization.
-8. XML document-type classification.
-9. Purchase invoice and credit-note handling.
-10. Tax-rate handling for supported purchase documents.
-11. Purchase-document acceptance rules.
-12. Email-ingestion integration boundaries when implemented.
-13. Expanded accounts-receivable rules if introduced.
-14. Expense classification/storage behavior.
-15. Reports and aggregation behavior.
-16. Expanded authorization coverage.
-17. Broader migration verification.
-18. Critical browser workflows where automation becomes justified.
+Direct outbound electronic-invoicing tests remain out of scope while that integration is deferred.
 
-Direct electronic invoicing tests remain out of scope while that integration is deferred.
-
-## 34. Definition of a Verified Change
+## 38. Definition of a Verified Change
 
 A critical change should normally satisfy the applicable combination of:
 

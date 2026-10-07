@@ -36,6 +36,7 @@ Responsibilities include:
 * Downloading server-generated documents through authenticated HTTP flows and JavaScript interop.
 * Reusing commercial UI components such as customer and product selectors.
 * Exposing Inventory, Physical Count, and Unknown Inventory Cost workflows without becoming authoritative for stock or cost rules.
+* Exposing Supplier, Purchase, Accounts Payable, Received Documents, accounting-classification, and Gmail workflows while keeping business rules server-authoritative.
 
 The client does not access SQL Server directly and is not a trusted security boundary.
 
@@ -53,6 +54,13 @@ Responsibilities include:
 * Inventory movement and FIFO logic.
 * Inventory cost-layer behavior.
 * Physical-count processing.
+* Supplier, Purchase, and Accounts Payable behavior.
+* Purchase-to-Inventory receipt coordination.
+* Received Electronic Document processing.
+* Hacienda XML 4.4 recognition and local XSD validation.
+* Accounting classification and learned-rule behavior.
+* Gmail OAuth and read-only document ingestion.
+* Received-document period summaries.
 * EF Core database access.
 * External service integrations.
 * Server-side document generation.
@@ -63,7 +71,7 @@ Responsibilities include:
 
 `Revestik.Shared` contains request/response contracts shared between the client and API.
 
-Current contract areas include authentication, customers, quotations, sales, products, inventory, physical counts, inventory cost resolution, locations, taxpayer information, and common response structures such as pagination.
+Current contract areas include authentication, customers, quotations, sales, products, inventory, physical counts, inventory cost resolution, suppliers, purchases, accounts payable, received electronic documents, Gmail integration, locations, taxpayer information, and common response structures such as pagination.
 
 Persistence entities remain server-side.
 
@@ -71,7 +79,7 @@ Persistence entities remain server-side.
 
 `Revestik.Api.Tests` contains automated verification for server behavior, persistence, security, inventory integrity, and hosting.
 
-Current areas include customers, products, quotations, sales, inventory movements, FIFO behavior, cost resolution, physical counts, authentication/CSRF, SQL Server integration, concurrency, PDF behavior, and hosting.
+Current areas include customers, products, quotations, sales, inventory movements, FIFO behavior, cost resolution, physical counts, suppliers, purchases, accounts payable, purchase-to-inventory receipt, Electronic Documents, Hacienda XML validation, accounting classification, Gmail ingestion, received-document period summaries, authentication/CSRF, SQL Server integration, concurrency, PDF behavior, and hosting.
 
 ## 3. High-Level Architecture
 
@@ -157,7 +165,7 @@ The persistence model also supports inventory-specific integrity through:
 * Product lifecycle state including logical archival.
 * Concurrency protection for critical product and inventory operations.
 
-Operations that coordinate multiple dependent inventory changes use transactional boundaries where partial completion would corrupt state.
+Operations that coordinate multiple dependent inventory or purchase changes use transactional boundaries where partial completion would corrupt state.
 
 ## 6. Commercial Architecture
 
@@ -547,11 +555,57 @@ It does not own:
 * Costa Rican XML 4.4 parsing.
 * Fiscal document classification.
 
-Those responsibilities belong to future Purchases workflows.
+Those responsibilities belong to the implemented Purchases, Electronic Documents, and external-integration workflows.
 
 The architectural boundary is intentional: external document ingestion or purchase processing should produce explicit valid inventory effects rather than making Inventory responsible for unrelated integration concerns.
 
-## 18. Commercial PDF Generation
+## 18. Purchases and Accounts Payable Architecture
+
+Purchases are implemented as a separate operational domain.
+
+Inventory effects occur through an explicit purchase-receipt operation rather than automatically when a Purchase record is created.
+
+The purchase-receipt workflow creates traceable stock-entry effects and FIFO cost layers from valid purchase costs while preventing duplicate application of the same Purchase to Inventory.
+
+A Purchase is intentionally distinct from a received Electronic Document.
+
+## 19. Received Electronic Documents Architecture
+
+Received Electronic Documents model Costa Rican fiscal XML independently from Purchases.
+
+The ingestion boundary is:
+
+```text
+Manual XML / Gmail
+        ↓
+recognition + local XSD validation
+        ↓
+quarantine
+        ↓
+manual acceptance
+        ↓
+Electronic Documents
+```
+
+Importing or accepting an Electronic Document does not automatically create a Purchase or modify Inventory.
+
+The economic date is `FechaEmision`. History defaults to the current calendar month, explicit historical ranges are supported, Pending remains global, and period summaries follow the selected `FechaEmision` range independently from list search/status/category filters.
+
+## 20. CAByS and Accounting Classification Architecture
+
+Revestik includes a local versioned CAByS 2025 catalog and a received-document accounting-classification layer.
+
+CAByS, accounting category, accounting nature, operational destination, payment condition, document-level classification, line-level overrides, and learned classification rules remain separate concepts. Automated suggestions remain reviewable and editable.
+
+## 21. Gmail Integration Architecture
+
+Gmail is a server-side transport integration for received fiscal documents.
+
+Current behavior includes server-side OAuth 2.0, `gmail.readonly`, message search, MIME traversal, XML attachment retrieval, duplicate/rejected tracking, controlled retry, manual synchronization, single-flight protection, and encrypted persisted integration state.
+
+Gmail does not directly create Purchases or Inventory movements. Periodic Gmail background synchronization has not yet been implemented.
+
+## 22. Commercial PDF Generation
 
 Quotation and Sale PDFs are generated in the backend using QuestPDF.
 
@@ -559,7 +613,7 @@ The browser requests the authenticated document endpoint and downloads the retur
 
 Draft Sales do not have an official sale PDF because they do not yet have a VEN.
 
-## 19. Authentication and Authorization
+## 23. Authentication and Authorization
 
 Revestik uses ASP.NET Core Identity with cookie-based authentication.
 
@@ -575,7 +629,7 @@ Detailed behavior is documented in:
 docs/security/security-overview.md
 ```
 
-## 20. Hosted Application Model
+## 24. Hosted Application Model
 
 During local development, Client and API run on separate development origins.
 
@@ -583,17 +637,17 @@ For the published application, ASP.NET Core serves the compiled Blazor WebAssemb
 
 Blazor routes use SPA fallback behavior while unknown `/api/*` routes remain API responses rather than returning `index.html`.
 
-## 21. External Integrations
+## 25. External Integrations
 
 External systems are kept behind server-side boundaries.
 
-Current integrations include taxpayer/location-related services.
+Current integrations include taxpayer/location services, Google external authentication, Google Workspace Gmail read-only ingestion, Hacienda XML 4.4 recognition/local XSD validation, and the local CAByS catalog.
 
-Future integrations should use the same server-side trust boundary.
+External integrations use the same server-side trust boundary.
 
 Inventory itself does not directly integrate with external fiscal/email systems.
 
-## 22. Deferred Electronic Invoicing Boundary
+## 26. Deferred Electronic Invoicing Boundary
 
 Direct Costa Rican electronic invoicing is not part of the current architecture.
 
@@ -601,7 +655,7 @@ Internal Sales (`VEN`) are not fiscal electronic invoices.
 
 If electronic invoicing is revisited, fiscal signing credentials, API credentials, signing operations, and Ministerio de Hacienda communication must remain exclusively server-side.
 
-## 23. Testing and Continuous Integration
+## 27. Testing and Continuous Integration
 
 Automated tests are maintained in `Revestik.Api.Tests`.
 
@@ -618,6 +672,11 @@ Current coverage includes:
 * Unknown-cost resolution.
 * Physical counts.
 * Unit quantity rules.
+* Suppliers, Purchases, and Accounts Payable.
+* Purchase-to-inventory receipt.
+* Electronic Documents and Hacienda XML validation.
+* Accounting classification and Gmail ingestion.
+* Received-document period summaries.
 * Authentication and CSRF.
 * SQL Server integration.
 * Concurrency.
@@ -626,7 +685,7 @@ Current coverage includes:
 
 Current local verified baseline:
 
-**439 passed, 0 failed.**
+**542 passed, 0 failed.**
 
 Current CI:
 
@@ -636,7 +695,7 @@ Current CI:
 4. Publishes the hosted application.
 5. Verifies required Blazor/runtime/static assets.
 
-## 24. Architectural Principles
+## 28. Architectural Principles
 
 ### Separation of concerns
 
@@ -674,6 +733,12 @@ Sales owns commercial sale behavior.
 
 Inventory owns physical stock behavior.
 
+Purchases owns supplier, purchase, payment, and accounts-payable behavior.
+
+Electronic Documents owns received fiscal-document persistence and classification.
+
+Gmail owns transport/integration concerns only.
+
 Cross-domain operations should coordinate through explicit application behavior rather than duplicating business rules across unrelated modules.
 
 ### Incremental complexity
@@ -684,7 +749,7 @@ New infrastructure and abstractions should solve concrete requirements rather th
 
 Deferred integrations should not delay completion and production hardening of the core business application.
 
-## 25. Current Architectural Classification
+## 29. Current Architectural Classification
 
 Revestik is a modular full-stack .NET application with:
 
@@ -700,7 +765,9 @@ Revestik is a modular full-stack .NET application with:
 * FIFO inventory cost-layer behavior.
 * Traceable inventory movements.
 * Physical-count workflows.
-* Automated server, persistence, security, inventory, concurrency, and hosting tests.
+* Supplier, Purchase, and Accounts Payable workflows.
+* Received Electronic Documents, Hacienda XML 4.4 validation, CAByS, accounting classification, and manual Gmail ingestion.
+* Automated server, persistence, security, inventory, purchase, electronic-document, integration, concurrency, and hosting tests.
 
 It is intentionally not implemented as independently deployable microservices.
 

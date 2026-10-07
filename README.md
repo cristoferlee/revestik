@@ -6,7 +6,7 @@ It is designed to centralize operational workflows such as customer management, 
 
 The project originates from real small-business operational requirements and is developed incrementally, with an emphasis on business rules, data integrity, security, testing, and maintainable architecture.
 
-> **Project status:** Active development. Customer Management, Quotations, Sales, Inventory, Suppliers, Purchases, Accounts Payable, Electronic Documents, CAByS integration, accounting classification, and manual Gmail document ingestion are implemented and verified. The current focus is refining the received-document workflow.
+> **Project status:** Active development. Customer Management, Quotations, Sales, Inventory, Suppliers, Purchases, Accounts Payable, Electronic Documents, CAByS integration, accounting classification, manual Gmail document ingestion, and the Received Documents workflow refinement are implemented and verified. The current focus is periodic Gmail background synchronization.
 
 ---
 
@@ -240,6 +240,10 @@ Current capabilities include:
 * Payment-condition classification
 * Document-level and line-level classification
 * Search, history, and review workflows
+* Current-calendar-month history by default
+* Explicit historical date-range filtering
+* `FechaEmision`-based accounting/financial period summaries
+* Global Pending queue independent of the selected history period
 * Secure staging/quarantine before canonical acceptance
 
 Electronic Documents do not automatically create Purchases or modify Inventory.
@@ -415,6 +419,10 @@ Current examples include:
 * XML must pass validation and quarantine before canonical acceptance.
 * Duplicate fiscal documents are not persisted as independent economic facts.
 * `FechaEmision` is the economic date of received fiscal documents.
+* Received Documents History defaults to the current calendar month.
+* Historical date ranges are explicit and validated.
+* Pending received documents remain globally visible until processed.
+* Period summaries follow the selected `FechaEmision` range and remain independent from list search/status/category filters.
 * CAByS, accounting classification, operational destination, and payment condition remain separate dimensions.
 
 See:
@@ -440,12 +448,13 @@ Coverage includes the major business domains and critical cross-domain behavior,
 * Electronic Documents
 * Hacienda XML validation
 * Gmail attachment processing
+* Received-document period summaries
 * Authentication, authorization, and CSRF
 * Hosting and published application behavior
 
 SQL Server-specific behavior is tested against isolated SQL Server instances using Testcontainers.
 
-> **Current automated test baseline:** 539 passing tests, 0 failed.
+> **Current automated test baseline:** 542 passing tests, 0 failed.
 
 Run the complete suite:
 
@@ -627,24 +636,28 @@ See:
 * Accounting Classification
 * Manual Gmail document ingestion
 
-### Current Focus
+### Recently Completed
 
 **Received Documents workflow refinement**
 
-Near-term work includes:
+Completed work includes:
 
 * Current-calendar-month history as the default historical view
-* Historical search and date-range filtering
-* Current-period summaries
+* Historical search and explicit date-range filtering
+* `FechaEmision`-based current-period summaries
+* Backend validation of invalid date ranges
+* Global Pending queue independent of the selected History period
 * Filter UI improvements
 * Accounting-category management UI improvements
-* Continued document-review UX refinement
+* Document-review UX refinement
 
-`FechaEmision` is the date used for the economic period of received fiscal documents.
+### Current Focus
 
-### Next Integration Step
+**Periodic Gmail background synchronization**
 
-Periodic Gmail background synchronization is intentionally deferred until the current manual workflow is fully refined and verified.
+The manual Gmail ingestion flow is already implemented and verified.
+
+The next integration step is scheduled/background synchronization while preserving the existing read-only mailbox access, quarantine/manual-acceptance boundary, duplicate safety, controlled retry, and single-flight behavior.
 
 ### Planned Domains
 
@@ -662,7 +675,6 @@ Reports are expected to aggregate data owned by their source domains rather than
 
 ### Deferred / Future
 
-* Periodic Gmail background synchronization
 * Direct Costa Rican electronic invoicing integration with Ministerio de Hacienda
 * Automated outbound email distribution
 * WhatsApp distribution
@@ -761,9 +773,11 @@ Suppliers / Purchases / Accounts Payable
         ↓
 Electronic Documents / Hacienda XML / CAByS
         ↓
+Manual Gmail ingestion
+        ↓
 Received-document workflow refinement
         ↓
-Gmail background synchronization
+Periodic Gmail background synchronization
         ↓
 Expenses
         ↓

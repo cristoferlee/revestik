@@ -115,7 +115,7 @@ Shared request/response models define the client/API contract.
 
 Operations that combine multiple dependent persistence changes must succeed or fail as a single transaction where partial completion would corrupt business state.
 
-Inventory consumption and sale-void inventory restoration are examples of this rule.
+Inventory consumption, sale-void inventory restoration, and Purchase-to-Inventory receipt are examples of this rule.
 
 ## DAT-005 — Historical operational records should not be physically rewritten without an explicit business rule
 
@@ -713,51 +713,97 @@ Multi-warehouse allocation is not part of the current implementation.
 
 Inventory owns physical stock behavior.
 
-Supplier records, purchase documents, purchase acceptance, email ingestion, and XML parsing belong to the Purchases domain.
+Supplier records, Purchase lifecycle, Accounts Payable, received Electronic Documents, email ingestion, and XML parsing remain outside the Inventory domain.
 
-Inventory will receive valid stock-entry effects from accepted purchase operations.
+Inventory receives valid stock-entry effects through explicit Purchase receipt operations.
 
 ---
 
-# 8. Planned Business Domains
+# 8. Purchases, Electronic Documents, and Gmail
 
-## Purchases and Suppliers
+## SUP-001 — Supplier names are unique
+
+**Status:** Implemented
+
+Supplier names are unique in the Supplier domain.
+
+## PUR-001 — Purchases own supplier and purchase workflows
+
+**Status:** Implemented
+
+The Purchases domain owns supplier association, Purchase records, Purchase lines, cash/credit conditions, due dates, Purchase payments, Accounts Payable behavior, and supplier Purchase history.
+
+## PUR-002 — Purchase Inventory effects are explicit
+
+**Status:** Implemented
+
+Creating or editing a Purchase does not silently mutate stock. Inventory effects occur through the explicit Purchase receipt workflow, which creates traceable Inventory movements/FIFO cost layers and prevents duplicate application.
+
+## EDOC-001 — Purchase and Electronic Document are different concepts
+
+**Status:** Implemented
+
+A `Purchase` is an operational business record. An `ElectronicDocument` is a received fiscal document. Receiving, accepting, or classifying an Electronic Document does not automatically create a Purchase or modify Inventory.
+
+## EDOC-002 — Received XML is quarantined before canonical acceptance
+
+**Status:** Implemented
+
+XML received manually or through Gmail passes recognition, validation, duplicate handling, and quarantine before becoming a canonical Electronic Document.
+
+## EDOC-003 — `FechaEmision` is the economic date
+
+**Status:** Implemented
+
+Import time, Gmail synchronization time, quarantine time, and manual acceptance time do not replace `FechaEmision` for historical period reporting.
+
+## EDOC-004 — History defaults to the current calendar month
+
+**Status:** Implemented
+
+Received Documents History defaults to the current calendar month and supports explicit historical date ranges. Invalid ranges are rejected by the backend.
+
+## EDOC-005 — Pending review remains global
+
+**Status:** Implemented
+
+The Pending received-document queue is not restricted to the selected History period.
+
+## EDOC-006 — Period summaries follow the selected economic period
+
+**Status:** Implemented
+
+Period summaries use the selected `FechaEmision` range and remain independent from free-text, processing-status, and accounting-category list filters.
+
+## EDOC-007 — Accounting-classification dimensions remain separate
+
+**Status:** Implemented
+
+CAByS, accounting category, accounting nature, operational destination, and payment condition remain separate business concepts. Line-level overrides may refine document-level classification, and automated suggestions remain reviewable.
+
+## GMAIL-001 — Gmail is a read-only transport mechanism
+
+**Status:** Implemented
+
+The current Gmail integration uses `gmail.readonly` and does not directly create Purchases or Inventory movements.
+
+## GMAIL-002 — Gmail uses the same validation/quarantine boundary
+
+**Status:** Implemented
+
+Gmail-derived XML follows the same recognition, validation, duplicate handling, quarantine, and manual-acceptance workflow as manual XML input.
+
+## GMAIL-003 — Manual Gmail synchronization is protected
+
+**Status:** Implemented
+
+Current behavior includes duplicate/rejected tracking, controlled retry, manual synchronization, and single-flight protection.
+
+## GMAIL-004 — Periodic background synchronization is not yet implemented
 
 **Status:** Planned
 
-The Purchases domain will own supplier and purchase workflows.
-
-Expected behavior includes:
-
-* Supplier records.
-* Manual purchase registration.
-* Product-linked purchase lines.
-* Purchase quantities and costs.
-* Purchase totals.
-* Purchase history.
-* Inventory increases resulting from accepted purchases.
-* Creation of FIFO cost layers from valid purchase costs.
-* Traceability between purchase records and resulting inventory movements.
-
-## Purchase Invoice Processing
-
-**Status:** Planned
-
-Purchase invoice processing will live inside the Purchases domain.
-
-Expected behavior includes:
-
-* Reception of Costa Rican XML 4.4 documents through the business email workflow.
-* XML deserialization.
-* Document-type identification.
-* Purchase invoice classification.
-* Credit-note classification.
-* Handling of invalid or unexpected documents.
-* Interpretation of applicable tax rates such as 13%, 4%, 1%, exempt, and other supported cases.
-* Human review/acceptance before a received document affects operational data.
-* Purchase or adjustment creation only after the document is accepted.
-
-The Inventory domain must not directly read email or parse XML 4.4 documents.
+Future periodic synchronization must preserve the current read-only permission model, duplicate safety, quarantine/manual-acceptance boundary, retry behavior, and single-flight protections.
 
 ## Accounts Receivable Expansion
 
@@ -775,34 +821,19 @@ A broader receivables domain may be introduced if business requirements expand i
 
 **Status:** Planned
 
-Reports are expected to aggregate information owned by operational domains.
-
-Expected reporting areas include:
-
-* Purchase totals.
-* Sales totals.
-* Inventory value.
-* Purchase-versus-sales comparisons.
-* Period-based summaries.
-* Other operational totals required by the business.
-
-Reports should not become the source of transactional truth.
+Reports are expected to aggregate information owned by operational domains and should not become the source of transactional truth.
 
 ## Dashboard and Analytics
 
 **Status:** Planned
 
-The Dashboard/Main area will present important current-period information derived from operational domains.
-
-It should not own transactional business rules.
+The Dashboard/Main area will present important current-period information derived from operational domains and should not own transactional business rules.
 
 ## Public RevestikCR.com Website
 
 **Status:** Planned
 
 A public customer-facing site is planned separately from the internal operational application.
-
-Its purpose may include completed projects, company information, and other public commercial content.
 
 ---
 
@@ -814,7 +845,7 @@ Its purpose may include completed projects, company information, and other publi
 
 Direct integration with Costa Rica's Ministerio de Hacienda is intentionally postponed.
 
-Internal `VEN` documents remain separate from fiscal electronic documents.
+Internal `VEN` documents remain separate from outbound fiscal electronic invoices and from received Electronic Documents.
 
 ## Automated Outbound Email and WhatsApp Distribution
 

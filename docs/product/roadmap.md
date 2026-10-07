@@ -148,7 +148,7 @@ Purchases, supplier management, email ingestion, and XML 4.4 processing intentio
 
 Current verified baseline:
 
-**439 passed, 0 failed.**
+**542 passed, 0 failed.**
 
 ## 4. Current Implemented Platform
 
@@ -164,6 +164,18 @@ Quotations
 Sales
         +
 Inventory Core
+        +
+Suppliers / Purchases / Accounts Payable
+        +
+Purchase-to-Inventory receipt
+        +
+Electronic Documents / Hacienda XML 4.4 / CAByS
+        +
+Accounting Classification
+        +
+Manual Gmail ingestion
+        +
+Received Documents refinement
         =
 Current implemented platform
 ```
@@ -172,58 +184,45 @@ Inventory is considered closed as a core domain for the current stage.
 
 Further Inventory changes should be driven by real defects, new requirements, or explicit integration needs rather than continued expansion without a business requirement.
 
-## 5. Current Focus — Purchases / Suppliers
+## 5. Recently Completed — Purchases / Suppliers / Accounts Payable
 
-**Status: Planned / next major domain**
+**Status: Implemented**
 
-The next major development phase is a dedicated Purchases / Suppliers domain.
+Purchases / Suppliers are implemented as dedicated operational workflows separate from Inventory, with explicit Purchase-to-Inventory receipt, FIFO cost capture, payment/AP behavior, supplier history, and duplicate-receipt protection.
 
-This domain should own purchasing workflows while integrating with Inventory through explicit stock-entry operations.
+## 6. Recently Completed — Received Electronic Documents
 
-Expected areas include:
+### Costa Rican Hacienda XML 4.4
 
-* Supplier records.
-* Supplier search and lifecycle rules.
-* Manual purchase registration.
-* Product-linked purchase lines.
-* Purchase quantities.
-* Purchase costs.
-* Purchase totals.
-* Purchase history.
-* Inventory increases from accepted purchases.
-* Creation of FIFO cost layers from valid purchase costs.
-* Traceability between purchases and resulting inventory movements.
-* Clear handling of corrections or reversals where required.
+**Status: Implemented**
 
-Inventory should not become responsible for supplier or purchase-document processing.
+Received fiscal-document processing is implemented as a dedicated Electronic Documents workflow with manual XML import, quarantine, local XSD validation, duplicate/rejected handling, accounting classification, learned rules, and manual review/acceptance.
 
-## 6. Purchase Invoice Processing
+Electronic Documents do not automatically create Purchases or Inventory movements. `FechaEmision` is the economic date.
 
-### Costa Rican XML 4.4
+### CAByS 2025
 
-**Status: Planned**
+**Status: Implemented**
 
-Purchase invoice processing will live inside the Purchases domain.
+The local versioned CAByS catalog supports product and received-document workflows.
 
-A dedicated purchase-invoice area is expected to process XML 4.4 documents received by the business.
+### Manual Gmail Ingestion
 
-Expected behavior includes:
+**Status: Implemented**
 
-* Reception of fiscal XML documents from the business email workflow.
-* XML 4.4 deserialization.
-* Document-type identification.
-* Purchase invoice classification.
-* Credit-note classification.
-* Detection of invalid, unsupported, or erroneous documents.
-* Interpretation of tax rates such as 13%, 4%, 1%, exempt, and other supported cases.
-* Review before operational acceptance.
-* Explicit acceptance before a document creates or changes purchase records.
-* Inventory impact only after the corresponding purchase operation is considered valid.
-* Traceability between the received document and the resulting purchase operation.
+The Gmail integration supports server-side OAuth 2.0, `gmail.readonly`, MIME traversal, XML attachment retrieval, duplicate/rejected tracking, controlled retry, manual synchronization, single-flight protection, and encrypted persisted integration state.
 
-The email integration should act as an input source for Purchases.
+### Received Documents Refinement
 
-Inventory itself should not read email or deserialize fiscal XML.
+**Status: Implemented**
+
+History defaults to the current calendar month, explicit historical ranges are supported, period summaries use `FechaEmision`, Pending remains global, and the filter/category/review UI has been refined.
+
+### Current Focus — Periodic Gmail Background Synchronization
+
+**Status: Next integration step**
+
+The next integration step is periodic Gmail background synchronization using the existing ingestion boundary while preserving read-only access, quarantine/manual acceptance, duplicate safety, retry, and single-flight protection.
 
 ## 7. Near-Term Domains
 
@@ -403,31 +402,15 @@ Audit infrastructure should be introduced when domain requirements justify it.
 
 ## 12. Testing Expansion
 
-Inventory-specific coverage is now part of the implemented baseline.
+Inventory, Purchases, Accounts Payable, Electronic Documents, Hacienda XML 4.4, Gmail ingestion, and received-document period-summary coverage are part of the implemented baseline.
 
-Upcoming testing priorities include:
-
-1. Purchase lifecycle and validation.
-2. Purchase-to-inventory behavior.
-3. Purchase cost-layer creation.
-4. XML 4.4 parsing and classification.
-5. Credit-note behavior.
-6. Purchase-document acceptance rules.
-7. Expanded receivables behavior if introduced.
-8. Expense classification/storage.
-9. Expanded authorization coverage.
-10. Database migration verification.
-11. Critical browser automation where justified.
-
-Test-suite runtime optimization is intentionally not a current functional-development priority.
+Upcoming testing priorities include periodic Gmail background synchronization, scheduled-run concurrency/single-flight behavior, retry/recovery across repeated runs, Expenses/Reports behavior when introduced, expanded authorization coverage, migration verification, and selected browser automation.
 
 ## 13. Performance and Background Processing
 
 Performance work should be measurement-driven.
 
-Background infrastructure should only be added for concrete asynchronous requirements.
-
-Email-based purchase-document ingestion may eventually justify background processing, but the infrastructure should be selected only when the workflow is being implemented and its actual requirements are known.
+Manual Gmail ingestion is implemented. Periodic Gmail background synchronization is now the concrete next asynchronous requirement and should reuse the existing ingestion pipeline rather than introduce a second model.
 
 ## 14. Definition of Done for New Domains
 
@@ -461,7 +444,15 @@ Sales
         ↓
 Inventory Core
         ↓
-Purchases / Suppliers
+Purchases / Suppliers / Accounts Payable
+        ↓
+Electronic Documents / Hacienda XML 4.4 / CAByS
+        ↓
+Manual Gmail ingestion
+        ↓
+Received Documents refinement
+        ↓
+Periodic Gmail background synchronization
         ↓
 Expenses
         ↓

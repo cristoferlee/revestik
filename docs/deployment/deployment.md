@@ -34,6 +34,13 @@ Implemented business areas currently include:
 * FIFO inventory behavior.
 * Physical inventory counts.
 * Inventory cost resolution.
+* Suppliers.
+* Purchases and Accounts Payable.
+* Purchase-to-Inventory receipt.
+* Electronic Documents.
+* Hacienda XML 4.4 / CAByS / accounting classification.
+* Manual Gmail document ingestion.
+* Received Documents period summaries.
 
 Because Revestik now manages transactional stock and historical inventory information, production database lifecycle, backup, migration, and recovery requirements are increasingly important.
 
@@ -143,9 +150,9 @@ A successful test run does not guarantee production readiness, but a known faili
 
 The current verified complete-suite baseline is:
 
-**439 passed, 0 failed.**
+**542 passed, 0 failed.**
 
-This baseline includes coverage for Customers, Quotations, Sales, Inventory, SQL Server persistence, security boundaries, concurrency-sensitive behavior, physical counts, inventory costs, and hosting.
+This baseline includes coverage for Customers, Quotations, Sales, Inventory, Suppliers, Purchases, Accounts Payable, Purchase-to-Inventory receipt, Electronic Documents, Hacienda XML validation, accounting classification, Gmail ingestion, received-document period summaries, SQL Server persistence, security boundaries, concurrency-sensitive behavior, physical counts, inventory costs, and hosting.
 
 Additional testing guidance is documented in:
 
@@ -180,7 +187,7 @@ Important examples include:
 artifacts/publish/
 └── wwwroot/
     ├── index.html
-    └── _framework/
+    └── \_framework/
         ├── blazor.webassembly.js
         └── runtime assets
 ```
@@ -285,11 +292,11 @@ Authentication:BootstrapAdministratorEmail
 Authentication:ClientBaseUrl
 ```
 
-Future integrations may introduce additional server-side configuration.
+The implemented Gmail received-document integration requires additional server-side OAuth/integration configuration.
 
-For example, purchase-document email ingestion may eventually require mail-account or provider credentials.
+Runtime state used by received-document staging and Gmail integration is stored under `src/Revestik.Api/App_Data/`, which is excluded from source control. Persisted Gmail integration state is protected using ASP.NET Core Data Protection.
 
-Such settings must not be added until the corresponding integration is actually implemented.
+Periodic background Gmail synchronization may introduce additional scheduling/worker configuration later.
 
 Actual configuration requirements should always be verified against the current application before deployment.
 
@@ -317,7 +324,7 @@ Current or future sensitive values may include:
 * Google authentication secrets.
 * Administrative bootstrap credentials.
 * Third-party API credentials.
-* Future business-email credentials.
+* Gmail OAuth/integration credentials.
 * Future fiscal certificates/signing secrets.
 
 The specific production secret-management platform will be documented after the hosting platform is selected.
@@ -367,6 +374,9 @@ The database now contains operational history beyond ordinary master data, inclu
 * FIFO cost layers.
 * Physical inventory counts.
 * Product lifecycle history.
+* Suppliers, Purchases, and Accounts Payable.
+* Purchase-linked Inventory provenance.
+* Electronic Documents and accounting classification data.
 
 This increases the importance of durable production storage and tested recovery procedures.
 
@@ -388,7 +398,7 @@ Before applying a production migration, review:
 * Historical records affected by the change.
 * Recovery strategy.
 
-Inventory development introduced persistence structures where migration review is especially important, including movement relationships, cost layers, physical-count records, concurrency-related fields, and product lifecycle state.
+Inventory, Purchases, Accounts Payable, and Electronic Documents introduced persistence structures where migration review is especially important, including movement relationships, cost layers, physical-count records, Purchase/payment relationships, Electronic Document structures, classification data, concurrency-related fields, and product lifecycle state.
 
 A migration should not be applied to production merely because:
 
@@ -510,10 +520,10 @@ Logs must avoid intentionally recording:
 * Antiforgery tokens.
 * Authentication cookies.
 * Sensitive personal information without a justified operational requirement.
-* Future email credentials.
+* Gmail OAuth/integration credentials.
 * Future signing credentials.
 
-Inventory and commercial failures should be diagnosable without logging unnecessary copies of complete sensitive business records.
+Inventory, Purchase, Electronic Document, Gmail-integration, and commercial failures should be diagnosable without logging unnecessary copies of complete sensitive business records or OAuth/token material.
 
 Production logging configuration should be reviewed when the hosting environment is selected.
 
@@ -533,9 +543,10 @@ Operationally important failures may eventually include:
 
 * Inventory transaction failures.
 * Concurrency conflicts.
-* Failed purchase-document ingestion.
+* Received Electronic Document ingestion/validation failures.
+* Gmail integration failures.
 * External integration failures.
-* Background-processing failures if background workloads are introduced.
+* Background-processing failures when periodic Gmail synchronization is introduced.
 
 The specific observability platform has not yet been selected for Revestik.
 
@@ -608,7 +619,11 @@ A production deployment should eventually include verification of at least:
 13. A Sale workflow works.
 14. Inventory data can be retrieved correctly.
 15. A safe inventory workflow can be exercised without corrupting stock.
-16. Critical historical records remain accessible after deployment.
+16. Supplier/Purchase/Accounts Payable data is accessible.
+17. Received Documents loads successfully.
+18. Current-month History and custom historical periods behave correctly.
+19. Gmail status/manual synchronization works when configured.
+20. Critical historical records remain accessible after deployment.
 
 These checks may initially be manual and later become automated smoke tests.
 
@@ -689,8 +704,10 @@ The same principle applies to:
 * Payments.
 * Inventory history.
 * Inventory costs.
-* Supplier information when introduced.
-* Purchase documents when introduced.
+* Supplier information.
+* Purchase and Accounts Payable information.
+* Received Electronic Documents.
+* Accounting classification data.
 
 ## 34. Backup and Recovery
 
@@ -714,6 +731,10 @@ Backups must protect not only current master data but also historical transactio
 * Inventory movements.
 * FIFO cost layers.
 * Physical inventory counts.
+* Suppliers.
+* Purchases and Accounts Payable.
+* Electronic Documents.
+* Accounting classification data.
 
 A database existing in the cloud does not automatically mean the application's recovery requirements have been satisfied.
 
@@ -744,7 +765,7 @@ That ADR should compare relevant alternatives according to actual requirements s
 * Recovery.
 * Expected traffic.
 * Authentication integration.
-* Future email/document-ingestion requirements where relevant.
+* Gmail/received-document integration requirements and future background synchronization where relevant.
 
 ## 36. Future Containerization
 
@@ -793,28 +814,15 @@ Some schema changes may require a migrate-before-deploy strategy, while backward
 
 This diagram represents a target process, not the current production implementation.
 
-## 38. Future Purchase and Email Integration
+## 38. Gmail and Received-Document Deployment Boundary
 
-Purchases / Suppliers are the next major planned business domain.
+Purchases, Accounts Payable, Electronic Documents, Hacienda XML 4.4 validation, received-document quarantine, and manual Gmail ingestion are implemented.
 
-Purchase invoice processing is expected to eventually include Costa Rican XML 4.4 documents received through a business email workflow.
+Production deployment must keep Gmail access server-side/read-only, keep OAuth state protected, preserve `App_Data` appropriately, enforce secure XML/quarantine behavior, prevent automatic Purchase/Inventory creation from Electronic Documents, and retain duplicate/retry/idempotency protections.
 
-When that functionality is implemented, deployment requirements may expand to include:
+Periodic Gmail background synchronization remains future work. When introduced, production will require a suitable worker/scheduling model, concurrency controls, retry/restart behavior, and monitoring.
 
-* Business-email credentials or delegated authorization.
-* Provider-specific configuration.
-* Secure token storage.
-* XML ingestion limits.
-* Background processing if justified.
-* Failure/retry behavior.
-* Observability for document ingestion.
-* Safe handling of malformed or unexpected external documents.
-
-These requirements are future concerns and must not be represented as currently implemented infrastructure.
-
-Inventory should remain isolated from direct email access and XML ingestion.
-
-The Purchases workflow should validate and accept documents before producing valid Inventory effects.
+Inventory remains isolated from direct email access and XML ingestion.
 
 ## 39. Public RevestikCR.com Deployment Boundary
 
@@ -842,7 +850,7 @@ Revestik currently has several foundations required for deployment:
 
 * Release build.
 * Automated tests.
-* 439-test verified baseline.
+* 542-test verified baseline.
 * Publish pipeline.
 * Hosted Blazor architecture.
 * Static asset verification.
@@ -856,6 +864,11 @@ Revestik currently has several foundations required for deployment:
 * EF Core migrations.
 * Transactional Inventory behavior.
 * Inventory integrity tests.
+* Suppliers / Purchases / Accounts Payable.
+* Purchase-to-Inventory receipt.
+* Electronic Documents and Hacienda XML 4.4 local validation.
+* Accounting classification and manual Gmail read-only ingestion.
+* Received Documents `FechaEmision` period summaries.
 
 Remaining production work includes infrastructure decisions such as:
 
