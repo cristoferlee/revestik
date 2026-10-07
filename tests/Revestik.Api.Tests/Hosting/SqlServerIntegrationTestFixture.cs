@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Data;
 using Testcontainers.MsSql;
@@ -6,17 +7,36 @@ namespace Revestik.Api.Tests.Hosting;
 
 public sealed class SqlServerIntegrationTestFixture : IAsyncLifetime
 {
-    private readonly MsSqlContainer container =
+    private static readonly MsSqlContainer Container =
         new MsSqlBuilder(
             "mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04")
-            .WithDatabase("RevestikIntegrationTests")
+            .WithDatabase("RevestikIntegrationTestsHost")
             .Build();
 
-    public string ConnectionString => container.GetConnectionString();
+    private static readonly SemaphoreSlim StartupLock = new(1, 1);
+
+    private static bool containerStarted;
+
+    private readonly string databaseName =
+        $"RevestikIntegrationTests_{Guid.NewGuid():N}";
+
+    public string ConnectionString
+    {
+        get
+        {
+            var builder = new SqlConnectionStringBuilder(
+                Container.GetConnectionString())
+            {
+                InitialCatalog = databaseName
+            };
+
+            return builder.ConnectionString;
+        }
+    }
 
     public async Task InitializeAsync()
     {
-        await container.StartAsync();
+        await EnsureContainerStartedAsync();
 
         await using var dbContext = CreateDbContext();
         await dbContext.Database.MigrateAsync();
@@ -24,15 +44,42 @@ public sealed class SqlServerIntegrationTestFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        await container.DisposeAsync();
+        await using var dbContext = CreateDbContext();
+        await dbContext.Database.EnsureDeletedAsync();
     }
 
     public RevestikDbContext CreateDbContext()
     {
-        var options = new DbContextOptionsBuilder<RevestikDbContext>()
-            .UseSqlServer(ConnectionString)
-            .Options;
+        var options =
+            new DbContextOptionsBuilder<RevestikDbContext>()
+                .UseSqlServer(ConnectionString)
+                .Options;
 
         return new RevestikDbContext(options);
+    }
+
+    private static async Task EnsureContainerStartedAsync()
+    {
+        if (containerStarted)
+        {
+            return;
+        }
+
+        await StartupLock.WaitAsync();
+
+        try
+        {
+            if (containerStarted)
+            {
+                return;
+            }
+
+            await Container.StartAsync();
+            containerStarted = true;
+        }
+        finally
+        {
+            StartupLock.Release();
+        }
     }
 }
