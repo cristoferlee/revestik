@@ -9,6 +9,8 @@ public sealed class ElectronicDocument
 
     public string Clave { get; set; } = string.Empty;
     public ElectronicDocumentType DocumentType { get; set; }
+    public ElectronicDocumentDirection Direction { get; set; } = ElectronicDocumentDirection.Received;
+    public ElectronicDocumentAdjustmentStatus? AdjustmentStatus { get; set; }
     public string NumeroConsecutivo { get; set; } = string.Empty;
     public DateTimeOffset FechaEmision { get; set; }
     public string IssuerEconomicActivityCode { get; set; } = string.Empty;
@@ -76,5 +78,6 @@ public sealed class ElectronicDocument
     public DateTime? ProcessedAtUtc { get; set; }
 
     public ICollection<ElectronicDocumentLine> Lines { get; set; } = [];
+    public ICollection<ElectronicDocumentReference> References { get; set; } = [];
     public HaciendaResponse? HaciendaResponse { get; set; }
 }

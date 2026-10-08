@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Revestik.Api.Models;
+using Revestik.Shared.ElectronicDocuments;
 
 namespace Revestik.Api.Data.Configurations;
 
@@ -13,7 +14,10 @@ public sealed class ElectronicDocumentConfiguration
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Clave).HasMaxLength(50).IsFixedLength().IsRequired();
-        builder.Property(x => x.DocumentType).HasConversion<string>().HasMaxLength(20).IsRequired();
+        builder.Property(x => x.DocumentType).HasConversion<string>().HasMaxLength(30).IsRequired();
+        builder.Property(x => x.Direction).HasConversion<string>().HasMaxLength(10)
+            .HasDefaultValue(ElectronicDocumentDirection.Received).HasSentinel((ElectronicDocumentDirection)0).IsRequired();
+        builder.Property(x => x.AdjustmentStatus).HasConversion<string>().HasMaxLength(30);
         builder.Property(x => x.NumeroConsecutivo).HasMaxLength(20).IsRequired();
         builder.Property(x => x.FechaEmision).HasColumnType("datetimeoffset").IsRequired();
         builder.Property(x => x.IssuerEconomicActivityCode).HasMaxLength(20).IsRequired();
@@ -73,6 +77,7 @@ public sealed class ElectronicDocumentConfiguration
         builder.HasIndex(x => x.FechaEmision);
         builder.HasIndex(x => x.IssuerIdentification);
         builder.HasIndex(x => x.DocumentType);
+        builder.HasIndex(x => x.Direction);
         builder.HasIndex(x => x.ProcessingStatus);
         builder.HasIndex(x => x.CategoryId);
         builder.HasIndex(x => x.SupplierId);

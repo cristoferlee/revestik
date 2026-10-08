@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
+using Revestik.Api.Services.HaciendaXml;
 using Revestik.Shared.ElectronicDocuments;
 
 namespace Revestik.Api.Services.ElectronicDocuments;
@@ -18,39 +19,36 @@ public sealed class ElectronicDocumentXmlParser : IElectronicDocumentXmlParser
     public ParsedReceivedXml Parse(ReadOnlyMemory<byte> xml)
     {
         if (xml.IsEmpty)
-        {
             throw new ElectronicDocumentXmlException("El archivo XML está vacío.");
-        }
 
         try
         {
             using var stream = new MemoryStream(xml.ToArray(), writable: false);
-            using var reader = XmlReader.Create(
-                stream,
-                new XmlReaderSettings
-                {
-                    DtdProcessing = DtdProcessing.Prohibit,
-                    XmlResolver = null,
-                    MaxCharactersInDocument = MaxCharactersInDocument,
-                    IgnoreComments = false,
-                    IgnoreWhitespace = false
-                });
+            using var reader = XmlReader.Create(stream, new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null,
+                MaxCharactersInDocument = MaxCharactersInDocument,
+                IgnoreComments = false,
+                IgnoreWhitespace = false
+            });
 
             var document = XDocument.Load(reader, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
             var root = document.Root ?? throw new ElectronicDocumentXmlException("El XML no contiene un elemento raíz.");
 
             if (root.Name == InvoiceNamespace + "FacturaElectronica")
-            {
                 return new ParsedReceivedElectronicDocument(ParseInvoice(root));
-            }
 
             if (root.Name == HaciendaMessageNamespace + "MensajeHacienda")
-            {
                 return new ParsedReceivedHaciendaResponse(ParseHaciendaResponse(root));
+
+            if (HaciendaXmlDocumentCatalog.TryResolve(root.Name.LocalName, root.Name.NamespaceName, out var descriptor) &&
+                !descriptor.ProcessingEnabled && descriptor.Kind != HaciendaXmlDocumentKind.MensajeReceptor)
+            {
+                return HaciendaDocumentStructureReader.Read(root, descriptor);
             }
 
-            throw new ElectronicDocumentXmlException(
-                $"Tipo o namespace XML no soportado: {root.Name}.");
+            throw new ElectronicDocumentXmlException($"Tipo o namespace XML no soportado: {root.Name}.");
         }
         catch (ElectronicDocumentXmlException)
         {
@@ -74,17 +72,11 @@ public sealed class ElectronicDocumentXmlParser : IElectronicDocumentXmlParser
         var detailElement = RequiredElement(root, ns + "DetalleServicio");
         var summaryElement = RequiredElement(root, ns + "ResumenFactura");
 
-        var lines = detailElement.Elements(ns + "LineaDetalle")
-            .Select(line => ParseLine(line, ns))
-            .ToList();
-
+        var lines = detailElement.Elements(ns + "LineaDetalle").Select(line => ParseLine(line, ns)).ToList();
         if (lines.Count == 0)
-        {
             throw new ElectronicDocumentXmlException("La factura electrónica no contiene líneas de detalle.");
-        }
 
         var currency = RequiredElement(summaryElement, ns + "CodigoTipoMoneda");
-
         return new ParsedElectronicDocument(
             ElectronicDocumentType.Invoice,
             RequiredValue(root, ns + "Clave", 50),
@@ -125,7 +117,6 @@ public sealed class ElectronicDocumentXmlParser : IElectronicDocumentXmlParser
         var identification = RequiredElement(element, ns + "Identificacion");
         var phone = element.Element(ns + "Telefono");
         var address = element.Element(ns + "Ubicacion");
-
         IEnumerable<string> addressParts = address is null
             ? Enumerable.Empty<string>()
             : new[]
@@ -150,14 +141,12 @@ public sealed class ElectronicDocumentXmlParser : IElectronicDocumentXmlParser
     private static ParsedLine ParseLine(XElement line, XNamespace ns)
     {
         var commercialCode = line.Element(ns + "CodigoComercial");
-
         var discounts = line.Elements(ns + "Descuento")
             .Select(item => new ParsedDiscount(
                 DecimalValue(item, ns + "MontoDescuento", required: true),
                 OptionalValue(item, ns + "CodigoDescuento"),
                 OptionalValue(item, ns + "NaturalezaDescuento")))
             .ToList();
-
         var taxes = line.Elements(ns + "Impuesto")
             .Select(item => new ParsedTax(
                 RequiredValue(item, ns + "Codigo"),
@@ -213,20 +202,13 @@ public sealed class ElectronicDocumentXmlParser : IElectronicDocumentXmlParser
     {
         var value = OptionalValue(parent, name);
         if (string.IsNullOrWhiteSpace(value))
-        {
             throw new ElectronicDocumentXmlException($"Falta el valor obligatorio {name.LocalName}.");
-        }
-
         if (exactLength.HasValue && value.Length != exactLength.Value)
-        {
             throw new ElectronicDocumentXmlException($"{name.LocalName} debe contener exactamente {exactLength.Value} caracteres.");
-        }
-
         return value;
     }
 
-    private static string OptionalValue(XElement parent, XName name) =>
-        parent.Element(name)?.Value.Trim() ?? string.Empty;
+    private static string OptionalValue(XElement parent, XName name) => parent.Element(name)?.Value.Trim() ?? string.Empty;
 
     private static decimal DecimalValue(XElement parent, XName name, bool required = false)
     {
@@ -234,12 +216,9 @@ public sealed class ElectronicDocumentXmlParser : IElectronicDocumentXmlParser
         if (string.IsNullOrWhiteSpace(value))
         {
             if (required)
-            {
                 throw new ElectronicDocumentXmlException($"Falta el valor obligatorio {name.LocalName}.");
-            }
             return 0m;
         }
-
         return decimal.Parse(value, NumberStyles.Number, CultureInfo.InvariantCulture);
     }
 
@@ -249,9 +228,7 @@ public sealed class ElectronicDocumentXmlParser : IElectronicDocumentXmlParser
         if (string.IsNullOrWhiteSpace(value))
         {
             if (required)
-            {
                 throw new ElectronicDocumentXmlException($"Falta el valor obligatorio {name.LocalName}.");
-            }
             return 0;
         }
         return int.Parse(value, CultureInfo.InvariantCulture);
@@ -260,8 +237,6 @@ public sealed class ElectronicDocumentXmlParser : IElectronicDocumentXmlParser
     private static int? OptionalInt(XElement parent, XName name)
     {
         var value = OptionalValue(parent, name);
-        return string.IsNullOrWhiteSpace(value)
-            ? null
-            : int.Parse(value, CultureInfo.InvariantCulture);
+        return string.IsNullOrWhiteSpace(value) ? null : int.Parse(value, CultureInfo.InvariantCulture);
     }
 }
