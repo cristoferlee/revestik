@@ -91,6 +91,36 @@ public static class BankVoucherGmailIntegrationEndpoints
             .WithName("CompleteBankVoucherGmailAuthorization");
 
         group.MapPost(
+                "/sync",
+                async (
+                    IBankVoucherGmailIntegrationService service,
+                    CancellationToken cancellationToken) =>
+                {
+                    try
+                    {
+                        return Results.Ok(
+                            await service.SyncAsync(cancellationToken));
+                    }
+                    catch (GmailSyncAlreadyRunningException exception)
+                    {
+                        return Results.Problem(
+                            title: "Sincronización en curso.",
+                            detail: exception.Message,
+                            statusCode: StatusCodes.Status409Conflict);
+                    }
+                    catch (GmailIntegrationException exception)
+                    {
+                        return Results.Problem(
+                            title: "No se pudo sincronizar Gmail para vouchers.",
+                            detail: exception.Message,
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                })
+            .RequireAuthorization(PolicyNames.ManageExpenses)
+            .AddEndpointFilter<AntiforgeryValidationFilter>()
+            .WithName("SyncBankVoucherGmail");
+
+        group.MapPost(
                 "/disconnect",
                 async (
                     IBankVoucherGmailIntegrationService service,

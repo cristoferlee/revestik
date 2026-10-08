@@ -13,6 +13,10 @@ public interface IExpenseApiService
         ExpenseSummaryRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<ExpenseConsolidatedSummaryResponse> GetConsolidatedSummaryAsync(
+        ExpenseSummaryRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<ExpenseResponse> CreateAsync(
         ExpenseCreateRequest request,
         CancellationToken cancellationToken = default);

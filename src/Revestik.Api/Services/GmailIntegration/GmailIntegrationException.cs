@@ -5,3 +5,6 @@ public class GmailIntegrationException(string message)
 
 public sealed class GmailSyncAlreadyRunningException()
     : GmailIntegrationException("Ya existe una sincronización de Gmail en curso.");
+
+public sealed class GmailRateLimitException(string message)
+    : GmailIntegrationException(message);

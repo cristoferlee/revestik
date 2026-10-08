@@ -25,15 +25,12 @@ public static class ExpenseEndpoints
                 var validationErrors = ValidateRequest(request);
 
                 if (validationErrors.Count > 0)
-                {
                     return Results.ValidationProblem(validationErrors);
-                }
 
-                var expenses = await expenseService.GetPageAsync(
-                    request,
-                    cancellationToken);
-
-                return Results.Ok(expenses);
+                return Results.Ok(
+                    await expenseService.GetPageAsync(
+                        request,
+                        cancellationToken));
             })
             .WithName("GetExpenses");
 
@@ -47,17 +44,33 @@ public static class ExpenseEndpoints
                 var validationErrors = ValidateRequest(request);
 
                 if (validationErrors.Count > 0)
-                {
                     return Results.ValidationProblem(validationErrors);
-                }
 
-                var summary = await expenseService.GetSummaryAsync(
-                    request,
-                    cancellationToken);
-
-                return Results.Ok(summary);
+                return Results.Ok(
+                    await expenseService.GetSummaryAsync(
+                        request,
+                        cancellationToken));
             })
             .WithName("GetExpenseSummary");
+
+        group.MapGet(
+            "/consolidated-summary",
+            async (
+                [AsParameters] ExpenseSummaryRequest request,
+                IExpenseReportingService reportingService,
+                CancellationToken cancellationToken) =>
+            {
+                var validationErrors = ValidateRequest(request);
+
+                if (validationErrors.Count > 0)
+                    return Results.ValidationProblem(validationErrors);
+
+                return Results.Ok(
+                    await reportingService.GetConsolidatedSummaryAsync(
+                        request,
+                        cancellationToken));
+            })
+            .WithName("GetConsolidatedExpenseSummary");
 
         group.MapPost(
             "/",
@@ -69,9 +82,7 @@ public static class ExpenseEndpoints
                 var validationErrors = ValidateRequest(request);
 
                 if (validationErrors.Count > 0)
-                {
                     return Results.ValidationProblem(validationErrors);
-                }
 
                 var expense = await expenseService.CreateAsync(
                     request,
@@ -100,6 +111,9 @@ public static class ExpenseEndpoints
             validationResults,
             validateAllProperties: true);
 
+        if (request is IValidatableObject validatable)
+            validationResults.AddRange(validatable.Validate(validationContext));
+
         return validationResults
             .SelectMany(result =>
                 result.MemberNames
@@ -115,6 +129,7 @@ public static class ExpenseEndpoints
                 group => group.Key,
                 group => group
                     .Select(error => error.ErrorMessage)
+                    .Distinct()
                     .ToArray());
     }
 }

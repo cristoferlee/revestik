@@ -11,14 +11,23 @@ This document reflects implemented architecture. Planned functionality is docume
 ## 2. Solution Structure
 
 ```text
+
 Revestik
+
 ├── src
-│   ├── Revestik.Client
-│   ├── Revestik.Api
-│   └── Revestik.Shared
+
+│   ├── Revestik.Client
+
+│   ├── Revestik.Api
+
+│   └── Revestik.Shared
+
 ├── tests
-│   └── Revestik.Api.Tests
+
+│   └── Revestik.Api.Tests
+
 └── docs
+
 ```
 
 ### Revestik.Client
@@ -26,7 +35,6 @@ Revestik
 `Revestik.Client` is the Blazor WebAssembly frontend.
 
 Responsibilities include:
-
 * Rendering the user interface.
 * Managing navigation and UI state.
 * Client-side form validation and calculation feedback.
@@ -45,7 +53,6 @@ The client does not access SQL Server directly and is not a trusted security bou
 `Revestik.Api` is the trusted ASP.NET Core server application.
 
 Responsibilities include:
-
 * HTTP API endpoints.
 * Authentication and authorization.
 * Server-side validation.
@@ -77,31 +84,48 @@ Persistence entities remain server-side.
 
 ### Revestik.Api.Tests
 
-`Revestik.Api.Tests` contains automated verification for server behavior, persistence, security, inventory integrity, and hosting.
+`Revestik.Api.Tests` contains automated verification for server behavior, persistence, security, inventory integrity, purchase workflows, received electronic documents, external integration boundaries, and hosting.
 
 Current areas include customers, products, quotations, sales, inventory movements, FIFO behavior, cost resolution, physical counts, suppliers, purchases, accounts payable, purchase-to-inventory receipt, Electronic Documents, Hacienda XML validation, accounting classification, Gmail ingestion, received-document period summaries, authentication/CSRF, SQL Server integration, concurrency, PDF behavior, and hosting.
 
 ## 3. High-Level Architecture
 
 ```mermaid
-flowchart TB
-    User[User / Browser]
-    Client[Revestik.Client<br/>Blazor WebAssembly]
-    Api[Revestik.Api<br/>ASP.NET Core]
-    Shared[Revestik.Shared<br/>HTTP Contracts]
-    EF[Entity Framework Core]
-    DB[(SQL Server)]
-    External[External Services]
-    Pdf[QuestPDF<br/>Server-side PDF]
 
-    User --> Client
-    Client -->|HTTPS / JSON| Api
-    Client -.-> Shared
-    Api -.-> Shared
-    Api --> EF
-    EF --> DB
-    Api --> External
-    Api --> Pdf
+flowchart TB
+
+    User[User / Browser]
+
+    Client[Revestik.Client<br/>Blazor WebAssembly]
+
+    Api[Revestik.Api<br/>ASP.NET Core]
+
+    Shared[Revestik.Shared<br/>HTTP Contracts]
+
+    EF[Entity Framework Core]
+
+    DB[(SQL Server)]
+
+    External[External Services]
+
+    Pdf[QuestPDF<br/>Server-side PDF]
+
+    User --> Client
+
+    Client -->|HTTPS / JSON| Api
+
+    Client -.-> Shared
+
+    Api -.-> Shared
+
+    Api --> EF
+
+    EF --> DB
+
+    Api --> External
+
+    Api --> Pdf
+
 ```
 
 The application remains a single deployable full-stack system.
@@ -111,27 +135,47 @@ Business domains are separated through explicit models, services, endpoints, con
 ## 4. Request Flow
 
 ```mermaid
-sequenceDiagram
-    actor User
-    participant Client as Blazor Client
-    participant API as ASP.NET Core API
-    participant Service as Application Service
-    participant EF as Entity Framework Core
-    participant DB as SQL Server
 
-    User->>Client: Submit operation
-    Client->>Client: Client-side validation
-    Client->>API: HTTP request + auth cookie + CSRF token
-    API->>API: Authenticate / authorize / validate CSRF
-    API->>API: Validate request
-    API->>Service: Execute business operation
-    Service->>EF: Read / persist data
-    EF->>DB: Parameterized database operation
-    DB-->>EF: Result
-    EF-->>Service: Result
-    Service-->>API: Response DTO
-    API-->>Client: JSON response
-    Client-->>User: Update UI
+sequenceDiagram
+
+    actor User
+
+    participant Client as Blazor Client
+
+    participant API as ASP.NET Core API
+
+    participant Service as Application Service
+
+    participant EF as Entity Framework Core
+
+    participant DB as SQL Server
+
+    User->>Client: Submit operation
+
+    Client->>Client: Client-side validation
+
+    Client->>API: HTTP request + auth cookie + CSRF token
+
+    API->>API: Authenticate / authorize / validate CSRF
+
+    API->>API: Validate request
+
+    API->>Service: Execute business operation
+
+    Service->>EF: Read / persist data
+
+    EF->>DB: Parameterized database operation
+
+    DB-->>EF: Result
+
+    EF-->>Service: Result
+
+    Service-->>API: Response DTO
+
+    API-->>Client: JSON response
+
+    Client-->>User: Update UI
+
 ```
 
 Read-only requests do not require antiforgery validation.
@@ -147,7 +191,6 @@ Revestik uses EF Core with SQL Server.
 Entity configuration is separated using `IEntityTypeConfiguration<T>` implementations.
 
 Data integrity is enforced at multiple levels where appropriate:
-
 1. Request validation.
 2. Server-side application logic.
 3. EF Core configuration.
@@ -156,14 +199,16 @@ Data integrity is enforced at multiple levels where appropriate:
 SQL Server sequences are used where commercial consecutive generation must remain safe under concurrency.
 
 The persistence model also supports inventory-specific integrity through:
-
 * Immutable inventory movement history.
 * FIFO inventory cost layers.
 * Filtered/unique indexes where required.
 * Relationships between sale inventory movements and reversal movements.
 * Physical-count records and lines.
 * Product lifecycle state including logical archival.
+* Purchase-linked inventory provenance.
 * Concurrency protection for critical product and inventory operations.
+
+The broader persistence model also includes Supplier, Purchase, Accounts Payable, Electronic Document, CAByS, and accounting-classification data.
 
 Operations that coordinate multiple dependent inventory or purchase changes use transactional boundaries where partial completion would corrupt state.
 
@@ -174,23 +219,41 @@ Quotations and Sales use the same Client/API/Shared architectural pattern while 
 ### Quotations
 
 ```text
+
 Quotes.razor / QuotesHistory.razor
-        ↓
+
+        ↓
+
 IQuotationApiService
-        ↓
+
+        ↓
+
 QuotationApiService
-        ↓
+
+        ↓
+
 QuotationEndpoints
-        ↓
+
+        ↓
+
 IQuotationService
-        ↓
+
+        ↓
+
 QuotationService
-        ├── QuotationCalculator
-        └── QuotationPdfService
-        ↓
+
+        ├── QuotationCalculator
+
+        └── QuotationPdfService
+
+        ↓
+
 Entity Framework Core
-        ↓
+
+        ↓
+
 SQL Server
+
 ```
 
 Quotations use `COT-xxxxxx` identifiers, support Draft/Issued states, preserve issued customer snapshots, and remain non-inventory commercial proposals.
@@ -200,26 +263,47 @@ Quotation creation, editing, issuing, reissuing, and conversion do not reserve o
 ### Sales
 
 ```text
+
 Sales.razor / SalesHistory.razor
-        ↓
+
+        ↓
+
 ISaleApiService
-        ↓
+
+        ↓
+
 SaleApiService
-        ↓
+
+        ↓
+
 SaleEndpoints
-        ↓
+
+        ↓
+
 ISaleService
-        ↓
+
+        ↓
+
 SaleService
-        ├── SaleCalculator
-        ├── SqlSaleNumberGenerator
-        └── SalePdfService
-        ↓
+
+        ├── SaleCalculator
+
+        ├── SqlSaleNumberGenerator
+
+        └── SalePdfService
+
+        ↓
+
 InventoryService
-        ↓
+
+        ↓
+
 Entity Framework Core
-        ↓
+
+        ↓
+
 SQL Server
+
 ```
 
 Sales support Draft/Issued/Voided states, payments, replacement relationships, history queries, summaries, internal PDF generation, and product-linked inventory effects.
@@ -243,13 +327,19 @@ An issued quotation may become the source of a Sale Draft.
 Conceptually:
 
 ```mermaid
-flowchart LR
-    Q[Issued Quotation<br/>COT-xxxxxx]
-    S[Sale Draft<br/>no VEN yet]
-    I[Issued Sale<br/>VEN-xxxxxx]
 
-    Q -->|Create from quotation| S
-    S -->|Review / edit / issue| I
+flowchart LR
+
+    Q[Issued Quotation<br/>COT-xxxxxx]
+
+    S[Sale Draft<br/>no VEN yet]
+
+    I[Issued Sale<br/>VEN-xxxxxx]
+
+    Q -->|Create from quotation| S
+
+    S -->|Review / edit / issue| I
+
 ```
 
 The quotation remains persisted and historical after conversion.
@@ -265,12 +355,19 @@ Inventory effects occur only when a valid inventory-backed Sale is issued.
 ## 8. Sale Lifecycle
 
 ```mermaid
+
 stateDiagram-v2
-    [*] --> Draft
-    Draft --> Issued: Issue
-    Issued --> Voided: Void
-    Issued --> Voided: Create replacement
-    Voided --> Draft: Linked replacement created
+
+    [*] --> Draft
+
+    Draft --> Issued: Issue
+
+    Issued --> Voided: Void
+
+    Issued --> Voided: Create replacement
+
+    Voided --> Draft: Linked replacement created
+
 ```
 
 A Draft does not have an official `VEN` number.
@@ -288,7 +385,6 @@ Payments belong to Sales.
 A Sale may have zero or more payment records.
 
 The current balance model exposes:
-
 * `Pending`
 * `PartiallyPaid`
 * `Paid`
@@ -304,7 +400,6 @@ Broader accounts-receivable behavior may evolve later if business requirements e
 Inventory is implemented as a business domain within the existing modular application rather than as a separate deployable service.
 
 Its responsibilities include:
-
 * Product inventory metadata.
 * Physical quantity tracking.
 * Inventory movements.
@@ -320,55 +415,99 @@ Its responsibilities include:
 ### Inventory Request Path
 
 ```text
+
 Inventory.razor
-        ↓
+
+        ↓
+
 Inventory-related client API services
-        ↓
+
+        ↓
+
 InventoryEndpoints / ProductEndpoints
-        ↓
+
+        ↓
+
 InventoryService / ProductService
-        ↓
+
+        ↓
+
 Entity Framework Core
-        ↓
+
+        ↓
+
 SQL Server
+
 ```
 
 Additional focused workflows use the same pattern:
 
 ```text
+
 PhysicalCount.razor
-        ↓
+
+        ↓
+
 IPhysicalCountApiService
-        ↓
+
+        ↓
+
 PhysicalCountApiService
-        ↓
+
+        ↓
+
 InventoryEndpoints
-        ↓
+
+        ↓
+
 IInventoryPhysicalCountService
-        ↓
+
+        ↓
+
 InventoryPhysicalCountService
-        ↓
+
+        ↓
+
 Entity Framework Core
-        ↓
+
+        ↓
+
 SQL Server
+
 ```
 
 ```text
+
 UnknownInventoryCosts.razor
-        ↓
+
+        ↓
+
 IInventoryCostApiService
-        ↓
+
+        ↓
+
 InventoryCostApiService
-        ↓
+
+        ↓
+
 InventoryEndpoints
-        ↓
+
+        ↓
+
 IInventoryCostResolutionService
-        ↓
+
+        ↓
+
 InventoryCostResolutionService
-        ↓
+
+        ↓
+
 Entity Framework Core
-        ↓
+
+        ↓
+
 SQL Server
+
 ```
 
 ## 11. Inventory Movement and FIFO Model
@@ -378,13 +517,21 @@ The current Inventory architecture treats current stock and historical movement/
 Conceptually:
 
 ```text
+
 Product
-  │
-  ├── Current stock reference
-  │
-  ├── InventoryMovement history
-  │
-  └── InventoryCostLayer history
+
+  │
+
+  ├── Current stock reference
+
+  │
+
+  ├── InventoryMovement history
+
+  │
+
+  └── InventoryCostLayer history
+
 ```
 
 Inventory movements provide traceability for stock-changing operations.
@@ -392,7 +539,6 @@ Inventory movements provide traceability for stock-changing operations.
 FIFO cost layers track the remaining quantities associated with historical inventory cost sources.
 
 When stock is consumed:
-
 1. The server determines the required physical quantity.
 2. Available FIFO layers are evaluated in order.
 3. Required quantities are consumed from those layers.
@@ -409,17 +555,27 @@ Sales and Inventory remain separate domains but coordinate through explicit serv
 Conceptually:
 
 ```mermaid
-flowchart LR
-    Draft[Sale Draft]
-    Issued[Issued Sale]
-    Inventory[Inventory Service]
-    Movement[Sale Inventory Movement]
-    Layers[FIFO Cost Layers]
 
-    Draft -->|Issue| Issued
-    Issued --> Inventory
-    Inventory --> Movement
-    Inventory --> Layers
+flowchart LR
+
+    Draft[Sale Draft]
+
+    Issued[Issued Sale]
+
+    Inventory[Inventory Service]
+
+    Movement[Sale Inventory Movement]
+
+    Layers[FIFO Cost Layers]
+
+    Draft -->|Issue| Issued
+
+    Issued --> Inventory
+
+    Inventory --> Movement
+
+    Inventory --> Layers
+
 ```
 
 Manual sale lines that do not reference an inventory-managed product do not create inventory movements.
@@ -433,7 +589,6 @@ Inventory shortage is not represented by creating artificial negative stock.
 Voiding an issued inventory-backed sale restores the exact inventory provenance originally consumed.
 
 The Inventory movement model supports:
-
 * Optional `SaleId`.
 * Optional `ReversesInventoryMovementId`.
 * A reversal relationship from a reversal movement to the original Sale movement.
@@ -442,18 +597,29 @@ The Inventory movement model supports:
 Conceptually:
 
 ```mermaid
-flowchart LR
-    Sale[Issued Sale]
-    Consume[Sale Inventory Movement]
-    Layer[FIFO Layer]
-    Void[Void Sale]
-    Reverse[Reversal Movement]
 
-    Sale --> Consume
-    Consume --> Layer
-    Void --> Reverse
-    Reverse --> Consume
-    Reverse --> Layer
+flowchart LR
+
+    Sale[Issued Sale]
+
+    Consume[Sale Inventory Movement]
+
+    Layer[FIFO Layer]
+
+    Void[Void Sale]
+
+    Reverse[Reversal Movement]
+
+    Sale --> Consume
+
+    Consume --> Layer
+
+    Void --> Reverse
+
+    Reverse --> Consume
+
+    Reverse --> Layer
+
 ```
 
 The reversal restores quantity to the original FIFO layers rather than creating unrelated replacement layers.
@@ -471,17 +637,25 @@ An original cost source remains immutable.
 A layer may therefore contain:
 
 ```text
+
 UnitCost
+
 ResolvedUnitCost
+
 ResolvedByUserId
+
 ResolvedAtUtc
+
 RemainingQuantity
+
 ```
 
 Effective cost follows the implemented rule:
 
 ```text
+
 UnitCost ?? ResolvedUnitCost
+
 ```
 
 This allows quantities with unknown historical cost to remain explicitly unknown until a user resolves them.
@@ -497,10 +671,15 @@ Physical inventory counts are modeled explicitly rather than directly overwritin
 The model includes:
 
 ```text
+
 InventoryPhysicalCount
-        │
-        └── InventoryPhysicalCountLine
-                └── Product
+
+        │
+
+        └── InventoryPhysicalCountLine
+
+                └── Product
+
 ```
 
 A count captures physical quantities for products.
@@ -518,23 +697,30 @@ Product lifecycle uses persisted state instead of destructive deletion from hist
 The current model distinguishes:
 
 ```text
+
 Active
+
 IsDeleted = false
+
 IsArchived = false
 
 Discontinued
+
 IsDeleted = true
+
 IsArchived = false
 
 Permanently removed from normal product workflows
+
 IsDeleted = true
+
 IsArchived = true
+
 ```
 
 The user-facing permanent-delete operation is therefore logical archival.
 
 Archived products:
-
 * Remain in the database.
 * Preserve historical references.
 * Are excluded from normal Active, Discontinued, and All product listings.
@@ -548,7 +734,6 @@ This preserves operational history while allowing the product to disappear perma
 Inventory owns physical stock behavior.
 
 It does not own:
-
 * Supplier management.
 * Purchase-document lifecycle.
 * Email ingestion.
@@ -563,6 +748,28 @@ The architectural boundary is intentional: external document ingestion or purcha
 
 Purchases are implemented as a separate operational domain.
 
+Conceptually:
+
+```text
+Purchases UI
+        ↓
+Purchase-related client API services
+        ↓
+PurchaseEndpoints / SupplierEndpoints
+        ↓
+PurchaseService / SupplierService
+        ↓
+Entity Framework Core
+        ↓
+SQL Server
+        ↓
+explicit receipt operation
+        ↓
+InventoryService
+```
+
+The Purchase domain owns supplier association, purchase lines, cash/credit conditions, due dates, payments, accounts-payable behavior, and supplier purchase history.
+
 Inventory effects occur through an explicit purchase-receipt operation rather than automatically when a Purchase record is created.
 
 The purchase-receipt workflow creates traceable stock-entry effects and FIFO cost layers from valid purchase costs while preventing duplicate application of the same Purchase to Inventory.
@@ -573,39 +780,142 @@ A Purchase is intentionally distinct from a received Electronic Document.
 
 Received Electronic Documents model Costa Rican fiscal XML independently from Purchases.
 
-The ingestion boundary is:
+The ingestion path is:
 
 ```text
 Manual XML / Gmail
         ↓
-recognition + local XSD validation
+secure document recognition
         ↓
-quarantine
+local Hacienda XSD validation
+        ↓
+Received Document Inbox / quarantine
         ↓
 manual acceptance
         ↓
-Electronic Documents
+ElectronicDocument persistence
+        ↓
+accounting classification / review
 ```
 
-Importing or accepting an Electronic Document does not automatically create a Purchase or modify Inventory.
+Important boundaries:
 
-The economic date is `FechaEmision`. History defaults to the current calendar month, explicit historical ranges are supported, Pending remains global, and period summaries follow the selected `FechaEmision` range independently from list search/status/category filters.
+* Importing or accepting an Electronic Document does not automatically create a Purchase.
+* Electronic Documents do not automatically modify Inventory.
+* Duplicate fiscal documents are not persisted as independent economic facts.
+* Hacienda document recognition and business-processing support remain separate concepts.
+* XML parsing disables unsafe external resource resolution and uses local schemas.
+
+The economic date of a received Electronic Document is `FechaEmision`.
+
+The History view defaults to the current calendar month using `FechaEmision`, while users may select another explicit historical range.
+
+The Pending view remains global so older unprocessed documents are not hidden by the current-month History period.
+
+Period accounting and financial summaries are calculated from the selected `FechaEmision` range and are intentionally independent from free-text, processing-status, and accounting-category list filters.
 
 ## 20. CAByS and Accounting Classification Architecture
 
 Revestik includes a local versioned CAByS 2025 catalog and a received-document accounting-classification layer.
 
-CAByS, accounting category, accounting nature, operational destination, payment condition, document-level classification, line-level overrides, and learned classification rules remain separate concepts. Automated suggestions remain reviewable and editable.
+The classification model separates:
+
+* CAByS.
+* Accounting category.
+* Accounting nature.
+* Operational destination.
+* Payment condition.
+* Document-level classification.
+* Line-level overrides.
+* Learned classification rules.
+* Confidence-based suggestions.
+
+Automated suggestions remain reviewable and editable.
 
 ## 21. Gmail Integration Architecture
 
 Gmail is a server-side transport integration for received fiscal documents.
 
-Current behavior includes server-side OAuth 2.0, `gmail.readonly`, message search, MIME traversal, XML attachment retrieval, duplicate/rejected tracking, controlled retry, manual synchronization, single-flight protection, and encrypted persisted integration state.
+Current behavior includes:
 
-Gmail does not directly create Purchases or Inventory movements. Periodic Gmail background synchronization has not yet been implemented.
+* Server-side OAuth 2.0.
+* `gmail.readonly`.
+* Connect/disconnect/status operations.
+* Message search.
+* MIME traversal.
+* XML attachment retrieval.
+* Per-attachment processing.
+* Duplicate and rejected-document tracking.
+* Controlled retry.
+* Manual synchronization.
+* Single-flight synchronization protection.
+* Encrypted persisted integration state.
 
-## 22. Commercial PDF Generation
+The Gmail pipeline remains:
+
+```text
+Gmail
+   ↓
+XML validation
+   ↓
+Quarantine
+   ↓
+Manual acceptance
+   ↓
+Electronic Documents
+```
+
+Gmail does not directly create Purchases or Inventory movements.
+
+A second independent read-only Gmail integration is used for bank-card vouchers.
+It targets the configured voucher mailbox and currently recognizes Banco Nacional
+`Voucher Digital` messages from the configured sender. Voucher synchronization is
+manual, single-flight, duplicate-safe by Gmail message id, and protected against
+Gmail rate limits. A synchronization cursor advances only when the run completes
+without per-message failures so transient failures remain retryable.
+
+Periodic background synchronization is intentionally not part of the current
+product behavior. Manual synchronization is the current operating model.
+
+## 22. Expenses and Bank Voucher Architecture
+
+Expenses are represented by three distinct sources that remain separate at the
+domain level:
+
+```text
+Manual Expense
+ElectronicDocument classified as OperatingExpense
+BankVoucher
+```
+
+`BankVoucher` is payment evidence, not a fiscal invoice. It may be:
+
+* `NeedsReview`
+* `Accepted`
+* `Matched`
+* `Ignored`
+
+A matched voucher links to an `ElectronicDocument` for traceability and does not
+count independently in consolidated expense totals.
+
+The consolidated expense formula is:
+
+```text
+Manual Expenses
++ processed ElectronicDocuments classified as OperatingExpense
++ Accepted BankVouchers
+= consolidated operating expenses
+```
+
+`NeedsReview`, `Matched`, and `Ignored` vouchers do not contribute independently.
+Currencies remain separate; the reporting service does not invent exchange-rate
+conversion.
+
+Voucher-to-document matching is conservative and advisory. It uses exact amount,
+currency, a bounded date window, and compatible normalized merchant/issuer names.
+The system does not auto-link a voucher to a fiscal document.
+
+## 23. Commercial PDF Generation
 
 Quotation and Sale PDFs are generated in the backend using QuestPDF.
 
@@ -613,7 +923,7 @@ The browser requests the authenticated document endpoint and downloads the retur
 
 Draft Sales do not have an official sale PDF because they do not yet have a VEN.
 
-## 23. Authentication and Authorization
+## 24. Authentication and Authorization
 
 Revestik uses ASP.NET Core Identity with cookie-based authentication.
 
@@ -626,10 +936,12 @@ Applicable mutable authenticated requests are protected with antiforgery validat
 Detailed behavior is documented in:
 
 ```text
+
 docs/security/security-overview.md
+
 ```
 
-## 24. Hosted Application Model
+## 25. Hosted Application Model
 
 During local development, Client and API run on separate development origins.
 
@@ -637,17 +949,23 @@ For the published application, ASP.NET Core serves the compiled Blazor WebAssemb
 
 Blazor routes use SPA fallback behavior while unknown `/api/*` routes remain API responses rather than returning `index.html`.
 
-## 25. External Integrations
+## 26. External Integrations
 
 External systems are kept behind server-side boundaries.
 
-Current integrations include taxpayer/location services, Google external authentication, Google Workspace Gmail read-only ingestion, Hacienda XML 4.4 recognition/local XSD validation, and the local CAByS catalog.
+Current integrations include:
+* Costa Rican taxpayer lookup.
+* Structured Costa Rican location data.
+* Google external authentication.
+* Google Workspace Gmail read-only ingestion.
+* Hacienda XML 4.4 recognition and local XSD validation.
+* Local CAByS catalog access.
 
 External integrations use the same server-side trust boundary.
 
 Inventory itself does not directly integrate with external fiscal/email systems.
 
-## 26. Deferred Electronic Invoicing Boundary
+## 27. Deferred Electronic Invoicing Boundary
 
 Direct Costa Rican electronic invoicing is not part of the current architecture.
 
@@ -655,12 +973,11 @@ Internal Sales (`VEN`) are not fiscal electronic invoices.
 
 If electronic invoicing is revisited, fiscal signing credentials, API credentials, signing operations, and Ministerio de Hacienda communication must remain exclusively server-side.
 
-## 27. Testing and Continuous Integration
+## 28. Testing and Continuous Integration
 
 Automated tests are maintained in `Revestik.Api.Tests`.
 
 Current coverage includes:
-
 * Customers.
 * Products.
 * Quotations.
@@ -672,11 +989,14 @@ Current coverage includes:
 * Unknown-cost resolution.
 * Physical counts.
 * Unit quantity rules.
-* Suppliers, Purchases, and Accounts Payable.
+* Suppliers.
+* Purchases and Accounts Payable.
 * Purchase-to-inventory receipt.
-* Electronic Documents and Hacienda XML validation.
-* Accounting classification and Gmail ingestion.
-* Received-document period summaries.
+* Electronic Documents.
+* Hacienda XML 4.4 recognition and validation.
+* Accounting classification and learned rules.
+* Gmail MIME, attachment, retry, and synchronization behavior.
+* Received-document `FechaEmision` range and period-summary behavior.
 * Authentication and CSRF.
 * SQL Server integration.
 * Concurrency.
@@ -688,14 +1008,13 @@ Current local verified baseline:
 **542 passed, 0 failed.**
 
 Current CI:
-
 1. Restores dependencies.
 2. Builds Release.
 3. Runs automated tests.
 4. Publishes the hosted application.
 5. Verifies required Blazor/runtime/static assets.
 
-## 28. Architectural Principles
+## 29. Architectural Principles
 
 ### Separation of concerns
 
@@ -737,7 +1056,7 @@ Purchases owns supplier, purchase, payment, and accounts-payable behavior.
 
 Electronic Documents owns received fiscal-document persistence and classification.
 
-Gmail owns transport/integration concerns only.
+Gmail owns transport/integration concerns only and does not become a transactional business domain.
 
 Cross-domain operations should coordinate through explicit application behavior rather than duplicating business rules across unrelated modules.
 
@@ -749,10 +1068,9 @@ New infrastructure and abstractions should solve concrete requirements rather th
 
 Deferred integrations should not delay completion and production hardening of the core business application.
 
-## 29. Current Architectural Classification
+## 30. Current Architectural Classification
 
 Revestik is a modular full-stack .NET application with:
-
 * Blazor WebAssembly client.
 * ASP.NET Core API/application host.
 * Shared HTTP contracts.
@@ -766,7 +1084,12 @@ Revestik is a modular full-stack .NET application with:
 * Traceable inventory movements.
 * Physical-count workflows.
 * Supplier, Purchase, and Accounts Payable workflows.
-* Received Electronic Documents, Hacienda XML 4.4 validation, CAByS, accounting classification, and manual Gmail ingestion.
+* Purchase-to-inventory receipt.
+* Received Electronic Documents and accounting classification.
+* Hacienda XML 4.4 recognition and local validation.
+* Local CAByS catalog.
+* Manual Gmail read-only ingestion.
+* `FechaEmision`-based received-document period summaries.
 * Automated server, persistence, security, inventory, purchase, electronic-document, integration, concurrency, and hosting tests.
 
 It is intentionally not implemented as independently deployable microservices.

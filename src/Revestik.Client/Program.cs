@@ -89,6 +89,7 @@ builder.Services.AddScoped<IQuotationApiService, QuotationApiService>();
 builder.Services.AddScoped<ISaleApiService, SaleApiService>();
 builder.Services.AddScoped<IPurchaseApiService, PurchaseApiService>();
 builder.Services.AddScoped<IExpenseApiService, ExpenseApiService>();
+builder.Services.AddScoped<IBankVoucherApiService, BankVoucherApiService>();
 builder.Services.AddScoped<IElectronicDocumentApiService, ElectronicDocumentApiService>();
 builder.Services.AddScoped<IGmailIntegrationApiService, GmailIntegrationApiService>();
 builder.Services.AddScoped<ITaxpayerApiService, TaxpayerApiService>();

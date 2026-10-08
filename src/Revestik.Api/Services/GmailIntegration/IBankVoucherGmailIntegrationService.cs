@@ -15,5 +15,8 @@ public interface IBankVoucherGmailIntegrationService
         string userId,
         CancellationToken cancellationToken);
 
+    Task<BankVoucherGmailSyncResultResponse> SyncAsync(
+        CancellationToken cancellationToken);
+
     Task DisconnectAsync(CancellationToken cancellationToken);
 }

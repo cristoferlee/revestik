@@ -13,7 +13,6 @@ Revestik aims to bring these workflows into a single system while maintaining cl
 Small businesses often manage daily operations across multiple disconnected tools.
 
 Typical information may be distributed between:
-
 * Customer records.
 * Quotations.
 * Sales records.
@@ -42,7 +41,6 @@ Users who manage customers, quotations, sales, payments, purchases, suppliers, i
 Users who require visibility into commercial activity, balances, expenses, receivables, inventory, purchases, and operational performance.
 
 ## 4. Product Goals
-
 * Centralize important business information.
 * Reduce dependence on disconnected spreadsheets and manual records.
 * Enforce consistent business rules.
@@ -58,7 +56,7 @@ Users who require visibility into commercial activity, balances, expenses, recei
 
 The application foundation, Customer domain, Quotations domain, Sales domain, Inventory core, Suppliers, Purchases, Accounts Payable, Electronic Documents, Hacienda XML 4.4 processing, CAByS, accounting classification, and manual Gmail document ingestion are implemented and verified.
 
-The Received Documents refinement is also complete, including current-calendar-month history, historical date ranges, `FechaEmision`-based period summaries, and UI improvements.
+The current Received Documents refinement is also complete, including current-calendar-month history, historical date ranges, `FechaEmision`-based period summaries, and UI improvements.
 
 The next integration focus is **periodic Gmail background synchronization**.
 
@@ -67,7 +65,6 @@ Inventory is considered functionally complete for the current product stage and 
 ## 6. Implemented Capabilities
 
 ### Authentication and Access Control
-
 * ASP.NET Core Identity.
 * Cookie-based authentication.
 * Google external authentication.
@@ -77,7 +74,6 @@ Inventory is considered functionally complete for the current product stage and 
 * Server-side secret boundary.
 
 ### Customer Management
-
 * Customer creation, retrieval, editing, deactivation, and reactivation.
 * Pagination, filtering, and search.
 * Deterministic ordering.
@@ -88,7 +84,6 @@ Inventory is considered functionally complete for the current product stage and 
 * Layered server and database integrity protections.
 
 ### Quotations
-
 * Create/edit workflow.
 * `Draft` and `Issued` states.
 * Customer snapshot on issue/reissue.
@@ -112,7 +107,6 @@ Inventory is considered functionally complete for the current product stage and 
 Quotations do not reserve or deduct inventory.
 
 ### Sales
-
 * Direct Sale Draft creation.
 * Sale Draft creation from an issued quotation.
 * `Draft`, `Issued`, and `Voided` states.
@@ -143,7 +137,6 @@ Quotations do not reserve or deduct inventory.
 The Inventory core is implemented and verified.
 
 Current capabilities include:
-
 * Configurable product categories.
 * Product catalog with search, filtering, pagination, and deterministic ordering.
 * CABYS support for physical products.
@@ -178,7 +171,6 @@ Services, transportation, installation, and other commercial charges do not crea
 Purchases are intentionally kept outside the Inventory domain. The implemented Purchases domain creates explicit stock-entry operations when valid purchase receipt affects inventory.
 
 ### External Integrations
-
 * Costa Rican taxpayer lookup.
 * Structured Costa Rican location data.
 * Google external authentication.
@@ -194,7 +186,7 @@ Current verified baseline:
 
 **542 passing tests, 0 failed.**
 
-Coverage includes customers, quotations, sales, products, inventory movements, FIFO behavior, inventory costs, physical counts, sale inventory consumption and reversal, suppliers, purchases, Accounts Payable, purchase-to-inventory receipt, Electronic Documents, Hacienda XML validation, accounting classification, Gmail ingestion, received-document period summaries, security, SQL Server persistence/concurrency, PDFs, and hosting.
+Coverage includes customers, quotations, sales, products, inventory movements, FIFO behavior, inventory costs, physical counts, sale inventory consumption and reversal, suppliers, purchases, Accounts Payable, purchase-to-inventory receipt, Electronic Documents, Hacienda XML validation, accounting classification, Gmail MIME/retry behavior, received-document period summaries, security, SQL Server persistence/concurrency, PDFs, and hosting.
 
 ## 7. Current Development Focus
 
@@ -202,29 +194,112 @@ Coverage includes customers, quotations, sales, products, inventory movements, F
 
 The Purchases domain is implemented independently from Inventory while integrating with it through explicit receipt operations.
 
-Implemented capabilities include supplier records, manual Purchase registration, product-linked lines, cash/credit terms, due dates, Purchase payments, Accounts Payable summaries, supplier Purchase history, explicit Inventory receipt, FIFO cost-layer creation, and duplicate-receipt prevention.
+Implemented capabilities include:
+
+* Supplier records and lifecycle.
+* Manual purchase registration.
+* Product-linked purchase lines.
+* Authorized product creation during purchase.
+* Purchase quantities, costs, discounts, taxes, and totals.
+* CRC and USD with exchange-rate handling.
+* Cash and credit purchases.
+* Credit terms and due dates.
+* Purchase payments.
+* Accounts Payable summaries.
+* Upcoming and overdue alerts.
+* Supplier purchase history.
+* Explicit Inventory receipt from Purchase lines.
+* FIFO cost-layer creation from valid purchase costs.
+* Prevention of duplicate Inventory application.
+* Traceability between Purchase records and resulting Inventory movements.
 
 ### Recently Completed — Received Electronic Documents
 
 Received fiscal documents are implemented as a separate concept from Purchases.
 
-Current behavior includes manual XML import, secure quarantine before canonical acceptance, Hacienda XML 4.4 recognition/local XSD validation, duplicate handling, accounting classification, learned rules, current-month History by default, explicit historical ranges, `FechaEmision`-based period summaries, and a global Pending queue.
+Current behavior includes:
 
-A Purchase remains an operational record and an Electronic Document remains a received fiscal document. Accepting an Electronic Document does not automatically create a Purchase or modify Inventory.
+* Manual XML import.
+* Secure staging/quarantine before canonical acceptance.
+* Original XML preservation.
+* Hacienda XML 4.4 document recognition and local XSD validation.
+* Duplicate detection.
+* Document, line, tax, discount, issuer, receiver, currency, totals, and economic-activity persistence.
+* Hacienda response association.
+* Accounting classification.
+* Operational destination.
+* Payment-condition classification.
+* Document-level and line-level classification.
+* Learned classification rules and confidence-based suggestions.
+* Search, review, and history workflows.
+* Current-calendar-month history by default.
+* Explicit historical date-range filtering.
+* Period summaries based on `FechaEmision`.
+* Global Pending queue independent of the selected history month.
+* Refined filters, table, empty-state, import, and accounting-category UI.
+
+A Purchase remains an operational record and an Electronic Document remains a received fiscal document.
+
+Accepting an Electronic Document does not automatically create a Purchase or modify Inventory.
 
 ### Recently Completed — Gmail Ingestion
 
-The business mailbox integration supports server-side OAuth 2.0, `gmail.readonly`, message search, MIME traversal, XML attachment retrieval, duplicate/rejected tracking, controlled retry, manual synchronization, single-flight protection, and encrypted persisted integration state.
+The business mailbox integration currently supports:
 
-### Current Focus — Periodic Gmail Background Synchronization
+* Server-side OAuth 2.0.
+* `gmail.readonly`.
+* Connect/disconnect/status operations.
+* Message search.
+* MIME traversal.
+* XML attachment retrieval.
+* Per-attachment processing.
+* Duplicate and rejected-document tracking.
+* Controlled retry.
+* Manual synchronization.
+* Single-flight synchronization protection.
+* Encrypted persisted integration state.
 
-The next integration step is periodic Gmail background synchronization while preserving the existing read-only, quarantine/manual-acceptance, duplicate-safety, retry, and single-flight boundaries.
+The Gmail integration is a transport mechanism only:
+
+```text
+Gmail
+   ↓
+XML validation
+   ↓
+Quarantine
+   ↓
+Manual acceptance
+   ↓
+Electronic Documents
+```
+
+### Manual Gmail Synchronization
+
+Manual synchronization is the current operating model.
+
+Received fiscal XML and bank vouchers use separate Gmail integration state. The
+bank-voucher mailbox is filtered to the configured sender/subject, protects against
+Gmail rate limits, remains duplicate-safe by message id, and keeps the synchronization
+cursor retryable when a run contains failures.
+
+Periodic background synchronization is intentionally deferred.
 
 ## 8. Planned Product Areas
 
 ### Expenses
 
-Planned capabilities include structured capture of operating expenses and small card expenses.
+Implemented capabilities include:
+
+* Manual expense entry.
+* Bank-voucher Gmail ingestion and review.
+* Accepted / Matched / Ignored / NeedsReview voucher states.
+* Conservative linking of bank vouchers to received fiscal documents.
+* Consolidated expense reporting across manual expenses, OperatingExpense electronic
+  documents, and accepted unmatched bank vouchers.
+* Separate currency totals without automatic exchange-rate conversion.
+
+Voucher-review pagination and immediate removal of reviewed items from the active
+queue remain UI-polish work.
 
 ### Accounts Receivable Expansion
 
@@ -237,7 +312,6 @@ A broader accounts-receivable domain may be added later if requirements expand i
 Reports will aggregate information already owned by operational domains rather than becoming the source of transactional data.
 
 Expected reporting areas include:
-
 * Purchase totals.
 * Sales totals.
 * Inventory value.
@@ -252,7 +326,6 @@ Purchase reporting is expected to use accepted purchase information and received
 The Dashboard/Main area will be a separate application area focused on presenting the most important operational information for the current period.
 
 Expected indicators may include:
-
 * Current-month sales.
 * Current-month purchases.
 * Inventory value.

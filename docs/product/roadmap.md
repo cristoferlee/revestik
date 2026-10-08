@@ -5,7 +5,6 @@
 This document describes the current implementation status and planned evolution of Revestik.
 
 Status terminology:
-
 * **Implemented** — available and verified in the current codebase.
 * **In Progress** — actively being developed.
 * **Planned** — intentionally expected but not yet implemented.
@@ -13,7 +12,6 @@ Status terminology:
 * **Deferred** — intentionally postponed.
 
 ## 2. Roadmap Principles
-
 1. Complete business workflows vertically.
 2. Protect important rules on the server.
 3. Add automated verification alongside critical behavior.
@@ -28,7 +26,6 @@ Status terminology:
 ## 3. Implemented Foundation
 
 ### Application Architecture
-
 * ASP.NET Core backend.
 * Blazor WebAssembly frontend.
 * Shared request/response contracts.
@@ -36,7 +33,6 @@ Status terminology:
 * Hosted same-origin production architecture.
 
 ### Authentication and Security
-
 * ASP.NET Core Identity.
 * Cookie-based authentication.
 * Google external authentication.
@@ -64,7 +60,6 @@ Quotations remain historical after conversion and do not modify inventory.
 **Status: Implemented**
 
 Includes:
-
 * Direct Sales.
 * Sales from issued quotations.
 * Draft/Issued/Voided lifecycle.
@@ -95,7 +90,6 @@ Includes:
 The Inventory core is complete for the current product stage.
 
 Implemented capabilities include:
-
 * Configurable product categories.
 * Product catalog management.
 * Search, filtering, pagination, and deterministic ordering.
@@ -134,7 +128,6 @@ Inventory owns physical stock behavior.
 Purchases, supplier management, email ingestion, and XML 4.4 processing intentionally remain outside the Inventory domain.
 
 ### Engineering Foundation
-
 * Automated test project.
 * Focused behavior tests.
 * Integration and hosting tests.
@@ -188,7 +181,30 @@ Further Inventory changes should be driven by real defects, new requirements, or
 
 **Status: Implemented**
 
-Purchases / Suppliers are implemented as dedicated operational workflows separate from Inventory, with explicit Purchase-to-Inventory receipt, FIFO cost capture, payment/AP behavior, supplier history, and duplicate-receipt protection.
+Purchases / Suppliers are implemented as dedicated operational workflows separate from Inventory.
+
+Implemented areas include:
+
+* Supplier records.
+* Supplier search and lifecycle rules.
+* Manual purchase registration.
+* Product-linked purchase lines.
+* Authorized product creation during Purchase entry.
+* Purchase quantities, costs, discounts, taxes, and totals.
+* CRC and USD with exchange-rate support.
+* Cash and credit Purchases.
+* Credit terms and due dates.
+* Purchase payments.
+* Accounts Payable summaries.
+* Upcoming and overdue alerts.
+* Supplier Purchase history.
+* Explicit Purchase-to-Inventory receipt.
+* FIFO cost-layer creation from valid Purchase costs.
+* Traceability between Purchases and resulting Inventory movements.
+* Prevention of duplicate Inventory application.
+* Transactional consistency for critical operations.
+
+Inventory remains responsible only for physical-stock behavior.
 
 ## 6. Recently Completed — Received Electronic Documents
 
@@ -196,41 +212,106 @@ Purchases / Suppliers are implemented as dedicated operational workflows separat
 
 **Status: Implemented**
 
-Received fiscal-document processing is implemented as a dedicated Electronic Documents workflow with manual XML import, quarantine, local XSD validation, duplicate/rejected handling, accounting classification, learned rules, and manual review/acceptance.
+Received fiscal-document processing now exists as a dedicated Electronic Documents workflow rather than being embedded inside Purchases.
 
-Electronic Documents do not automatically create Purchases or Inventory movements. `FechaEmision` is the economic date.
+Implemented areas include:
+
+* Manual fiscal XML import.
+* Secure staging/quarantine before canonical acceptance.
+* Original XML preservation.
+* Document-family recognition.
+* Local Hacienda XSD validation.
+* Secure XML parsing.
+* Detection of duplicate/rejected documents.
+* Issuer, receiver, currency, totals, economic activity, lines, taxes, and discounts.
+* Hacienda response association.
+* Accounting classification.
+* Operational destination.
+* Payment-condition classification.
+* Document-level and line-level classification.
+* Learned classification rules.
+* Confidence-based suggestions.
+* Manual review/acceptance.
+
+Electronic Documents do not automatically create Purchases or Inventory movements.
+
+`FechaEmision` is the economic date of a received fiscal document.
 
 ### CAByS 2025
 
 **Status: Implemented**
 
-The local versioned CAByS catalog supports product and received-document workflows.
+The local versioned CAByS catalog supports product and received-document workflows, including code/description lookup and hierarchical classification information.
 
 ### Manual Gmail Ingestion
 
 **Status: Implemented**
 
-The Gmail integration supports server-side OAuth 2.0, `gmail.readonly`, MIME traversal, XML attachment retrieval, duplicate/rejected tracking, controlled retry, manual synchronization, single-flight protection, and encrypted persisted integration state.
+The Google Workspace Gmail integration supports:
+
+* Server-side OAuth 2.0.
+* `gmail.readonly`.
+* Connect/disconnect/status.
+* Message search.
+* MIME traversal.
+* XML attachment retrieval.
+* Per-attachment processing.
+* Duplicate/rejected tracking.
+* Controlled retry.
+* Manual synchronization.
+* Single-flight synchronization protection.
+* Encrypted persisted integration state.
+
+Gmail is transport only and does not directly create business transactions.
 
 ### Received Documents Refinement
 
 **Status: Implemented**
 
-History defaults to the current calendar month, explicit historical ranges are supported, period summaries use `FechaEmision`, Pending remains global, and the filter/category/review UI has been refined.
+The current refinement checkpoint includes:
 
-### Current Focus — Periodic Gmail Background Synchronization
+* Current-calendar-month History by default.
+* Explicit historical date-range filtering.
+* `FechaEmision`-based period selection.
+* Period accounting/financial summaries.
+* Invalid date-range validation.
+* Global Pending queue independent of the selected History period.
+* Filter UI improvements.
+* Accounting-category management UI improvements.
+* Received-document review UX refinement.
 
-**Status: Next integration step**
+### Manual Gmail Synchronization
 
-The next integration step is periodic Gmail background synchronization using the existing ingestion boundary while preserving read-only access, quarantine/manual acceptance, duplicate safety, retry, and single-flight protection.
+**Status: Implemented / current operating model**
+
+Both received-document Gmail ingestion and bank-voucher Gmail ingestion are manual
+user-triggered workflows.
+
+The bank-voucher mailbox integration additionally includes sender/subject filtering,
+Gmail-rate-limit protection, duplicate safety by Gmail message id, and a retry-safe
+synchronization cursor.
+
+Periodic background synchronization is intentionally deferred rather than being the
+next product step.
+
 
 ## 7. Near-Term Domains
 
 ### Expenses
 
-**Status: Planned**
+**Status: Implemented**
 
-Expected capabilities include structured capture of operating expenses and small card expenses.
+The current module supports:
+
+* Manual operating-expense capture.
+* Banco Nacional card-voucher ingestion through a separate Gmail mailbox.
+* Voucher review states: NeedsReview, Accepted, Matched, and Ignored.
+* Conservative voucher-to-ElectronicDocument matching.
+* Consolidated expense totals without voucher/XML double counting.
+* Currency-separated totals with no invented conversion.
+
+Pending UX polish includes paginating the voucher review queue and removing reviewed
+items from the active review view immediately after an action.
 
 ### Accounts Receivable Expansion
 
@@ -247,7 +328,6 @@ A broader receivables domain should be introduced only if requirements expand in
 Reports should aggregate data already owned by operational domains.
 
 Expected areas include:
-
 * Purchase totals.
 * Sales totals.
 * Inventory value.
@@ -265,7 +345,6 @@ Reports should not become the source of transactional truth.
 The Dashboard/Main area should surface important current-period operational information.
 
 Expected indicators may include:
-
 * Current-month sales.
 * Current-month purchases.
 * Inventory value.
@@ -281,7 +360,6 @@ Dashboard logic should consume information from source domains rather than own t
 **Status: Planned**
 
 Expected areas may include:
-
 * Company information.
 * Business preferences.
 * User administration.
@@ -295,7 +373,6 @@ Expected areas may include:
 A separate public-facing website is planned for final customers.
 
 Its expected purpose includes:
-
 * Presentation of completed projects.
 * Company information.
 * Customer-facing commercial content.
@@ -342,7 +419,6 @@ Performance optimization can be revisited after the main internal application an
 ## 9. Production Infrastructure
 
 Before Revestik becomes authoritative for important production operations, select and document:
-
 * Hosting platform.
 * Production SQL Server environment.
 * Secret management.
@@ -362,22 +438,39 @@ Authorization should evolve with real organizational responsibilities.
 Potential capabilities include:
 
 ```text
+
 View customers
+
 Manage customers
+
 View quotations
+
 Manage quotations
+
 View sales
+
 Manage sales
+
 View inventory
+
 Manage inventory
+
 Manage physical counts
+
 Resolve inventory costs
+
 Register purchases
+
 Manage suppliers
+
 Register payments
+
 View reports
+
 Manage users
+
 Manage configuration
+
 ```
 
 Authorization should continue to be introduced according to real responsibilities rather than through speculative role complexity.
@@ -387,7 +480,6 @@ Authorization should continue to be introduced according to real responsibilitie
 Sales and Inventory already preserve important operational history.
 
 Current examples include:
-
 * Voided payments remain historical.
 * Voided sales remain historical.
 * Replacement sales preserve the original issued sale.
@@ -402,20 +494,35 @@ Audit infrastructure should be introduced when domain requirements justify it.
 
 ## 12. Testing Expansion
 
-Inventory, Purchases, Accounts Payable, Electronic Documents, Hacienda XML 4.4, Gmail ingestion, and received-document period-summary coverage are part of the implemented baseline.
+Inventory, Purchases, Accounts Payable, Electronic Documents, Hacienda XML 4.4, Gmail ingestion, and received-document period-summary coverage are now part of the implemented baseline.
 
-Upcoming testing priorities include periodic Gmail background synchronization, scheduled-run concurrency/single-flight behavior, retry/recovery across repeated runs, Expenses/Reports behavior when introduced, expanded authorization coverage, migration verification, and selected browser automation.
+Upcoming testing priorities include:
+
+1. Periodic Gmail background-synchronization behavior when implemented.
+2. Background execution concurrency and single-flight protection.
+3. Retry/recovery behavior across repeated scheduled runs.
+4. Expanded receivables behavior if introduced.
+5. Expense classification/storage.
+6. Reports and aggregation behavior.
+7. Expanded authorization coverage.
+8. Broader database migration verification.
+9. Critical browser automation where justified.
+
+Test-suite runtime optimization is intentionally not a current functional-development priority.
 
 ## 13. Performance and Background Processing
 
 Performance work should be measurement-driven.
 
-Manual Gmail ingestion is implemented. Periodic Gmail background synchronization is now the concrete next asynchronous requirement and should reuse the existing ingestion pipeline rather than introduce a second model.
+Background infrastructure should only be added for concrete asynchronous requirements.
+
+Manual Gmail ingestion is already implemented. Periodic Gmail background synchronization is now the concrete next asynchronous requirement.
+
+The background implementation should reuse the existing Gmail ingestion pipeline rather than introduce a second parallel ingestion model.
 
 ## 14. Definition of Done for New Domains
 
 A substantial domain should be evaluated against:
-
 * Business rules documented.
 * Request validation implemented.
 * Server-side rules enforced.

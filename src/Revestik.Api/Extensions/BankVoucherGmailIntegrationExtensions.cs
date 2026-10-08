@@ -1,4 +1,5 @@
 using Revestik.Api.Configuration;
+using Revestik.Api.Services.BankVouchers;
 using Revestik.Api.Services.GmailIntegration;
 
 namespace Revestik.Api.Extensions;
@@ -22,6 +23,9 @@ public static class BankVoucherGmailIntegrationExtensions
         services.AddSingleton<IBankVoucherGmailIntegrationStateStore, BankVoucherGmailIntegrationStateStore>();
         services.AddSingleton<IBankVoucherGmailOAuthStateService, BankVoucherGmailOAuthStateService>();
         services.AddSingleton<BankVoucherGmailSyncCoordinator>();
+
+        services.AddSingleton<IBankVoucherEmailParser, BancoNacionalBankVoucherEmailParser>();
+        services.AddScoped<IBankVoucherIngestionService, BankVoucherIngestionService>();
         services.AddScoped<IBankVoucherGmailIntegrationService, BankVoucherGmailIntegrationService>();
 
         return services;

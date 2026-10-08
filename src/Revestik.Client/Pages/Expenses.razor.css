@@ -4,58 +4,147 @@
 }
 
 .page-header,
-.section-heading {
+.section-heading,
+.voucher-main,
+.voucher-title-row,
+.candidate-row {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 20px;
+    gap: 16px;
 }
 
 .page-header h1,
 .section-heading h2 {
-    margin-bottom: 6px;
-}
-
-.page-header h1 {
-    font-size: clamp(1.8rem, 4vw, 2.4rem);
+    margin: 4px 0 6px;
 }
 
 .page-header p,
-.section-heading p {
+.section-heading p,
+.voucher-item small,
+.voucher-note {
     margin: 0;
     color: var(--color-text-secondary);
 }
 
+.section-kicker {
+    color: var(--color-primary-dark);
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.module-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.module-nav-button {
+    padding: 10px 15px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.module-nav-button.active {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+}
+
+.nav-count {
+    display: inline-flex;
+    min-width: 22px;
+    height: 22px;
+    margin-left: 6px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--color-primary);
+    color: #111827;
+    font-size: .75rem;
+}
+
 .expense-card,
-.summary-card {
-    padding: clamp(20px, 4vw, 28px);
+.summary-card,
+.voucher-item {
+    padding: clamp(18px, 3vw, 26px);
     border: 1px solid var(--color-border);
     border-radius: 15px;
-    background-color: var(--color-surface);
+    background: var(--color-surface);
     box-shadow: var(--shadow-card);
 }
 
 .summary-grid {
     display: grid;
-    grid-template-columns: minmax(240px, 360px);
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 16px;
 }
 
 .summary-card {
     display: grid;
-    gap: 6px;
+    gap: 12px;
 }
 
-.summary-card span,
-.summary-card small {
+.summary-heading {
+    display: grid;
+    gap: 4px;
+}
+
+.summary-heading span,
+.summary-card > span,
+.summary-card small,
+.status-grid span,
+.gmail-status-grid span {
     color: var(--color-text-secondary);
 }
 
-.summary-card strong {
-    font-size: 1.8rem;
+.summary-heading strong,
+.summary-card > strong {
+    font-size: 1.7rem;
 }
 
-.status-message {
+.summary-breakdown {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+}
+
+.summary-breakdown div,
+.status-grid div,
+.gmail-status-grid div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.summary-breakdown dt,
+.summary-breakdown dd {
+    margin: 0;
+}
+
+.status-grid,
+.gmail-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.status-grid div,
+.gmail-status-grid div {
+    padding: 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    flex-direction: column;
+}
+
+.status-message,
+.review-warning {
     padding: 14px 16px;
     border-left: 4px solid;
     border-radius: 10px;
@@ -63,21 +152,32 @@
 
 .error-message {
     border-left-color: var(--color-danger);
-    background-color: #fef2f2;
+    background: #fef2f2;
     color: #991b1b;
 }
 
 .success-message {
     border-left-color: #16a34a;
-    background-color: #f0fdf4;
+    background: #f0fdf4;
     color: #166534;
+}
+
+.review-warning {
+    margin-top: 16px;
+    border-left-color: #d97706;
+    background: #fffbeb;
+    color: #78350f;
+}
+
+.review-warning p {
+    margin: 6px 0 0;
 }
 
 .form-grid,
 .filters-grid {
     display: grid;
     gap: 18px;
-    margin-top: 20px;
+    margin-top: 18px;
 }
 
 .form-grid {
@@ -85,7 +185,7 @@
 }
 
 .filters-grid {
-    grid-template-columns: minmax(240px, 1.5fr) repeat(2, minmax(170px, 0.75fr));
+    grid-template-columns: minmax(240px, 1.5fr) repeat(2, minmax(170px, .75fr));
 }
 
 .form-group {
@@ -95,7 +195,7 @@
 }
 
 .form-group label {
-    font-size: 0.9rem;
+    font-size: .9rem;
     font-weight: 600;
 }
 
@@ -107,40 +207,23 @@
     padding: 11px 12px;
     border: 1px solid var(--color-border);
     border-radius: 9px;
-    background-color: var(--color-surface);
+    background: var(--color-surface);
     color: var(--color-text);
-}
-
-.form-group ::deep textarea {
-    min-height: 110px;
-    resize: vertical;
-}
-
-.form-group ::deep input:focus,
-.form-group ::deep textarea:focus,
-.search-group input:focus {
-    border-color: var(--color-primary);
-    outline: none;
-    box-shadow: 0 0 0 3px rgb(245 158 11 / 15%);
 }
 
 .form-wide {
     grid-column: 1 / -1;
 }
 
-::deep .validation-message,
-::deep .validation-errors {
-    color: var(--color-danger);
-    font-size: 0.85rem;
-}
-
 .form-actions,
-.filter-actions {
+.filter-actions,
+.gmail-actions,
+.voucher-actions {
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 10px;
-    margin-top: 20px;
+    margin-top: 18px;
 }
 
 .primary-button,
@@ -154,35 +237,25 @@
 }
 
 .primary-button {
-    background-color: var(--color-primary);
+    background: var(--color-primary);
     color: #111827;
-}
-
-.primary-button:hover {
-    background-color: var(--color-primary-dark);
-    color: #ffffff;
 }
 
 .secondary-button {
     border-color: var(--color-border);
-    background-color: var(--color-surface);
+    background: var(--color-surface);
     color: var(--color-text);
-}
-
-.secondary-button:hover {
-    border-color: var(--color-navigation-hover);
-    background-color: var(--color-background);
 }
 
 .primary-button:disabled,
 .secondary-button:disabled {
     cursor: not-allowed;
-    opacity: 0.6;
+    opacity: .6;
 }
 
 .table-container {
     width: 100%;
-    margin-top: 20px;
+    margin-top: 18px;
     overflow-x: auto;
 }
 
@@ -197,25 +270,11 @@ td {
     padding: 14px 12px;
     border-bottom: 1px solid var(--color-border);
     text-align: left;
-    vertical-align: top;
 }
 
 th {
-    background-color: var(--color-navigation);
-    color: #ffffff;
-    font-size: 0.875rem;
-    font-weight: 600;
-}
-
-tbody tr:hover {
-    background-color: var(--color-primary-light);
-}
-
-.empty-state {
-    margin: 0;
-    padding: 30px 15px;
-    color: var(--color-text-secondary);
-    text-align: center;
+    background: var(--color-navigation);
+    color: #fff;
 }
 
 .pagination-controls {
@@ -223,20 +282,93 @@ tbody tr:hover {
     align-items: center;
     justify-content: center;
     gap: 16px;
-    margin-top: 20px;
+    margin-top: 18px;
 }
 
-.pagination-controls span {
-    min-width: 130px;
+.voucher-list {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+}
+
+.voucher-item {
+    box-shadow: none;
+}
+
+.voucher-title-row {
+    justify-content: flex-start;
+    align-items: center;
+    gap: 10px;
+}
+
+.voucher-item small {
+    display: block;
+    margin-top: 4px;
+}
+
+.voucher-amount {
+    white-space: nowrap;
+    font-size: 1.2rem;
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 700;
+}
+
+.status-review {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-accepted {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-matched {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.status-ignored {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+.candidate-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.candidate-row {
+    align-items: center;
+    padding: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-background);
+}
+
+.voucher-note {
+    margin-top: 14px;
+}
+
+.empty-state {
+    padding: 28px 12px;
     color: var(--color-text-secondary);
     text-align: center;
 }
 
 @media (max-width: 768px) {
     .page-header,
-    .section-heading {
-        align-items: stretch;
+    .section-heading,
+    .voucher-main,
+    .candidate-row {
         flex-direction: column;
+        align-items: stretch;
     }
 
     .form-grid,
@@ -250,16 +382,10 @@ tbody tr:hover {
 
     .page-header button,
     .form-actions button,
-    .filter-actions button {
+    .filter-actions button,
+    .gmail-actions button,
+    .voucher-actions button,
+    .candidate-row button {
         width: 100%;
-    }
-
-    .form-actions,
-    .filter-actions {
-        flex-direction: column-reverse;
-    }
-
-    .pagination-controls {
-        justify-content: space-between;
     }
 }

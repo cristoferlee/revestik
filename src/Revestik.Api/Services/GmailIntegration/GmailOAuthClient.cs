@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Json;
 
 namespace Revestik.Api.Services.GmailIntegration;
@@ -119,6 +120,76 @@ internal sealed class GmailOAuthClient(IHttpClientFactory httpClientFactory)
         return profile.EmailAddress;
     }
 
+    public async Task<IReadOnlyList<string>> ListMessageIdsAsync(
+        string accessToken,
+        string query,
+        int maxMessages,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<string>();
+        string? pageToken = null;
+        var maximum = Math.Clamp(maxMessages, 1, 500);
+
+        do
+        {
+            var remaining = maximum - results.Count;
+            if (remaining <= 0)
+                break;
+
+            var url = AddQueryString(
+                $"{GmailApiBaseUrl}users/me/messages",
+                new Dictionary<string, string?>
+                {
+                    ["q"] = query,
+                    ["maxResults"] = Math.Min(remaining, 100)
+                        .ToString(CultureInfo.InvariantCulture),
+                    ["pageToken"] = pageToken,
+                    ["includeSpamTrash"] = "false"
+                });
+
+            var page = await GetAuthorizedJsonAsync<GmailMessageListDto>(
+                accessToken,
+                url,
+                cancellationToken);
+
+            results.AddRange(
+                page.Messages
+                    .Select(x => x.Id)
+                    .Where(x => !string.IsNullOrWhiteSpace(x)));
+
+            pageToken = page.NextPageToken;
+        }
+        while (!string.IsNullOrWhiteSpace(pageToken) &&
+               results.Count < maximum);
+
+        return results;
+    }
+
+    public Task<GmailMessageDto> GetMessageAsync(
+        string accessToken,
+        string messageId,
+        CancellationToken cancellationToken) =>
+        GetAuthorizedJsonAsync<GmailMessageDto>(
+            accessToken,
+            AddQueryString(
+                $"{GmailApiBaseUrl}users/me/messages/{Uri.EscapeDataString(messageId)}",
+                new Dictionary<string, string?> { ["format"] = "full" }),
+            cancellationToken);
+
+    public async Task<string> GetMessageAttachmentDataAsync(
+        string accessToken,
+        string messageId,
+        string attachmentId,
+        CancellationToken cancellationToken)
+    {
+        var attachment = await GetAuthorizedJsonAsync<GmailAttachmentDto>(
+            accessToken,
+            $"{GmailApiBaseUrl}users/me/messages/{Uri.EscapeDataString(messageId)}/attachments/{Uri.EscapeDataString(attachmentId)}",
+            cancellationToken);
+
+        return attachment.Data;
+    }
+
     public async Task<bool> TryRevokeAsync(
         string token,
         CancellationToken cancellationToken)
@@ -144,21 +215,79 @@ internal sealed class GmailOAuthClient(IHttpClientFactory httpClientFactory)
         CancellationToken cancellationToken)
     {
         using var client = httpClientFactory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
-        using var response = await client.SendAsync(request, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        const int maxAttempts = 3;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue(
+                    "Bearer",
+                    accessToken);
+
+            using var response = await client.SendAsync(
+                request,
+                cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<T>(
+                           cancellationToken)
+                       ?? throw new GmailIntegrationException(
+                           "Gmail API devolvió una respuesta vacía.");
+            }
+
+            var body = await response.Content.ReadAsStringAsync(
+                cancellationToken);
+
+            if (IsRateLimitResponse(response.StatusCode, body))
+            {
+                if (attempt < maxAttempts)
+                {
+                    await Task.Delay(
+                        TimeSpan.FromSeconds(Math.Pow(2, attempt - 1)),
+                        cancellationToken);
+
+                    continue;
+                }
+
+                throw new GmailRateLimitException(
+                    "Gmail alcanzó temporalmente el límite de solicitudes. " +
+                    "La sincronización se detuvo para evitar más errores. " +
+                    "Inténtalo nuevamente en unos minutos.");
+            }
+
             throw new GmailIntegrationException(
                 $"Gmail API devolvió HTTP {(int)response.StatusCode}. {Truncate(body, 180)}");
         }
 
-        return await response.Content.ReadFromJsonAsync<T>(cancellationToken)
-            ?? throw new GmailIntegrationException(
-                "Gmail API devolvió una respuesta vacía.");
+        throw new GmailIntegrationException(
+            "Gmail API no pudo completar la solicitud.");
+    }
+
+    private static bool IsRateLimitResponse(
+        System.Net.HttpStatusCode statusCode,
+        string body)
+    {
+        if (statusCode != System.Net.HttpStatusCode.Forbidden &&
+            statusCode != System.Net.HttpStatusCode.TooManyRequests)
+        {
+            return false;
+        }
+
+        return body.Contains(
+                   "userRateLimitExceeded",
+                   StringComparison.OrdinalIgnoreCase) ||
+               body.Contains(
+                   "rateLimitExceeded",
+                   StringComparison.OrdinalIgnoreCase) ||
+               body.Contains(
+                   "Quota exceeded",
+                   StringComparison.OrdinalIgnoreCase) ||
+               body.Contains(
+                   "Too Many Requests",
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private static string Truncate(string value, int maxLength) =>

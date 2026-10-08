@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Revestik.Client.Services.Expenses;
 using Revestik.Shared.Expenses;
+using Revestik.Shared.Integrations.Gmail;
 
 namespace Revestik.Client.Pages;
 
@@ -15,18 +16,33 @@ public partial class Expenses : ComponentBase, IDisposable
     };
 
     private IReadOnlyList<ExpenseListItemResponse> expenses = [];
+    private IReadOnlyList<BankVoucherReviewItemResponse> bankVouchers = [];
     private ExpenseCreateRequest formModel = CreateDefaultForm();
-    private ExpenseSummaryResponse summary = new(0, 0m);
 
+    private ExpenseSummaryResponse summary = new(0, 0m);
+    private ExpenseConsolidatedSummaryResponse consolidatedSummary =
+        new([], 0, 0, 0, 0);
+
+    private GmailMailboxStatusResponse gmailStatus =
+        new(false, false, "revestikcr@gmail.com", null, null, null, null, false);
+
+    private ExpenseView activeView = ExpenseView.Overview;
     private string? errorMessage;
     private string? successMessage;
     private int totalPages = 1;
     private bool isFormOpen;
     private bool isLoading;
     private bool isSaving;
+    private bool isVoucherBusy;
 
     [Inject]
     private IExpenseApiService ExpenseApiService { get; set; } = default!;
+
+    [Inject]
+    private IBankVoucherApiService BankVoucherApiService { get; set; } = default!;
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = default!;
 
     private bool CanGoPrevious => !isLoading && listRequest.Page > 1;
     private bool CanGoNext => !isLoading && listRequest.Page < totalPages;
@@ -37,6 +53,68 @@ public partial class Expenses : ComponentBase, IDisposable
         await LoadAsync();
     }
 
+    private async Task LoadAsync()
+    {
+        if (isLoading)
+            return;
+
+        errorMessage = null;
+        isLoading = true;
+
+        try
+        {
+            var token = cancellationTokenSource.Token;
+            var summaryRequest = new ExpenseSummaryRequest
+            {
+                DateFrom = listRequest.DateFrom,
+                DateTo = listRequest.DateTo
+            };
+
+            var pageTask = ExpenseApiService.GetPageAsync(listRequest, token);
+            var summaryTask = ExpenseApiService.GetSummaryAsync(summaryRequest, token);
+            var consolidatedTask =
+                ExpenseApiService.GetConsolidatedSummaryAsync(summaryRequest, token);
+            var vouchersTask = BankVoucherApiService.GetVouchersAsync(
+                new BankVoucherListRequest
+                {
+                    DateFrom = listRequest.DateFrom,
+                    DateTo = listRequest.DateTo
+                },
+                token);
+            var gmailTask = BankVoucherApiService.GetGmailStatusAsync(token);
+
+            await Task.WhenAll(
+                pageTask,
+                summaryTask,
+                consolidatedTask,
+                vouchersTask,
+                gmailTask);
+
+            var page = await pageTask;
+            expenses = page.Items;
+            summary = await summaryTask;
+            consolidatedSummary = await consolidatedTask;
+            bankVouchers = await vouchersTask;
+            gmailStatus = await gmailTask;
+
+            totalPages = Math.Max(
+                1,
+                (int)Math.Ceiling(
+                    page.TotalCount / (double)listRequest.PageSize));
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
     private void ToggleForm()
     {
         isFormOpen = !isFormOpen;
@@ -44,9 +122,7 @@ public partial class Expenses : ComponentBase, IDisposable
         successMessage = null;
 
         if (isFormOpen)
-        {
             formModel = CreateDefaultForm();
-        }
     }
 
     private void CloseForm()
@@ -58,9 +134,7 @@ public partial class Expenses : ComponentBase, IDisposable
     private async Task SaveExpenseAsync()
     {
         if (isSaving)
-        {
             return;
-        }
 
         errorMessage = null;
         successMessage = null;
@@ -78,17 +152,135 @@ public partial class Expenses : ComponentBase, IDisposable
             listRequest.Page = 1;
             await LoadAsync();
         }
-        catch (OperationCanceledException)
+        catch (Exception exception)
         {
-        }
-        catch (HttpRequestException)
-        {
-            errorMessage =
-                "No fue posible registrar el gasto. Revisa los datos e inténtalo nuevamente.";
+            errorMessage = exception.Message;
         }
         finally
         {
             isSaving = false;
+        }
+    }
+
+    private async Task ConnectVoucherGmailAsync()
+    {
+        isVoucherBusy = true;
+        errorMessage = null;
+
+        try
+        {
+            var url = await BankVoucherApiService.GetAuthorizationUrlAsync(
+                cancellationTokenSource.Token);
+
+            Navigation.NavigateTo(url, forceLoad: true);
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+            isVoucherBusy = false;
+        }
+    }
+
+    private async Task SyncVouchersAsync()
+    {
+        isVoucherBusy = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var result = await BankVoucherApiService.SyncAsync(
+                cancellationTokenSource.Token);
+
+            successMessage =
+                $"Sincronización completa: {result.Imported} importado(s), " +
+                $"{result.Duplicates} duplicado(s), " +
+                $"{result.Unrecognized} no reconocido(s), " +
+                $"{result.Failed} fallo(s).";
+
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isVoucherBusy = false;
+        }
+    }
+
+    private async Task DisconnectVoucherGmailAsync()
+    {
+        isVoucherBusy = true;
+        errorMessage = null;
+
+        try
+        {
+            await BankVoucherApiService.DisconnectAsync(
+                cancellationTokenSource.Token);
+
+            successMessage = "Gmail de vouchers desconectado.";
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isVoucherBusy = false;
+        }
+    }
+
+    private Task AcceptVoucherAsync(int id) =>
+        ExecuteVoucherActionAsync(
+            () => BankVoucherApiService.AcceptAsync(
+                id,
+                cancellationTokenSource.Token),
+            "Voucher aceptado.");
+
+    private Task IgnoreVoucherAsync(int id) =>
+        ExecuteVoucherActionAsync(
+            () => BankVoucherApiService.IgnoreAsync(
+                id,
+                cancellationTokenSource.Token),
+            "Voucher ignorado.");
+
+    private Task MatchVoucherAsync(
+        int id,
+        int electronicDocumentId) =>
+        ExecuteVoucherActionAsync(
+            () => BankVoucherApiService.MatchAsync(
+                id,
+                electronicDocumentId,
+                cancellationTokenSource.Token),
+            "Voucher vinculado con la factura electrónica.");
+
+    private async Task ExecuteVoucherActionAsync(
+        Func<Task> action,
+        string success)
+    {
+        if (isVoucherBusy)
+            return;
+
+        isVoucherBusy = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await action();
+            successMessage = success;
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isVoucherBusy = false;
         }
     }
 
@@ -109,116 +301,19 @@ public partial class Expenses : ComponentBase, IDisposable
     private async Task PreviousPageAsync()
     {
         if (!CanGoPrevious)
-        {
             return;
-        }
 
         listRequest.Page--;
-        await LoadPageAsync();
+        await LoadAsync();
     }
 
     private async Task NextPageAsync()
     {
         if (!CanGoNext)
-        {
             return;
-        }
 
         listRequest.Page++;
-        await LoadPageAsync();
-    }
-
-    private async Task LoadAsync()
-    {
-        if (isLoading)
-        {
-            return;
-        }
-
-        errorMessage = null;
-        isLoading = true;
-
-        try
-        {
-            var token = cancellationTokenSource.Token;
-            var pageTask = ExpenseApiService.GetPageAsync(listRequest, token);
-            var summaryTask = ExpenseApiService.GetSummaryAsync(
-                new ExpenseSummaryRequest
-                {
-                    DateFrom = listRequest.DateFrom,
-                    DateTo = listRequest.DateTo
-                },
-                token);
-
-            await Task.WhenAll(pageTask, summaryTask);
-
-            var page = await pageTask;
-            summary = await summaryTask;
-            expenses = page.Items;
-            totalPages = Math.Max(
-                1,
-                (int)Math.Ceiling(
-                    page.TotalCount / (double)listRequest.PageSize));
-
-            if (listRequest.Page > totalPages)
-            {
-                listRequest.Page = totalPages;
-                await LoadPageCoreAsync(token);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (HttpRequestException)
-        {
-            errorMessage =
-                "No fue posible cargar los gastos. Inténtalo nuevamente.";
-        }
-        finally
-        {
-            isLoading = false;
-        }
-    }
-
-    private async Task LoadPageAsync()
-    {
-        if (isLoading)
-        {
-            return;
-        }
-
-        errorMessage = null;
-        isLoading = true;
-
-        try
-        {
-            await LoadPageCoreAsync(cancellationTokenSource.Token);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (HttpRequestException)
-        {
-            errorMessage =
-                "No fue posible cargar los gastos. Inténtalo nuevamente.";
-        }
-        finally
-        {
-            isLoading = false;
-        }
-    }
-
-    private async Task LoadPageCoreAsync(CancellationToken cancellationToken)
-    {
-        var page = await ExpenseApiService.GetPageAsync(
-            listRequest,
-            cancellationToken);
-
-        expenses = page.Items;
-        totalPages = Math.Max(
-            1,
-            (int)Math.Ceiling(
-                page.TotalCount / (double)listRequest.PageSize));
+        await LoadAsync();
     }
 
     private void SetCurrentMonth()
@@ -228,6 +323,43 @@ public partial class Expenses : ComponentBase, IDisposable
         listRequest.DateFrom = firstDay;
         listRequest.DateTo = firstDay.AddMonths(1).AddDays(-1);
     }
+
+    private string GetGmailStatusLabel() =>
+        gmailStatus.IsConnected
+            ? "Conectado"
+            : gmailStatus.IsConfigured
+                ? "No conectado"
+                : "Sin credenciales";
+
+    private static string FormatSyncDate(DateTime? value) =>
+        value.HasValue
+            ? value.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+            : "Aún no realizada";
+
+    private static string FormatMoney(string currency, decimal amount) =>
+        currency.Equals("CRC", StringComparison.OrdinalIgnoreCase)
+            ? $"₡ {amount:N2}"
+            : $"{currency} {amount:N2}";
+
+    private static string GetVoucherStatusLabel(BankVoucherStatus status) =>
+        status switch
+        {
+            BankVoucherStatus.Accepted => "Aceptado",
+            BankVoucherStatus.NeedsReview => "Por revisar",
+            BankVoucherStatus.Matched => "Vinculado",
+            BankVoucherStatus.Ignored => "Ignorado",
+            _ => status.ToString()
+        };
+
+    private static string GetVoucherStatusClass(BankVoucherStatus status) =>
+        status switch
+        {
+            BankVoucherStatus.Accepted => "status-accepted",
+            BankVoucherStatus.NeedsReview => "status-review",
+            BankVoucherStatus.Matched => "status-matched",
+            BankVoucherStatus.Ignored => "status-ignored",
+            _ => string.Empty
+        };
 
     private static ExpenseCreateRequest CreateDefaultForm() =>
         new()
@@ -239,5 +371,12 @@ public partial class Expenses : ComponentBase, IDisposable
     {
         cancellationTokenSource.Cancel();
         cancellationTokenSource.Dispose();
+    }
+
+    private enum ExpenseView
+    {
+        Overview,
+        Manual,
+        Vouchers
     }
 }

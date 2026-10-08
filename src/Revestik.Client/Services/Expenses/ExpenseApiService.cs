@@ -33,7 +33,7 @@ public sealed class ExpenseApiService(HttpClient httpClient)
         CancellationToken cancellationToken = default)
     {
         using var response = await httpClient.GetAsync(
-            BuildSummaryUrl(request),
+            BuildSummaryUrl("api/expenses/summary", request),
             cancellationToken);
 
         response.EnsureSuccessStatusCode();
@@ -42,6 +42,24 @@ public sealed class ExpenseApiService(HttpClient httpClient)
             .ReadFromJsonAsync<ExpenseSummaryResponse>(
                 cancellationToken)
             ?? new ExpenseSummaryResponse(0, 0m);
+    }
+
+    public async Task<ExpenseConsolidatedSummaryResponse> GetConsolidatedSummaryAsync(
+        ExpenseSummaryRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.GetAsync(
+            BuildSummaryUrl(
+                "api/expenses/consolidated-summary",
+                request),
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content
+            .ReadFromJsonAsync<ExpenseConsolidatedSummaryResponse>(
+                cancellationToken)
+            ?? new ExpenseConsolidatedSummaryResponse([], 0, 0, 0, 0);
     }
 
     public async Task<ExpenseResponse> CreateAsync(
@@ -67,9 +85,7 @@ public sealed class ExpenseApiService(HttpClient httpClient)
         var parameters = new List<string>();
 
         if (!string.IsNullOrWhiteSpace(request.Search))
-        {
             Add(parameters, "Search", request.Search.Trim());
-        }
 
         AddDate(parameters, "DateFrom", request.DateFrom);
         AddDate(parameters, "DateTo", request.DateTo);
@@ -85,15 +101,17 @@ public sealed class ExpenseApiService(HttpClient httpClient)
         return $"api/expenses?{string.Join("&", parameters)}";
     }
 
-    private static string BuildSummaryUrl(ExpenseSummaryRequest request)
+    private static string BuildSummaryUrl(
+        string baseUrl,
+        ExpenseSummaryRequest request)
     {
         var parameters = new List<string>();
         AddDate(parameters, "DateFrom", request.DateFrom);
         AddDate(parameters, "DateTo", request.DateTo);
 
         return parameters.Count == 0
-            ? "api/expenses/summary"
-            : $"api/expenses/summary?{string.Join("&", parameters)}";
+            ? baseUrl
+            : $"{baseUrl}?{string.Join("&", parameters)}";
     }
 
     private static void AddDate(
@@ -102,9 +120,7 @@ public sealed class ExpenseApiService(HttpClient httpClient)
         DateOnly? value)
     {
         if (!value.HasValue)
-        {
             return;
-        }
 
         Add(
             parameters,
@@ -117,10 +133,8 @@ public sealed class ExpenseApiService(HttpClient httpClient)
     private static void Add(
         ICollection<string> parameters,
         string name,
-        string value)
-    {
+        string value) =>
         parameters.Add(
             $"{Uri.EscapeDataString(name)}=" +
             $"{Uri.EscapeDataString(value)}");
-    }
 }
