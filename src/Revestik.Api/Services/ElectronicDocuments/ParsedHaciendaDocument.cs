@@ -17,7 +17,9 @@ public sealed record ParsedHaciendaDocument(
     decimal? ExchangeRate,
     decimal TotalDocument,
     IReadOnlyList<ParsedHaciendaLine> Lines,
-    IReadOnlyList<ParsedHaciendaReference> References) : ParsedReceivedXml;
+    IReadOnlyList<ParsedHaciendaReference> References,
+    ParsedTotals? FiscalTotals = null,
+    IReadOnlyList<ParsedLine>? FiscalLines = null) : ParsedReceivedXml;
 
 public sealed record ParsedHaciendaParty(
     string Name,

@@ -13,7 +13,6 @@ public sealed class ReceivedDocumentInboxService : IReceivedDocumentInboxService
 {
     private const int MaxXmlBytes = 5 * 1024 * 1024;
     private const string ProtectorPurpose = "Revestik.ReceivedDocuments.Inbox.v1";
-
     private readonly RevestikDbContext dbContext;
     private readonly IElectronicDocumentXmlParser parser;
     private readonly IHaciendaXmlSchemaValidator schemaValidator;
@@ -40,68 +39,48 @@ public sealed class ReceivedDocumentInboxService : IReceivedDocumentInboxService
         company = companyOptions.Value;
         options = inboxOptions.Value;
         protector = dataProtectionProvider.CreateProtector(ProtectorPurpose);
-
         storagePath = Path.IsPathRooted(options.StoragePath)
             ? options.StoragePath
             : Path.Combine(environment.ContentRootPath, options.StoragePath);
-
         Directory.CreateDirectory(storagePath);
     }
 
     public async Task<ReceivedDocumentInboxItemResponse> StageAsync(
-        byte[] xml,
-        string fileName,
-        string source,
-        CancellationToken cancellationToken)
+        byte[] xml, string fileName, string source, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(xml);
-
         if (xml.Length == 0)
             throw new ReceivedDocumentInboxException("El archivo XML está vacío.");
-
         if (xml.Length > MaxXmlBytes)
             throw new ReceivedDocumentInboxException("El archivo XML no puede superar 5 MB.");
-
         if (!string.Equals(Path.GetExtension(fileName), ".xml", StringComparison.OrdinalIgnoreCase))
             throw new ReceivedDocumentInboxException("Solo se permiten archivos con extensión .xml.");
 
-        HaciendaXmlValidationResult schemaValidation;
-        try
-        {
-            schemaValidation = schemaValidator.Validate(xml);
-        }
-        catch (HaciendaXmlValidationException exception)
-        {
-            throw new ReceivedDocumentInboxException(exception.Message);
-        }
+        HaciendaXmlValidationResult validated;
+        try { validated = schemaValidator.Validate(xml); }
+        catch (HaciendaXmlValidationException ex)
+        { throw new ReceivedDocumentInboxException(ex.Message); }
 
         ReceivedDocumentInboxEnvelope envelope;
-        if (!schemaValidation.Descriptor.ProcessingEnabled)
+        if (!validated.Descriptor.ProcessingEnabled && !IsSupportedFiscalKind(validated.Descriptor.Kind))
         {
-            envelope = BuildRecognizedNotEnabledEnvelope(
-                schemaValidation.Descriptor,
-                xml,
-                fileName,
-                source);
+            envelope = BuildRecognizedNotEnabledEnvelope(validated.Descriptor, xml, fileName, source);
         }
         else
         {
             ParsedReceivedXml parsed;
-            try
-            {
-                parsed = parser.Parse(xml);
-            }
-            catch (ElectronicDocumentXmlException exception)
-            {
-                throw new ReceivedDocumentInboxException(exception.Message);
-            }
+            try { parsed = parser.Parse(xml); }
+            catch (ElectronicDocumentXmlException ex)
+            { throw new ReceivedDocumentInboxException(ex.Message); }
 
             envelope = parsed switch
             {
-                ParsedReceivedElectronicDocument received =>
-                    await BuildInvoiceEnvelopeAsync(received.Document, xml, fileName, source, cancellationToken),
+                ParsedReceivedElectronicDocument invoice =>
+                    await BuildInvoiceEnvelopeAsync(invoice.Document, xml, fileName, source, cancellationToken),
                 ParsedReceivedHaciendaResponse response =>
                     await BuildHaciendaEnvelopeAsync(response.Response, xml, fileName, source, cancellationToken),
+                ParsedHaciendaDocument fiscal when IsSupportedFiscalKind(fiscal.Kind) =>
+                    await BuildFiscalEnvelopeAsync(fiscal, xml, fileName, source, cancellationToken),
                 _ => throw new ReceivedDocumentInboxException("Tipo XML recibido no soportado.")
             };
         }
@@ -110,212 +89,199 @@ public sealed class ReceivedDocumentInboxService : IReceivedDocumentInboxService
         return Map(envelope);
     }
 
-    public async Task<IReadOnlyList<ReceivedDocumentInboxItemResponse>> GetPendingAsync(
-        CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ReceivedDocumentInboxItemResponse>> GetPendingAsync(CancellationToken cancellationToken)
     {
-        var items = new List<ReceivedDocumentInboxItemResponse>();
-
+        var result = new List<ReceivedDocumentInboxItemResponse>();
         foreach (var path in Directory.EnumerateFiles(storagePath, "*.inbox"))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var envelope = await ReadAsync(path, cancellationToken);
-
-            if (envelope.Status is ReceivedDocumentInboxStatus.PendingReview
+            var item = await ReadAsync(path, cancellationToken);
+            if (item.Status is ReceivedDocumentInboxStatus.PendingReview
                 or ReceivedDocumentInboxStatus.Duplicate
                 or ReceivedDocumentInboxStatus.RecognizedNotEnabled)
-            {
-                items.Add(Map(envelope));
-            }
+                result.Add(Map(item));
         }
-
-        return items.OrderByDescending(x => x.ReceivedAtUtc).ToList();
+        return result.OrderByDescending(x => x.ReceivedAtUtc).ToList();
     }
 
     public async Task<ReceivedDocumentInboxAcceptResponse> AcceptAsync(
-        Guid inboxId,
-        string userId,
-        CancellationToken cancellationToken)
+        Guid inboxId, string userId, CancellationToken cancellationToken)
     {
         var path = GetPath(inboxId);
-        if (!File.Exists(path))
-            throw new KeyNotFoundException("El documento pendiente no existe.");
-
-        var envelope = await ReadAsync(path, cancellationToken);
-
-        if (envelope.Status == ReceivedDocumentInboxStatus.Duplicate)
+        if (!File.Exists(path)) throw new KeyNotFoundException("El documento pendiente no existe.");
+        var item = await ReadAsync(path, cancellationToken);
+        if (item.Status == ReceivedDocumentInboxStatus.Duplicate)
             throw new ReceivedDocumentInboxException("El documento es duplicado y no puede aceptarse nuevamente.");
-
-        if (envelope.Status == ReceivedDocumentInboxStatus.RecognizedNotEnabled)
-            throw new ReceivedDocumentInboxException("El tipo de documento Hacienda es válido, pero su procesamiento todavía no está habilitado en Revestik.");
-
-        if (envelope.Status != ReceivedDocumentInboxStatus.PendingReview)
+        if (item.Status == ReceivedDocumentInboxStatus.RecognizedNotEnabled)
+            throw new ReceivedDocumentInboxException("El documento fue recibido mientras su procesamiento estaba deshabilitado. Debe volver a ingresarse y validarse.");
+        if (item.Status != ReceivedDocumentInboxStatus.PendingReview)
             throw new ReceivedDocumentInboxException("El documento ya no está pendiente de revisión.");
 
-        var xml = Convert.FromBase64String(envelope.XmlBase64);
+        var xml = Convert.FromBase64String(item.XmlBase64);
+        // Always re-check the *current* schema and allowlist; a stored envelope isn't authorization.
+        HaciendaXmlValidationResult validation;
+        try { validation = schemaValidator.Validate(xml); }
+        catch (HaciendaXmlValidationException ex)
+        { throw new ReceivedDocumentInboxException(ex.Message); }
+        if ((!validation.Descriptor.ProcessingEnabled && !IsSupportedFiscalKind(validation.Descriptor.Kind)) ||
+            !string.Equals(validation.Descriptor.RootElement, item.DocumentKind, StringComparison.Ordinal))
+            throw new ReceivedDocumentInboxException("El tipo fiscal no está habilitado o no coincide con el documento preparado.");
 
         try
         {
             var imported = await importService.ImportAsync(xml, userId, cancellationToken);
-
-            envelope.Status = ReceivedDocumentInboxStatus.Accepted;
-            envelope.AcceptedElectronicDocumentId = imported.ElectronicDocumentId ?? imported.Id;
-            envelope.XmlBase64 = string.Empty; // raw staging payload is destroyed after canonical import
-            await SaveAsync(envelope, cancellationToken);
-
-            return new ReceivedDocumentInboxAcceptResponse(envelope.Id, imported);
+            item.Status = ReceivedDocumentInboxStatus.Accepted;
+            item.AcceptedElectronicDocumentId = imported.ElectronicDocumentId ?? imported.Id;
+            item.XmlBase64 = string.Empty;
+            await SaveAsync(item, cancellationToken);
+            return new ReceivedDocumentInboxAcceptResponse(item.Id, imported);
         }
-        catch (DuplicateElectronicDocumentException exception)
+        catch (DuplicateElectronicDocumentException ex)
         {
-            envelope.Status = ReceivedDocumentInboxStatus.Duplicate;
-            envelope.ExistingElectronicDocumentId = exception.ExistingId;
-            await SaveAsync(envelope, cancellationToken);
+            item.Status = ReceivedDocumentInboxStatus.Duplicate;
+            item.ExistingElectronicDocumentId = ex.ExistingId;
+            await SaveAsync(item, cancellationToken);
             throw new ReceivedDocumentInboxException("El documento ya existe en Revestik.");
         }
     }
 
-    public async Task<bool> RejectAsync(
-        Guid inboxId,
-        CancellationToken cancellationToken)
+    public async Task<bool> RejectAsync(Guid inboxId, CancellationToken cancellationToken)
     {
         var path = GetPath(inboxId);
-        if (!File.Exists(path))
-            return false;
-
-        var envelope = await ReadAsync(path, cancellationToken);
-        envelope.Status = ReceivedDocumentInboxStatus.Rejected;
-        envelope.XmlBase64 = string.Empty; // do not retain rejected untrusted XML
-        await SaveAsync(envelope, cancellationToken);
+        if (!File.Exists(path)) return false;
+        var item = await ReadAsync(path, cancellationToken);
+        item.Status = ReceivedDocumentInboxStatus.Rejected;
+        item.XmlBase64 = string.Empty;
+        await SaveAsync(item, cancellationToken);
         return true;
     }
 
+    private static bool IsSupportedFiscalKind(HaciendaXmlDocumentKind kind) => kind is
+        HaciendaXmlDocumentKind.NotaCreditoElectronica or
+        HaciendaXmlDocumentKind.NotaDebitoElectronica or
+        HaciendaXmlDocumentKind.TiqueteElectronico or
+        HaciendaXmlDocumentKind.FacturaElectronicaCompra or
+        HaciendaXmlDocumentKind.FacturaElectronicaExportacion or
+        HaciendaXmlDocumentKind.ReciboElectronicoPago;
 
-    private static ReceivedDocumentInboxEnvelope BuildRecognizedNotEnabledEnvelope(
-        HaciendaXmlDocumentDescriptor descriptor,
-        byte[] xml,
-        string fileName,
-        string source)
+    private async Task<ReceivedDocumentInboxEnvelope> BuildFiscalEnvelopeAsync(
+        ParsedHaciendaDocument document, byte[] xml, string fileName, string source, CancellationToken cancellationToken)
     {
-        var preview = HaciendaXmlPreviewReader.Read(xml);
+        var issuerMatches = MatchesCompany(document.Issuer.IdentificationType, document.Issuer.Identification);
+        var receiverMatches = document.Receiver is not null &&
+            MatchesCompany(document.Receiver.IdentificationType, document.Receiver.Identification);
+        if (document.Receiver is not null && !receiverMatches && !issuerMatches)
+            throw new ReceivedDocumentInboxException("El comprobante está dirigido a otra entidad fiscal.");
+        if (!issuerMatches && !receiverMatches)
+            throw new ReceivedDocumentInboxException("No es posible verificar la relación fiscal del comprobante con Revestik.");
+        if (document.FiscalTotals is null || document.FiscalLines is null ||
+            document.FiscalTotals.TotalDocument != document.TotalDocument)
+            throw new ReceivedDocumentInboxException("El documento no contiene un desglose fiscal completo.");
+        if (document.TotalDocument < 0 || (document.ExchangeRate.HasValue && document.ExchangeRate.Value <= 0))
+            throw new ReceivedDocumentInboxException("El documento contiene importes o tipo de cambio inválidos.");
+        if ((document.Kind is HaciendaXmlDocumentKind.NotaCreditoElectronica or
+            HaciendaXmlDocumentKind.NotaDebitoElectronica or
+            HaciendaXmlDocumentKind.FacturaElectronicaCompra or
+            HaciendaXmlDocumentKind.ReciboElectronicoPago) &&
+            document.References.Count is < 1 or > 10)
+            throw new ReceivedDocumentInboxException("Este documento requiere entre 1 y 10 referencias fiscales.");
+        if (document.References.Count > 10)
+            throw new ReceivedDocumentInboxException("El documento supera diez referencias fiscales.");
 
+        var exists = await dbContext.ElectronicDocuments.AsNoTracking()
+            .Where(x => x.Clave == document.Clave)
+            .Select(x => (int?)x.Id).SingleOrDefaultAsync(cancellationToken);
+        var totalCrc = document.CurrencyCode.Equals("CRC", StringComparison.OrdinalIgnoreCase)
+            ? document.TotalDocument
+            : document.TotalDocument * (document.ExchangeRate ?? 1m);
+        var high = totalCrc > options.HighAmountReviewThresholdCrc;
+        var warnings = new List<string>();
+        if (high) warnings.Add($"Monto extraordinariamente alto: equivalente aproximado CRC {totalCrc:N2}. Requiere revisión manual.");
+        if (document.Receiver is null) warnings.Add("Sin receptor identificado. No se presume que sea un gasto deducible.");
+        if (document.Kind is HaciendaXmlDocumentKind.NotaCreditoElectronica or HaciendaXmlDocumentKind.NotaDebitoElectronica)
+            warnings.Add("Ajuste fiscal pendiente de vinculación y aprobación. No aplica movimientos económicos.");
+        if (document.Kind == HaciendaXmlDocumentKind.ReciboElectronicoPago)
+            warnings.Add("Comprobante de pago: no debe registrarse como un gasto adicional.");
+        if (document.Kind is HaciendaXmlDocumentKind.FacturaElectronicaCompra or HaciendaXmlDocumentKind.FacturaElectronicaExportacion)
+            warnings.Add("Evidencia fiscal sin clasificación económica automática.");
         return new ReceivedDocumentInboxEnvelope
         {
-            Id = Guid.NewGuid(),
-            Source = source,
-            FileName = Path.GetFileName(fileName),
+            Id = Guid.NewGuid(), Source = source, FileName = Path.GetFileName(fileName),
             ReceivedAtUtc = DateTime.UtcNow,
-            Status = ReceivedDocumentInboxStatus.RecognizedNotEnabled,
-            DocumentKind = descriptor.RootElement,
-            Clave = preview.Clave,
-            IssuerName = preview.IssuerName,
-            IssuerIdentification = preview.IssuerIdentification,
-            ReceiverName = preview.ReceiverName,
-            CurrencyCode = preview.CurrencyCode,
-            Total = preview.Total,
-            TotalCrcEquivalent = preview.Total,
+            Status = exists.HasValue ? ReceivedDocumentInboxStatus.Duplicate : ReceivedDocumentInboxStatus.PendingReview,
+            DocumentKind = document.Kind.ToString(), Clave = document.Clave,
+            IssuerName = document.Issuer.Name, IssuerIdentification = document.Issuer.Identification,
+            ReceiverName = document.Receiver?.Name ?? string.Empty, CurrencyCode = document.CurrencyCode,
+            Total = document.TotalDocument, TotalCrcEquivalent = totalCrc,
+            RequiresHighAmountReview = high, Warnings = warnings,
+            ExistingElectronicDocumentId = exists, XmlBase64 = Convert.ToBase64String(xml)
+        };
+    }
+
+    private static ReceivedDocumentInboxEnvelope BuildRecognizedNotEnabledEnvelope(
+        HaciendaXmlDocumentDescriptor descriptor, byte[] xml, string fileName, string source)
+    {
+        var preview = HaciendaXmlPreviewReader.Read(xml);
+        return new ReceivedDocumentInboxEnvelope
+        {
+            Id = Guid.NewGuid(), Source = source, FileName = Path.GetFileName(fileName),
+            ReceivedAtUtc = DateTime.UtcNow, Status = ReceivedDocumentInboxStatus.RecognizedNotEnabled,
+            DocumentKind = descriptor.RootElement, Clave = preview.Clave,
+            IssuerName = preview.IssuerName, IssuerIdentification = preview.IssuerIdentification,
+            ReceiverName = preview.ReceiverName, CurrencyCode = preview.CurrencyCode,
+            Total = preview.Total, TotalCrcEquivalent = preview.Total,
             RequiresHighAmountReview = false,
-            Warnings =
-            [
-                "El XML cumple una estructura Hacienda v4.4 reconocida, pero este tipo de documento todavía no tiene reglas de negocio habilitadas en Revestik."
-            ],
+            Warnings = ["XML Hacienda reconocido, pero todavía no habilitado para aceptación."],
             XmlBase64 = Convert.ToBase64String(xml)
         };
     }
 
     private async Task<ReceivedDocumentInboxEnvelope> BuildInvoiceEnvelopeAsync(
-        ParsedElectronicDocument document,
-        byte[] xml,
-        string fileName,
-        string source,
-        CancellationToken cancellationToken)
+        ParsedElectronicDocument doc, byte[] xml, string fileName, string source, CancellationToken ct)
     {
-        EnsureReceiver(document.Receiver.IdentificationType, document.Receiver.Identification);
-        ValidateInvoiceAmounts(document);
-
-        var existingId = await dbContext.ElectronicDocuments
-            .AsNoTracking()
-            .Where(x => x.Clave == document.Clave)
-            .Select(x => (int?)x.Id)
-            .SingleOrDefaultAsync(cancellationToken);
-
-        var crcEquivalent = document.CurrencyCode.Equals("CRC", StringComparison.OrdinalIgnoreCase)
-            ? document.Totals.TotalDocument
-            : document.Totals.TotalDocument * document.ExchangeRate;
-
-        var highAmount = crcEquivalent > options.HighAmountReviewThresholdCrc;
-        var warnings = highAmount
-            ? new List<string>
-            {
-                $"Monto extraordinariamente alto: equivalente aproximado CRC {crcEquivalent:N2}. Requiere revisión manual."
-            }
-            : [];
-
+        EnsureReceiver(doc.Receiver.IdentificationType, doc.Receiver.Identification);
+        ValidateInvoiceAmounts(doc);
+        var existing = await dbContext.ElectronicDocuments.AsNoTracking()
+            .Where(x => x.Clave == doc.Clave).Select(x => (int?)x.Id).SingleOrDefaultAsync(ct);
+        var crc = doc.CurrencyCode.Equals("CRC", StringComparison.OrdinalIgnoreCase)
+            ? doc.Totals.TotalDocument : doc.Totals.TotalDocument * doc.ExchangeRate;
+        var high = crc > options.HighAmountReviewThresholdCrc;
         return new ReceivedDocumentInboxEnvelope
         {
-            Id = Guid.NewGuid(),
-            Source = source,
-            FileName = Path.GetFileName(fileName),
+            Id = Guid.NewGuid(), Source = source, FileName = Path.GetFileName(fileName),
             ReceivedAtUtc = DateTime.UtcNow,
-            Status = existingId.HasValue
-                ? ReceivedDocumentInboxStatus.Duplicate
-                : ReceivedDocumentInboxStatus.PendingReview,
-            DocumentKind = "FacturaElectronica",
-            Clave = document.Clave,
-            IssuerName = document.Issuer.Name,
-            IssuerIdentification = document.Issuer.Identification,
-            ReceiverName = document.Receiver.Name,
-            CurrencyCode = document.CurrencyCode,
-            Total = document.Totals.TotalDocument,
-            TotalCrcEquivalent = crcEquivalent,
-            RequiresHighAmountReview = highAmount,
-            Warnings = warnings,
-            ExistingElectronicDocumentId = existingId,
-            XmlBase64 = Convert.ToBase64String(xml)
+            Status = existing.HasValue ? ReceivedDocumentInboxStatus.Duplicate : ReceivedDocumentInboxStatus.PendingReview,
+            DocumentKind = "FacturaElectronica", Clave = doc.Clave,
+            IssuerName = doc.Issuer.Name, IssuerIdentification = doc.Issuer.Identification,
+            ReceiverName = doc.Receiver.Name, CurrencyCode = doc.CurrencyCode,
+            Total = doc.Totals.TotalDocument, TotalCrcEquivalent = crc,
+            RequiresHighAmountReview = high,
+            Warnings = high ? [$"Monto extraordinariamente alto: equivalente aproximado CRC {crc:N2}. Requiere revisión manual."] : [],
+            ExistingElectronicDocumentId = existing, XmlBase64 = Convert.ToBase64String(xml)
         };
     }
 
     private async Task<ReceivedDocumentInboxEnvelope> BuildHaciendaEnvelopeAsync(
-        ParsedHaciendaResponse response,
-        byte[] xml,
-        string fileName,
-        string source,
-        CancellationToken cancellationToken)
+        ParsedHaciendaResponse response, byte[] xml, string fileName, string source, CancellationToken ct)
     {
         EnsureReceiver(response.ReceiverIdentificationType, response.ReceiverIdentification);
-
         if (response.TotalInvoice < 0 || response.TotalTax < 0)
             throw new ReceivedDocumentInboxException("El mensaje de Hacienda contiene montos negativos no permitidos.");
-
-        var existingId = await dbContext.HaciendaResponses
-            .AsNoTracking()
-            .Where(x => x.Clave == response.Clave)
-            .Select(x => (int?)x.Id)
-            .SingleOrDefaultAsync(cancellationToken);
-
-        var highAmount = response.TotalInvoice > options.HighAmountReviewThresholdCrc;
-
+        var existing = await dbContext.HaciendaResponses.AsNoTracking()
+            .Where(x => x.Clave == response.Clave).Select(x => (int?)x.Id).SingleOrDefaultAsync(ct);
+        var high = response.TotalInvoice > options.HighAmountReviewThresholdCrc;
         return new ReceivedDocumentInboxEnvelope
         {
-            Id = Guid.NewGuid(),
-            Source = source,
-            FileName = Path.GetFileName(fileName),
+            Id = Guid.NewGuid(), Source = source, FileName = Path.GetFileName(fileName),
             ReceivedAtUtc = DateTime.UtcNow,
-            Status = existingId.HasValue
-                ? ReceivedDocumentInboxStatus.Duplicate
-                : ReceivedDocumentInboxStatus.PendingReview,
-            DocumentKind = "MensajeHacienda",
-            Clave = response.Clave,
-            IssuerName = response.IssuerName,
-            IssuerIdentification = response.IssuerIdentification,
-            ReceiverName = response.ReceiverName,
-            CurrencyCode = "CRC",
-            Total = response.TotalInvoice,
-            TotalCrcEquivalent = response.TotalInvoice,
-            RequiresHighAmountReview = highAmount,
-            Warnings = highAmount
-                ? [$"Monto extraordinariamente alto: CRC {response.TotalInvoice:N2}. Requiere revisión manual."]
-                : [],
-            ExistingElectronicDocumentId = existingId,
-            XmlBase64 = Convert.ToBase64String(xml)
+            Status = existing.HasValue ? ReceivedDocumentInboxStatus.Duplicate : ReceivedDocumentInboxStatus.PendingReview,
+            DocumentKind = "MensajeHacienda", Clave = response.Clave,
+            IssuerName = response.IssuerName, IssuerIdentification = response.IssuerIdentification,
+            ReceiverName = response.ReceiverName, CurrencyCode = "CRC",
+            Total = response.TotalInvoice, TotalCrcEquivalent = response.TotalInvoice,
+            RequiresHighAmountReview = high,
+            Warnings = high ? [$"Monto extraordinariamente alto: CRC {response.TotalInvoice:N2}. Requiere revisión manual."] : [],
+            ExistingElectronicDocumentId = existing, XmlBase64 = Convert.ToBase64String(xml)
         };
     }
 
@@ -323,53 +289,34 @@ public sealed class ReceivedDocumentInboxService : IReceivedDocumentInboxService
     {
         if (document.ExchangeRate <= 0)
             throw new ReceivedDocumentInboxException("El tipo de cambio debe ser mayor que cero.");
-
         foreach (var line in document.Lines)
         {
             if (line.Quantity <= 0)
                 throw new ReceivedDocumentInboxException($"La línea {line.LineNumber} contiene una cantidad inválida.");
-
             EnsureNonNegative(line.LineNumber, "PrecioUnitario", line.UnitPrice);
             EnsureNonNegative(line.LineNumber, "MontoTotal", line.GrossAmount);
             EnsureNonNegative(line.LineNumber, "SubTotal", line.Subtotal);
             EnsureNonNegative(line.LineNumber, "BaseImponible", line.TaxableBase);
             EnsureNonNegative(line.LineNumber, "ImpuestoNeto", line.NetTax);
             EnsureNonNegative(line.LineNumber, "MontoTotalLinea", line.TotalLine);
-
-            foreach (var discount in line.Discounts)
-                EnsureNonNegative(line.LineNumber, "MontoDescuento", discount.Amount);
-
+            foreach (var d in line.Discounts) EnsureNonNegative(line.LineNumber, "MontoDescuento", d.Amount);
             foreach (var tax in line.Taxes)
             {
                 EnsureNonNegative(line.LineNumber, "Tarifa", tax.Rate);
                 EnsureNonNegative(line.LineNumber, "MontoImpuesto", tax.Amount);
             }
         }
-
-        var totals = document.Totals;
-        var monetaryValues = new[]
-        {
-            totals.TotalTaxedServices, totals.TotalExemptServices,
-            totals.TotalExoneratedServices, totals.TotalNonSubjectServices,
-            totals.TotalTaxedGoods, totals.TotalExemptGoods,
-            totals.TotalExoneratedGoods, totals.TotalNonSubjectGoods,
-            totals.TotalTaxed, totals.TotalExempt, totals.TotalExonerated,
-            totals.TotalNonSubject, totals.TotalSale, totals.TotalDiscounts,
-            totals.TotalNetSale, totals.TotalTax, totals.TotalVatReturned,
-            totals.TotalOtherCharges, totals.TotalDocument
-        };
-
-        if (monetaryValues.Any(x => x < 0))
+        var t = document.Totals;
+        decimal[] amounts = [t.TotalTaxedServices, t.TotalExemptServices, t.TotalExoneratedServices,
+            t.TotalNonSubjectServices, t.TotalTaxedGoods, t.TotalExemptGoods, t.TotalExoneratedGoods,
+            t.TotalNonSubjectGoods, t.TotalTaxed, t.TotalExempt, t.TotalExonerated, t.TotalNonSubject,
+            t.TotalSale, t.TotalDiscounts, t.TotalNetSale, t.TotalTax, t.TotalVatReturned,
+            t.TotalOtherCharges, t.TotalDocument];
+        if (amounts.Any(x => x < 0))
             throw new ReceivedDocumentInboxException("El documento contiene totales negativos no permitidos.");
-
-        EnsureClose(
-            totals.TotalNetSale,
-            totals.TotalSale - totals.TotalDiscounts,
+        EnsureClose(t.TotalNetSale, t.TotalSale - t.TotalDiscounts,
             "TotalVentaNeta no coincide con TotalVenta menos TotalDescuentos.");
-
-        EnsureClose(
-            totals.TotalDocument,
-            totals.TotalNetSale + totals.TotalTax - totals.TotalVatReturned + totals.TotalOtherCharges,
+        EnsureClose(t.TotalDocument, t.TotalNetSale + t.TotalTax - t.TotalVatReturned + t.TotalOtherCharges,
             "TotalComprobante no coincide con los componentes del resumen de la factura.");
     }
 
@@ -378,63 +325,34 @@ public sealed class ReceivedDocumentInboxService : IReceivedDocumentInboxService
         if (Math.Abs(actual - expected) > options.MonetaryTolerance)
             throw new ReceivedDocumentInboxException(message);
     }
-
-    private static void EnsureNonNegative(int lineNumber, string field, decimal value)
+    private static void EnsureNonNegative(int number, string field, decimal value)
     {
         if (value < 0)
-            throw new ReceivedDocumentInboxException(
-                $"La línea {lineNumber} contiene {field} negativo.");
+            throw new ReceivedDocumentInboxException($"La línea {number} contiene {field} negativo.");
     }
-
-    private void EnsureReceiver(string identificationType, string identification)
+    private bool MatchesCompany(string type, string number) =>
+        string.Equals(type, company.TaxIdentificationType, StringComparison.Ordinal) &&
+        string.Equals(number, company.TaxIdentificationNumber, StringComparison.Ordinal);
+    private void EnsureReceiver(string type, string number)
     {
-        if (!string.Equals(identificationType, company.TaxIdentificationType, StringComparison.Ordinal) ||
-            !string.Equals(identification, company.TaxIdentificationNumber, StringComparison.Ordinal))
-        {
-            throw new ReceivedDocumentInboxException(
-                "El documento no está dirigido al receptor fiscal configurado para Revestik.");
-        }
+        if (!MatchesCompany(type, number))
+            throw new ReceivedDocumentInboxException("El documento no está dirigido al receptor fiscal configurado para Revestik.");
     }
-
-    private async Task SaveAsync(
-        ReceivedDocumentInboxEnvelope envelope,
-        CancellationToken cancellationToken)
+    private async Task SaveAsync(ReceivedDocumentInboxEnvelope item, CancellationToken ct)
     {
-        var json = JsonSerializer.Serialize(envelope);
-        var encrypted = protector.Protect(json);
-        await File.WriteAllTextAsync(GetPath(envelope.Id), encrypted, cancellationToken);
+        var encrypted = protector.Protect(JsonSerializer.Serialize(item));
+        await File.WriteAllTextAsync(GetPath(item.Id), encrypted, ct);
     }
-
-    private async Task<ReceivedDocumentInboxEnvelope> ReadAsync(
-        string path,
-        CancellationToken cancellationToken)
+    private async Task<ReceivedDocumentInboxEnvelope> ReadAsync(string path, CancellationToken ct)
     {
-        var encrypted = await File.ReadAllTextAsync(path, cancellationToken);
-        var json = protector.Unprotect(encrypted);
-
+        var json = protector.Unprotect(await File.ReadAllTextAsync(path, ct));
         return JsonSerializer.Deserialize<ReceivedDocumentInboxEnvelope>(json)
             ?? throw new ReceivedDocumentInboxException("No fue posible leer un documento de la bandeja segura.");
     }
-
     private string GetPath(Guid id) => Path.Combine(storagePath, $"{id:N}.inbox");
-
-    private static ReceivedDocumentInboxItemResponse Map(ReceivedDocumentInboxEnvelope item) =>
-        new(
-            item.Id,
-            item.Source,
-            item.FileName,
-            item.ReceivedAtUtc,
-            item.Status,
-            item.DocumentKind,
-            item.Clave,
-            item.IssuerName,
-            item.IssuerIdentification,
-            item.ReceiverName,
-            item.CurrencyCode,
-            item.Total,
-            item.TotalCrcEquivalent,
-            item.RequiresHighAmountReview,
-            item.Warnings,
-            item.ExistingElectronicDocumentId,
-            item.AcceptedElectronicDocumentId);
+    private static ReceivedDocumentInboxItemResponse Map(ReceivedDocumentInboxEnvelope item) => new(
+        item.Id, item.Source, item.FileName, item.ReceivedAtUtc, item.Status, item.DocumentKind,
+        item.Clave, item.IssuerName, item.IssuerIdentification, item.ReceiverName,
+        item.CurrencyCode, item.Total, item.TotalCrcEquivalent, item.RequiresHighAmountReview,
+        item.Warnings, item.ExistingElectronicDocumentId, item.AcceptedElectronicDocumentId);
 }
