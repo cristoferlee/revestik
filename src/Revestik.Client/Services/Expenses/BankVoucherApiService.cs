@@ -68,7 +68,7 @@ public sealed class BankVoucherApiService(HttpClient httpClient)
         await EnsureSuccessAsync(response, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<BankVoucherReviewItemResponse>> GetVouchersAsync(
+    public async Task<BankVoucherPageResponse> GetVouchersAsync(
         BankVoucherListRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -76,9 +76,23 @@ public sealed class BankVoucherApiService(HttpClient httpClient)
         AddDate(parameters, "DateFrom", request.DateFrom);
         AddDate(parameters, "DateTo", request.DateTo);
 
-        var url = parameters.Count == 0
-            ? "api/bank-vouchers"
-            : $"api/bank-vouchers?{string.Join("&", parameters)}";
+        if (request.Status.HasValue)
+        {
+            parameters.Add(
+                "Status=" +
+                ((int)request.Status.Value).ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (request.ExcludeNeedsReview)
+            parameters.Add("ExcludeNeedsReview=true");
+
+        parameters.Add(
+            $"Page={request.Page.ToString(CultureInfo.InvariantCulture)}");
+        parameters.Add(
+            $"PageSize={request.PageSize.ToString(CultureInfo.InvariantCulture)}");
+
+        var url =
+            $"api/bank-vouchers?{string.Join("&", parameters)}";
 
         using var response = await httpClient.GetAsync(
             url,
@@ -86,10 +100,10 @@ public sealed class BankVoucherApiService(HttpClient httpClient)
 
         await EnsureSuccessAsync(response, cancellationToken);
 
-        return await response.Content
-            .ReadFromJsonAsync<List<BankVoucherReviewItemResponse>>(
-                cancellationToken)
-            ?? [];
+        return await ReadRequiredAsync<BankVoucherPageResponse>(
+            response,
+            "La API devolvió una página vacía de vouchers.",
+            cancellationToken);
     }
 
     public Task AcceptAsync(

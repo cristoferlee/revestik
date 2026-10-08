@@ -13,59 +13,58 @@ public sealed class BankVoucherReviewService(RevestikDbContext dbContext)
 {
     private static readonly TimeSpan MatchWindow = TimeSpan.FromDays(3);
 
-    public async Task<IReadOnlyList<BankVoucherReviewItemResponse>> GetAsync(
+    public async Task<BankVoucherPageResponse> GetAsync(
         BankVoucherListRequest request,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var vouchersQuery = dbContext.BankVouchers.AsQueryable();
+        await RequeueAcceptedWithLateCandidatesAsync(
+            request,
+            cancellationToken);
 
-        if (request.DateFrom.HasValue)
+        var vouchersQuery = ApplyDateRange(
+            dbContext.BankVouchers.AsNoTracking(),
+            request);
+
+        if (request.Status.HasValue)
         {
-            var from = new DateTimeOffset(
-                request.DateFrom.Value.ToDateTime(TimeOnly.MinValue),
-                TimeSpan.FromHours(-6));
-
             vouchersQuery = vouchersQuery.Where(x =>
-                x.TransactionDate >= from);
+                x.Status == request.Status.Value);
+        }
+        else if (request.ExcludeNeedsReview)
+        {
+            vouchersQuery = vouchersQuery.Where(x =>
+                x.Status != BankVoucherStatus.NeedsReview);
         }
 
-        if (request.DateTo.HasValue)
-        {
-            var until = new DateTimeOffset(
-                request.DateTo.Value.AddDays(1).ToDateTime(TimeOnly.MinValue),
-                TimeSpan.FromHours(-6));
-
-            vouchersQuery = vouchersQuery.Where(x =>
-                x.TransactionDate < until);
-        }
+        var totalCount = await vouchersQuery.CountAsync(
+            cancellationToken);
 
         var vouchers = await vouchersQuery
             .OrderByDescending(x => x.TransactionDate)
             .ThenByDescending(x => x.Id)
+            .Skip((request.Page - 1) * request.PageSize)
+            .Take(request.PageSize)
             .ToListAsync(cancellationToken);
 
-        var results = new List<BankVoucherReviewItemResponse>(vouchers.Count);
+        var results =
+            new List<BankVoucherReviewItemResponse>(vouchers.Count);
 
         foreach (var voucher in vouchers)
         {
-            var analysis = await AnalyzeAsync(voucher, cancellationToken);
-
-            if (voucher.Status == BankVoucherStatus.Accepted &&
-                analysis.Candidates.Count > 0)
-            {
-                voucher.Status = BankVoucherStatus.NeedsReview;
-                voucher.UpdatedAtUtc = DateTime.UtcNow;
-            }
+            var analysis = await AnalyzeAsync(
+                voucher,
+                cancellationToken);
 
             results.Add(Map(voucher, analysis));
         }
 
-        if (dbContext.ChangeTracker.HasChanges())
-            await dbContext.SaveChangesAsync(cancellationToken);
-
-        return results;
+        return new BankVoucherPageResponse(
+            results,
+            totalCount,
+            request.Page,
+            request.PageSize);
     }
 
     public async Task<BankVoucherReviewItemResponse?> GetByIdAsync(
@@ -152,6 +151,67 @@ public sealed class BankVoucherReviewService(RevestikDbContext dbContext)
 
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    private async Task RequeueAcceptedWithLateCandidatesAsync(
+        BankVoucherListRequest request,
+        CancellationToken cancellationToken)
+    {
+        var acceptedQuery = ApplyDateRange(
+            dbContext.BankVouchers,
+            request)
+            .Where(x => x.Status == BankVoucherStatus.Accepted);
+
+        var accepted = await acceptedQuery
+            .OrderByDescending(x => x.TransactionDate)
+            .ToListAsync(cancellationToken);
+
+        var changed = false;
+
+        foreach (var voucher in accepted)
+        {
+            var analysis = await AnalyzeAsync(
+                voucher,
+                cancellationToken);
+
+            if (analysis.Candidates.Count == 0)
+                continue;
+
+            voucher.Status = BankVoucherStatus.NeedsReview;
+            voucher.UpdatedAtUtc = DateTime.UtcNow;
+            changed = true;
+        }
+
+        if (changed)
+            await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static IQueryable<BankVoucher> ApplyDateRange(
+        IQueryable<BankVoucher> query,
+        BankVoucherListRequest request)
+    {
+        if (request.DateFrom.HasValue)
+        {
+            var from = new DateTimeOffset(
+                request.DateFrom.Value.ToDateTime(TimeOnly.MinValue),
+                TimeSpan.FromHours(-6));
+
+            query = query.Where(x =>
+                x.TransactionDate >= from);
+        }
+
+        if (request.DateTo.HasValue)
+        {
+            var until = new DateTimeOffset(
+                request.DateTo.Value.AddDays(1)
+                    .ToDateTime(TimeOnly.MinValue),
+                TimeSpan.FromHours(-6));
+
+            query = query.Where(x =>
+                x.TransactionDate < until);
+        }
+
+        return query;
     }
 
     private async Task<VoucherAnalysis> AnalyzeAsync(

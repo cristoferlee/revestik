@@ -18,10 +18,47 @@ public static class BankVoucherEndpoints
         group.MapGet(
                 "/",
                 async (
-                    [AsParameters] BankVoucherListRequest request,
+                    DateOnly? dateFrom,
+                    DateOnly? dateTo,
+                    int? status,
+                    bool? excludeNeedsReview,
+                    int page,
+                    int pageSize,
                     IBankVoucherReviewService service,
                     CancellationToken cancellationToken) =>
                 {
+                    BankVoucherStatus? parsedStatus = null;
+
+                    if (status.HasValue)
+                    {
+                        if (!Enum.IsDefined(
+                                typeof(BankVoucherStatus),
+                                status.Value))
+                        {
+                            return Results.ValidationProblem(
+                                new Dictionary<string, string[]>
+                                {
+                                    ["Status"] =
+                                    [
+                                        "El estado del voucher no es válido."
+                                    ]
+                                });
+                        }
+
+                        parsedStatus =
+                            (BankVoucherStatus)status.Value;
+                    }
+
+                    var request = new BankVoucherListRequest
+                    {
+                        DateFrom = dateFrom,
+                        DateTo = dateTo,
+                        Status = parsedStatus,
+                        ExcludeNeedsReview = excludeNeedsReview ?? false,
+                        Page = page,
+                        PageSize = pageSize
+                    };
+
                     var errors = ValidateRequest(request);
 
                     if (errors.Count > 0)
@@ -57,7 +94,9 @@ public static class BankVoucherEndpoints
                     int id,
                     IBankVoucherReviewService service,
                     CancellationToken cancellationToken) =>
-                    await service.AcceptAsync(id, cancellationToken)
+                    await service.AcceptAsync(
+                        id,
+                        cancellationToken)
                         ? Results.NoContent()
                         : Results.NotFound())
             .AddEndpointFilter<AntiforgeryValidationFilter>()
@@ -69,7 +108,9 @@ public static class BankVoucherEndpoints
                     int id,
                     IBankVoucherReviewService service,
                     CancellationToken cancellationToken) =>
-                    await service.IgnoreAsync(id, cancellationToken)
+                    await service.IgnoreAsync(
+                        id,
+                        cancellationToken)
                         ? Results.NoContent()
                         : Results.NotFound())
             .AddEndpointFilter<AntiforgeryValidationFilter>()
@@ -96,10 +137,12 @@ public static class BankVoucherEndpoints
                     return matched
                         ? Results.NoContent()
                         : Results.Problem(
-                            title: "No se pudo vincular el voucher.",
+                            title:
+                                "No se pudo vincular el voucher.",
                             detail:
                                 "La factura seleccionada no existe o no cumple los criterios de monto, moneda, fecha y comercio.",
-                            statusCode: StatusCodes.Status409Conflict);
+                            statusCode:
+                                StatusCodes.Status409Conflict);
                 })
             .AddEndpointFilter<AntiforgeryValidationFilter>()
             .WithName("MatchBankVoucher");
@@ -134,7 +177,8 @@ public static class BankVoucherEndpoints
                     {
                         Name = name,
                         Error =
-                            result.ErrorMessage ?? "Invalid value."
+                            result.ErrorMessage
+                            ?? "Invalid value."
                     }))
             .GroupBy(x => x.Name)
             .ToDictionary(

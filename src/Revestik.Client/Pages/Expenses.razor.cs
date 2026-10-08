@@ -15,8 +15,23 @@ public partial class Expenses : ComponentBase, IDisposable
         PageSize = 20
     };
 
+    private readonly BankVoucherListRequest reviewVoucherRequest = new()
+    {
+        Status = BankVoucherStatus.NeedsReview,
+        Page = 1,
+        PageSize = 10
+    };
+
+    private readonly BankVoucherListRequest historyVoucherRequest = new()
+    {
+        ExcludeNeedsReview = true,
+        Page = 1,
+        PageSize = 10
+    };
+
     private IReadOnlyList<ExpenseListItemResponse> expenses = [];
-    private IReadOnlyList<BankVoucherReviewItemResponse> bankVouchers = [];
+    private IReadOnlyList<BankVoucherReviewItemResponse> reviewVouchers = [];
+    private IReadOnlyList<BankVoucherReviewItemResponse> historyVouchers = [];
     private ExpenseCreateRequest formModel = CreateDefaultForm();
 
     private ExpenseSummaryResponse summary = new(0, 0m);
@@ -27,9 +42,12 @@ public partial class Expenses : ComponentBase, IDisposable
         new(false, false, "revestikcr@gmail.com", null, null, null, null, false);
 
     private ExpenseView activeView = ExpenseView.Overview;
+    private VoucherView activeVoucherView = VoucherView.Review;
     private string? errorMessage;
     private string? successMessage;
     private int totalPages = 1;
+    private int reviewVoucherTotalPages = 1;
+    private int historyVoucherTotalPages = 1;
     private bool isFormOpen;
     private bool isLoading;
     private bool isSaving;
@@ -46,6 +64,28 @@ public partial class Expenses : ComponentBase, IDisposable
 
     private bool CanGoPrevious => !isLoading && listRequest.Page > 1;
     private bool CanGoNext => !isLoading && listRequest.Page < totalPages;
+
+    private bool CanGoPreviousVoucher =>
+        !isVoucherBusy && ActiveVoucherRequest.Page > 1;
+
+    private bool CanGoNextVoucher =>
+        !isVoucherBusy &&
+        ActiveVoucherRequest.Page < ActiveVoucherTotalPages;
+
+    private BankVoucherListRequest ActiveVoucherRequest =>
+        activeVoucherView == VoucherView.Review
+            ? reviewVoucherRequest
+            : historyVoucherRequest;
+
+    private int ActiveVoucherTotalPages =>
+        activeVoucherView == VoucherView.Review
+            ? reviewVoucherTotalPages
+            : historyVoucherTotalPages;
+
+    private IReadOnlyList<BankVoucherReviewItemResponse> VisibleVouchers =>
+        activeVoucherView == VoucherView.Review
+            ? reviewVouchers
+            : historyVouchers;
 
     protected override async Task OnInitializedAsync()
     {
@@ -64,6 +104,8 @@ public partial class Expenses : ComponentBase, IDisposable
         try
         {
             var token = cancellationTokenSource.Token;
+            SyncVoucherDateFilters();
+
             var summaryRequest = new ExpenseSummaryRequest
             {
                 DateFrom = listRequest.DateFrom,
@@ -74,12 +116,11 @@ public partial class Expenses : ComponentBase, IDisposable
             var summaryTask = ExpenseApiService.GetSummaryAsync(summaryRequest, token);
             var consolidatedTask =
                 ExpenseApiService.GetConsolidatedSummaryAsync(summaryRequest, token);
-            var vouchersTask = BankVoucherApiService.GetVouchersAsync(
-                new BankVoucherListRequest
-                {
-                    DateFrom = listRequest.DateFrom,
-                    DateTo = listRequest.DateTo
-                },
+            var reviewTask = BankVoucherApiService.GetVouchersAsync(
+                reviewVoucherRequest,
+                token);
+            var historyTask = BankVoucherApiService.GetVouchersAsync(
+                historyVoucherRequest,
                 token);
             var gmailTask = BankVoucherApiService.GetGmailStatusAsync(token);
 
@@ -87,15 +128,18 @@ public partial class Expenses : ComponentBase, IDisposable
                 pageTask,
                 summaryTask,
                 consolidatedTask,
-                vouchersTask,
+                reviewTask,
+                historyTask,
                 gmailTask);
 
             var page = await pageTask;
             expenses = page.Items;
             summary = await summaryTask;
             consolidatedSummary = await consolidatedTask;
-            bankVouchers = await vouchersTask;
             gmailStatus = await gmailTask;
+
+            ApplyReviewPage(await reviewTask);
+            ApplyHistoryPage(await historyTask);
 
             totalPages = Math.Max(
                 1,
@@ -198,6 +242,8 @@ public partial class Expenses : ComponentBase, IDisposable
                 $"{result.Unrecognized} no reconocido(s), " +
                 $"{result.Failed} fallo(s).";
 
+            reviewVoucherRequest.Page = 1;
+            historyVoucherRequest.Page = 1;
             await LoadAsync();
         }
         catch (Exception exception)
@@ -272,7 +318,135 @@ public partial class Expenses : ComponentBase, IDisposable
         {
             await action();
             successMessage = success;
-            await LoadAsync();
+            await RefreshVoucherDataAsync();
+
+            if (activeVoucherView == VoucherView.Review &&
+                reviewVouchers.Count == 0 &&
+                reviewVoucherRequest.Page > 1)
+            {
+                reviewVoucherRequest.Page--;
+                await RefreshVoucherDataAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            errorMessage = exception.Message;
+        }
+        finally
+        {
+            isVoucherBusy = false;
+        }
+    }
+
+    private async Task RefreshVoucherDataAsync()
+    {
+        var token = cancellationTokenSource.Token;
+        SyncVoucherDateFilters();
+
+        var summaryRequest = new ExpenseSummaryRequest
+        {
+            DateFrom = listRequest.DateFrom,
+            DateTo = listRequest.DateTo
+        };
+
+        var consolidatedTask =
+            ExpenseApiService.GetConsolidatedSummaryAsync(
+                summaryRequest,
+                token);
+
+        var reviewTask =
+            BankVoucherApiService.GetVouchersAsync(
+                reviewVoucherRequest,
+                token);
+
+        var historyTask =
+            BankVoucherApiService.GetVouchersAsync(
+                historyVoucherRequest,
+                token);
+
+        await Task.WhenAll(
+            consolidatedTask,
+            reviewTask,
+            historyTask);
+
+        consolidatedSummary = await consolidatedTask;
+        ApplyReviewPage(await reviewTask);
+        ApplyHistoryPage(await historyTask);
+    }
+
+    private void ApplyReviewPage(BankVoucherPageResponse page)
+    {
+        reviewVouchers = page.Items;
+        reviewVoucherTotalPages = CalculateTotalPages(
+            page.TotalCount,
+            page.PageSize);
+    }
+
+    private void ApplyHistoryPage(BankVoucherPageResponse page)
+    {
+        historyVouchers = page.Items;
+        historyVoucherTotalPages = CalculateTotalPages(
+            page.TotalCount,
+            page.PageSize);
+    }
+
+    private static int CalculateTotalPages(
+        int totalCount,
+        int pageSize) =>
+        Math.Max(
+            1,
+            (int)Math.Ceiling(
+                totalCount / (double)pageSize));
+
+    private async Task SelectVoucherViewAsync(VoucherView view)
+    {
+        if (activeVoucherView == view)
+            return;
+
+        activeVoucherView = view;
+        errorMessage = null;
+        successMessage = null;
+
+        await RefreshActiveVoucherPageAsync();
+    }
+
+    private async Task PreviousVoucherPageAsync()
+    {
+        if (!CanGoPreviousVoucher)
+            return;
+
+        ActiveVoucherRequest.Page--;
+        await RefreshActiveVoucherPageAsync();
+    }
+
+    private async Task NextVoucherPageAsync()
+    {
+        if (!CanGoNextVoucher)
+            return;
+
+        ActiveVoucherRequest.Page++;
+        await RefreshActiveVoucherPageAsync();
+    }
+
+    private async Task RefreshActiveVoucherPageAsync()
+    {
+        if (isVoucherBusy)
+            return;
+
+        isVoucherBusy = true;
+
+        try
+        {
+            SyncVoucherDateFilters();
+
+            var page = await BankVoucherApiService.GetVouchersAsync(
+                ActiveVoucherRequest,
+                cancellationTokenSource.Token);
+
+            if (activeVoucherView == VoucherView.Review)
+                ApplyReviewPage(page);
+            else
+                ApplyHistoryPage(page);
         }
         catch (Exception exception)
         {
@@ -287,6 +461,8 @@ public partial class Expenses : ComponentBase, IDisposable
     private async Task ApplyFiltersAsync()
     {
         listRequest.Page = 1;
+        reviewVoucherRequest.Page = 1;
+        historyVoucherRequest.Page = 1;
         await LoadAsync();
     }
 
@@ -294,6 +470,8 @@ public partial class Expenses : ComponentBase, IDisposable
     {
         listRequest.Search = null;
         listRequest.Page = 1;
+        reviewVoucherRequest.Page = 1;
+        historyVoucherRequest.Page = 1;
         SetCurrentMonth();
         await LoadAsync();
     }
@@ -316,12 +494,21 @@ public partial class Expenses : ComponentBase, IDisposable
         await LoadAsync();
     }
 
+    private void SyncVoucherDateFilters()
+    {
+        reviewVoucherRequest.DateFrom = listRequest.DateFrom;
+        reviewVoucherRequest.DateTo = listRequest.DateTo;
+        historyVoucherRequest.DateFrom = listRequest.DateFrom;
+        historyVoucherRequest.DateTo = listRequest.DateTo;
+    }
+
     private void SetCurrentMonth()
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var firstDay = new DateOnly(today.Year, today.Month, 1);
         listRequest.DateFrom = firstDay;
         listRequest.DateTo = firstDay.AddMonths(1).AddDays(-1);
+        SyncVoucherDateFilters();
     }
 
     private string GetGmailStatusLabel() =>
@@ -378,5 +565,11 @@ public partial class Expenses : ComponentBase, IDisposable
         Overview,
         Manual,
         Vouchers
+    }
+
+    private enum VoucherView
+    {
+        Review,
+        History
     }
 }

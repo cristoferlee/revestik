@@ -4,7 +4,7 @@ namespace Revestik.Api.Services.BankVouchers;
 
 public interface IBankVoucherReviewService
 {
-    Task<IReadOnlyList<BankVoucherReviewItemResponse>> GetAsync(
+    Task<BankVoucherPageResponse> GetAsync(
         BankVoucherListRequest request,
         CancellationToken cancellationToken);
 

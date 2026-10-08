@@ -109,7 +109,7 @@
                         </div>
                         <dl class="summary-breakdown">
                             <div><dt>Manuales</dt><dd>@FormatMoney(total.Currency, total.ManualExpenses)</dd></div>
-                            <div><dt>XML · gastos</dt><dd>@FormatMoney(total.Currency, total.ElectronicDocumentExpenses)</dd></div>
+                            <div><dt>Facturas Electronicas · gastos</dt><dd>@FormatMoney(total.Currency, total.ElectronicDocumentExpenses)</dd></div>
                             <div><dt>Vouchers aceptados</dt><dd>@FormatMoney(total.Currency, total.AcceptedBankVouchers)</dd></div>
                         </dl>
                     </article>
@@ -128,7 +128,7 @@
                 <div>
                     <span class="section-kicker">Composición</span>
                     <h2>Cómo se calcula</h2>
-                    <p>Manual + XML clasificado como gasto operativo + voucher aceptado sin factura vinculada.</p>
+                    <p>Gastos Manuales + Factura Electronica clasificada como gasto operativo + voucher aceptado sin factura vinculada.</p>
                 </div>
             </div>
 
@@ -147,7 +147,7 @@
             <div class="section-heading">
                 <div>
                     <h2>Agregar gasto manual</h2>
-                    <p>Úsalo para egresos que no cuentan con XML ni voucher bancario que deba contabilizarse.</p>
+                    <p>Úsalo para egresos que no cuentan con Factura Electronica ni voucher bancario que deba contabilizarse.</p>
                 </div>
             </div>
 
@@ -312,20 +312,51 @@
         <section class="expense-card">
             <div class="section-heading">
                 <div>
-                    <span class="section-kicker">Revisión</span>
-                    <h2>Vouchers del período</h2>
-                    <p>Revisa antes de aceptar para evitar contabilizar dos veces un mismo gasto.</p>
+                    <span class="section-kicker">Vouchers</span>
+                    <h2>@(activeVoucherView == VoucherView.Review ? "Pendientes de revisión" : "Historial")</h2>
+                    <p>
+                        @(activeVoucherView == VoucherView.Review
+                            ? "Al aceptar, vincular o ignorar un voucher desaparece de esta cola y queda disponible en el historial."
+                            : "Consulta vouchers ya aceptados, vinculados o ignorados.")
+                    </p>
                 </div>
             </div>
 
-            @if (bankVouchers.Count == 0)
+            <nav class="module-nav" aria-label="Vista de vouchers">
+                <button type="button"
+                        class="module-nav-button @(activeVoucherView == VoucherView.Review ? "active" : null)"
+                        disabled="@isVoucherBusy"
+                        @onclick="() => SelectVoucherViewAsync(VoucherView.Review)">
+                    Por revisar
+                    @if (consolidatedSummary.NeedsReviewVoucherCount > 0)
+                    {
+                        <span class="nav-count">@consolidatedSummary.NeedsReviewVoucherCount</span>
+                    }
+                </button>
+                <button type="button"
+                        class="module-nav-button @(activeVoucherView == VoucherView.History ? "active" : null)"
+                        disabled="@isVoucherBusy"
+                        @onclick="() => SelectVoucherViewAsync(VoucherView.History)">
+                    Historial
+                </button>
+            </nav>
+
+            @if (isVoucherBusy && VisibleVouchers.Count == 0)
             {
-                <p class="empty-state">No hay vouchers en el período seleccionado.</p>
+                <p class="empty-state">Cargando vouchers...</p>
+            }
+            else if (VisibleVouchers.Count == 0)
+            {
+                <p class="empty-state">
+                    @(activeVoucherView == VoucherView.Review
+                        ? "No hay vouchers pendientes de revisión en el período seleccionado."
+                        : "No hay vouchers revisados en el período seleccionado.")
+                </p>
             }
             else
             {
                 <div class="voucher-list">
-                    @foreach (var voucher in bankVouchers)
+                    @foreach (var voucher in VisibleVouchers)
                     {
                         <article class="voucher-item">
                             <div class="voucher-main">
@@ -425,6 +456,22 @@
                         </article>
                     }
                 </div>
+
+                <nav class="pagination-controls">
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@(!CanGoPreviousVoucher)"
+                            @onclick="PreviousVoucherPageAsync">
+                        Anterior
+                    </button>
+                    <span>Página @ActiveVoucherRequest.Page de @ActiveVoucherTotalPages</span>
+                    <button type="button"
+                            class="secondary-button"
+                            disabled="@(!CanGoNextVoucher)"
+                            @onclick="NextVoucherPageAsync">
+                        Siguiente
+                    </button>
+                </nav>
             }
         </section>
     }

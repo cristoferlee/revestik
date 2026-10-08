@@ -17,7 +17,7 @@ public interface IBankVoucherApiService
     Task DisconnectAsync(
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<BankVoucherReviewItemResponse>> GetVouchersAsync(
+    Task<BankVoucherPageResponse> GetVouchersAsync(
         BankVoucherListRequest request,
         CancellationToken cancellationToken = default);
 

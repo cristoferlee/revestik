@@ -34,13 +34,14 @@ public sealed class BankVoucherReviewServiceTests
 
         var service = new BankVoucherReviewService(db);
 
-        var items = await service.GetAsync(
+        var page = await service.GetAsync(
             new BankVoucherListRequest(),
             CancellationToken.None);
 
-        var item = Assert.Single(items);
+        var item = Assert.Single(page.Items);
         var candidate = Assert.Single(item.MatchCandidates);
 
+        Assert.Equal(1, page.TotalCount);
         Assert.Equal(document.Id, candidate.ElectronicDocumentId);
         Assert.Equal(
             AccountingNature.OperatingExpense,
@@ -69,10 +70,14 @@ public sealed class BankVoucherReviewServiceTests
 
         var service = new BankVoucherReviewService(db);
 
-        var item = Assert.Single(
-            await service.GetAsync(
-                new BankVoucherListRequest(),
-                CancellationToken.None));
+        var page = await service.GetAsync(
+            new BankVoucherListRequest
+            {
+                Status = BankVoucherStatus.NeedsReview
+            },
+            CancellationToken.None);
+
+        var item = Assert.Single(page.Items);
 
         Assert.Equal(
             BankVoucherStatus.NeedsReview,
@@ -81,6 +86,105 @@ public sealed class BankVoucherReviewServiceTests
         Assert.Equal(
             BankVoucherStatus.NeedsReview,
             Assert.Single(db.BankVouchers).Status);
+    }
+
+    [Fact]
+    public async Task GetAsync_StatusFilter_ReturnsOnlyRequestedStatus()
+    {
+        await using var db = CreateDb();
+
+        db.BankVouchers.AddRange(
+            CreateVoucher(BankVoucherStatus.NeedsReview),
+            CreateVoucher(BankVoucherStatus.Accepted),
+            CreateVoucher(BankVoucherStatus.Ignored));
+
+        await db.SaveChangesAsync();
+
+        var service = new BankVoucherReviewService(db);
+
+        var page = await service.GetAsync(
+            new BankVoucherListRequest
+            {
+                Status = BankVoucherStatus.NeedsReview
+            },
+            CancellationToken.None);
+
+        var item = Assert.Single(page.Items);
+        Assert.Equal(BankVoucherStatus.NeedsReview, item.Status);
+        Assert.Equal(1, page.TotalCount);
+    }
+
+    [Fact]
+    public async Task GetAsync_History_ExcludesNeedsReview()
+    {
+        await using var db = CreateDb();
+
+        db.BankVouchers.AddRange(
+            CreateVoucher(BankVoucherStatus.NeedsReview),
+            CreateVoucher(BankVoucherStatus.Accepted),
+            CreateVoucher(BankVoucherStatus.Matched),
+            CreateVoucher(BankVoucherStatus.Ignored));
+
+        await db.SaveChangesAsync();
+
+        var service = new BankVoucherReviewService(db);
+
+        var page = await service.GetAsync(
+            new BankVoucherListRequest
+            {
+                ExcludeNeedsReview = true
+            },
+            CancellationToken.None);
+
+        Assert.Equal(3, page.TotalCount);
+        Assert.All(
+            page.Items,
+            item => Assert.NotEqual(
+                BankVoucherStatus.NeedsReview,
+                item.Status));
+    }
+
+    [Fact]
+    public async Task GetAsync_PaginatesTenItems()
+    {
+        await using var db = CreateDb();
+
+        for (var index = 0; index < 12; index++)
+        {
+            var voucher = CreateVoucher(
+                BankVoucherStatus.NeedsReview);
+
+            voucher.TransactionDate = voucher.TransactionDate
+                .AddMinutes(index);
+
+            db.BankVouchers.Add(voucher);
+        }
+
+        await db.SaveChangesAsync();
+
+        var service = new BankVoucherReviewService(db);
+
+        var firstPage = await service.GetAsync(
+            new BankVoucherListRequest
+            {
+                Status = BankVoucherStatus.NeedsReview,
+                Page = 1,
+                PageSize = 10
+            },
+            CancellationToken.None);
+
+        var secondPage = await service.GetAsync(
+            new BankVoucherListRequest
+            {
+                Status = BankVoucherStatus.NeedsReview,
+                Page = 2,
+                PageSize = 10
+            },
+            CancellationToken.None);
+
+        Assert.Equal(12, firstPage.TotalCount);
+        Assert.Equal(10, firstPage.Items.Count);
+        Assert.Equal(2, secondPage.Items.Count);
     }
 
     [Fact]
@@ -177,10 +281,11 @@ public sealed class BankVoucherReviewServiceTests
 
         var service = new BankVoucherReviewService(db);
 
-        var item = Assert.Single(
-            await service.GetAsync(
-                new BankVoucherListRequest(),
-                CancellationToken.None));
+        var page = await service.GetAsync(
+            new BankVoucherListRequest(),
+            CancellationToken.None);
+
+        var item = Assert.Single(page.Items);
 
         Assert.True(item.IsKnownMerchant);
         Assert.Empty(item.MatchCandidates);
