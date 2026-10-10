@@ -89,6 +89,9 @@ builder.Services.AddSingleton<IQuotationPdfService, QuotationPdfService>();
 builder.Services.AddScoped<ISaleService, SaleService>();
 builder.Services.AddScoped<ISaleNumberGenerator, SqlSaleNumberGenerator>();
 builder.Services.AddSingleton<ISalePdfService, SalePdfService>();
+builder.Services.AddScoped<FiscalAnalyticsService>();
+builder.Services.AddScoped<ElectronicDocumentPurchaseLinkService>();
+builder.Services.AddScoped<ElectronicDocumentPurchaseReconciliationService>();
 
 var haciendaBaseUrl = builder.Configuration["Hacienda:BaseUrl"]
     ?? throw new InvalidOperationException("Hacienda base URL was not configured.");
@@ -157,6 +160,7 @@ app.MapSaleEndpoints();
 app.MapTaxpayerEndpoints();
 app.MapLocationEndpoints();
 app.MapAuthenticationEndpoints();
+app.MapFiscalReconciliationEndpoints();
 
 if (!app.Environment.IsDevelopment())
 {

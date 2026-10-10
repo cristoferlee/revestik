@@ -101,6 +101,75 @@ public sealed class ElectronicDocumentPeriodSummaryServiceTests
     }
 
     [Fact]
+    public async Task GetSummaryAsync_UsesXmlCalendarDateAcrossOffsetsForCountsAndTotals()
+    {
+        await using var db = CreateDbContext();
+        var category = new ElectronicDocumentCategory
+        {
+            Name = "Inventario", AccountingNature = AccountingNature.Inventory,
+            IsActive = true, IsDefaultDestinationInitialized = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        db.ElectronicDocumentCategories.Add(category);
+        await db.SaveChangesAsync();
+
+        var first = CreateDocument(21, "oct21", new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.FromHours(14)),
+            ElectronicDocumentProcessingStatus.Processed, 100m, category.Id);
+        var last = CreateDocument(22, "oct22", new DateTimeOffset(2026, 10, 1, 23, 59, 59, TimeSpan.FromHours(-14)),
+            ElectronicDocumentProcessingStatus.Processed, 200m, category.Id);
+        var previous = CreateDocument(23, "sep23", new DateTimeOffset(2026, 9, 30, 23, 59, 59, TimeSpan.FromHours(-14)),
+            ElectronicDocumentProcessingStatus.Processed, 900m, category.Id);
+        var next = CreateDocument(24, "nov24", new DateTimeOffset(2026, 10, 2, 0, 0, 0, TimeSpan.FromHours(14)),
+            ElectronicDocumentProcessingStatus.Processed, 800m, category.Id);
+        db.ElectronicDocuments.AddRange(first, last, previous, next);
+        await db.SaveChangesAsync();
+
+        var result = await new ElectronicDocumentPeriodSummaryService(db).GetSummaryAsync(
+            new ElectronicDocumentSummaryRequest
+            {
+                DateFrom = new DateOnly(2026, 10, 1), DateTo = new DateOnly(2026, 10, 1)
+            }, CancellationToken.None);
+
+        Assert.Equal(2, result.ProcessedCount);
+        Assert.Equal(300m, Assert.Single(result.AccountingTotals!).PurchasesTotal);
+        Assert.Equal(300m, Assert.Single(result.FinancialTotals!).CashTotal);
+    }
+
+    [Fact]
+    public async Task GetSummaryAsync_ExcludesNotesAndIssuedDocumentsFromEconomicTotalsButCountsThem()
+    {
+        await using var db = CreateDbContext();
+        var category = new ElectronicDocumentCategory
+        {
+            Name = "Inventario", AccountingNature = AccountingNature.Inventory,
+            IsActive = true, IsDefaultDestinationInitialized = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        db.ElectronicDocumentCategories.Add(category);
+        await db.SaveChangesAsync();
+        ElectronicDocument Make(int id, ElectronicDocumentType type, ElectronicDocumentDirection direction, decimal amount)
+        {
+            var doc = CreateDocument(id, $"doc{id}", new DateTimeOffset(2026, 10, 5, 10, 0, 0, TimeSpan.FromHours(-6)),
+                ElectronicDocumentProcessingStatus.Processed, amount, category.Id);
+            doc.DocumentType = type;
+            doc.Direction = direction;
+            return doc;
+        }
+        db.ElectronicDocuments.AddRange(
+            Make(31, ElectronicDocumentType.Invoice, ElectronicDocumentDirection.Received, 100m),
+            Make(32, ElectronicDocumentType.CreditNote, ElectronicDocumentDirection.Received, 50m),
+            Make(33, ElectronicDocumentType.Invoice, ElectronicDocumentDirection.Issued, 500m));
+        await db.SaveChangesAsync();
+
+        var result = await new ElectronicDocumentPeriodSummaryService(db).GetSummaryAsync(
+            new ElectronicDocumentSummaryRequest { DateFrom = new DateOnly(2026, 10, 1), DateTo = new DateOnly(2026, 10, 31) },
+            CancellationToken.None);
+        Assert.Equal(3, result.ProcessedCount);
+        Assert.Equal(100m, Assert.Single(result.AccountingTotals!).PurchasesTotal);
+        Assert.Equal(100m, Assert.Single(result.FinancialTotals!).CashTotal);
+    }
+
+    [Fact]
     public void SummaryRequest_WhenDateFromIsAfterDateTo_IsInvalid()
     {
         var request = new ElectronicDocumentSummaryRequest
@@ -137,6 +206,7 @@ public sealed class ElectronicDocumentPeriodSummaryServiceTests
             Id = id,
             Clave = clave,
             DocumentType = ElectronicDocumentType.Invoice,
+            Direction = ElectronicDocumentDirection.Received,
             NumeroConsecutivo = $"0010000101000005{id:0000}",
             FechaEmision = fechaEmision,
             IssuerEconomicActivityCode = string.Empty,

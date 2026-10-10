@@ -112,9 +112,10 @@ public sealed class ReceivedDocumentInboxService : IReceivedDocumentInboxService
         var item = await ReadAsync(path, cancellationToken);
         if (item.Status == ReceivedDocumentInboxStatus.Duplicate)
             throw new ReceivedDocumentInboxException("El documento es duplicado y no puede aceptarse nuevamente.");
-        if (item.Status == ReceivedDocumentInboxStatus.RecognizedNotEnabled)
-            throw new ReceivedDocumentInboxException("El documento fue recibido mientras su procesamiento estaba deshabilitado. Debe volver a ingresarse y validarse.");
-        if (item.Status != ReceivedDocumentInboxStatus.PendingReview)
+        // Legacy recognized documents are revalidated against the CURRENT XSD and
+        // current fiscal allowlist below. The old preview is never trusted for import.
+        if (item.Status is not (ReceivedDocumentInboxStatus.PendingReview or
+            ReceivedDocumentInboxStatus.RecognizedNotEnabled))
             throw new ReceivedDocumentInboxException("El documento ya no está pendiente de revisión.");
 
         var xml = Convert.FromBase64String(item.XmlBase64);

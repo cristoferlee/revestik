@@ -1,0 +1,60 @@
+/* Scoped to this page; follows ReceivedDocuments visual language. */
+.fiscal-workspace{display:grid;gap:20px;max-width:1460px;margin:0 auto;padding:20px 24px 42px;background:#fff;color:#26313d}
+.fiscal-workspace .received-header{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:4px 0 2px;margin:0;background:transparent;border:0;box-shadow:none}
+.fiscal-workspace h1{margin:0 0 5px;color:#17212b;font-size:clamp(1.9rem,3vw,2.45rem);letter-spacing:-.04em}
+.fiscal-workspace h2{margin:0 0 3px;font-size:1.06rem;color:#26313d}
+.fiscal-workspace h3{margin:0 0 .9rem;color:#26313d}
+.fiscal-workspace p{margin:4px 0;color:#7a8592;line-height:1.5;font-size:.83rem}
+.fiscal-workspace .section-kicker{display:inline-flex;align-items:center;min-height:23px;padding:0 8px;border-radius:999px;background:#f2f4f6;color:#6d7884;font-size:.65rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+.fiscal-workspace .received-card,.fiscal-workspace .fiscal-panel{background:#fff;border:1px solid #e0e5ea;border-radius:13px;box-shadow:0 4px 14px rgb(23 32 42 / 4%)}
+.fiscal-workspace .fiscal-panel{padding:18px 20px;margin:0}
+.fiscal-workspace .section-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px;padding-bottom:13px;border-bottom:1px solid #edf0f3}
+.fiscal-workspace .received-workflow-nav{display:flex;flex-wrap:wrap;gap:8px;padding:8px;margin:0;border:1px solid #e1e6eb;border-radius:12px;background:#f8fafb;box-shadow:0 2px 8px rgb(23 32 42 / 4%)}
+.fiscal-workspace button{font:inherit;font-size:.82rem;font-weight:700;cursor:pointer;border-radius:9px;min-height:40px}
+.fiscal-workspace button:disabled{opacity:.52;cursor:not-allowed}
+.fiscal-workspace .workflow-tab{min-height:38px;padding:8px 14px;border:1px solid transparent;background:transparent;color:#56616e}
+.fiscal-workspace .workflow-tab.active{background:#fff;color:#17212b;border-color:#d8dee5;box-shadow:0 2px 7px rgb(23 32 42 / 7%)}
+.fiscal-workspace .primary-button{display:inline-flex;align-items:center;justify-content:center;padding:0 15px;border:1px solid #e59200;background:linear-gradient(180deg,#ffad18 0%,#f59a00 100%);color:#1f2937;box-shadow:0 2px 5px rgb(166 97 0 / 14%)}
+.fiscal-workspace .primary-button:hover:not(:disabled){background:#ed9200}
+.fiscal-workspace .secondary-button{display:inline-flex;align-items:center;justify-content:center;padding:0 15px;border:1px solid #d9e0e7;background:#fff;color:#3d4956;box-shadow:0 1px 2px rgb(23 32 42 / 3%)}
+.fiscal-workspace .secondary-button:hover:not(:disabled){background:#f8fafb;border-color:#bcc7d2}
+.fiscal-workspace .fiscal-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0}
+.fiscal-workspace .fiscal-input{min-width:12rem;max-width:28rem;flex:1;min-height:40px;padding:8px 12px;border:1px solid #d9e0e7;border-radius:9px;background:#fff;color:#26313d}
+.fiscal-workspace .fiscal-input:focus{outline:2px solid #f59a00;outline-offset:1px}
+.fiscal-workspace .table-container{overflow-x:auto;border:1px solid #e0e5ea;border-radius:12px;background:#fff}
+.fiscal-workspace table{width:100%;border-collapse:collapse;text-align:left;background:#fff}
+.fiscal-workspace th{background:#f8fafb;color:#687482;font-size:.76rem;letter-spacing:.04em;text-transform:uppercase;padding:13px 14px}
+.fiscal-workspace td{background:#fff;border-top:1px solid #e7edf2;padding:13px 14px;vertical-align:middle;color:#26313d}
+.fiscal-workspace tbody tr:hover td{background:#fbfcfd}
+.fiscal-workspace td strong,.fiscal-workspace td small{display:block;max-width:400px;overflow-wrap:anywhere}
+.fiscal-workspace td small{color:#7a8592;font-size:.73rem;margin-top:3px}
+.fiscal-workspace .fiscal-pagination,.fiscal-workspace .fiscal-candidate{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem;border-bottom:1px solid #e3eaf0}
+.fiscal-workspace .fiscal-pagination{margin-top:8px;border-bottom:0;color:#697683}
+.fiscal-workspace .fiscal-actions{display:flex;gap:8px}
+.fiscal-workspace .fiscal-candidate{margin:8px 0;border:1px solid #e0e5ea;border-radius:12px;background:#fff}
+.fiscal-workspace .fiscal-candidate>div{display:grid;gap:6px}
+.fiscal-workspace .fiscal-candidate small{display:block;color:#7a8592}
+.fiscal-workspace .fiscal-candidate-selected{border:2px solid #e59200;background:#fffaf0}
+.fiscal-workspace .fiscal-empty{padding:28px;text-align:center;color:#697683;border:1px dashed #ccd5df;border-radius:12px;background:#f8fafb}
+.fiscal-workspace .fiscal-note{font-size:.88rem;color:#56616e;background:#fff9ed;border-left:3px solid #f59a00;padding:12px 15px;border-radius:8px}
+.fiscal-workspace .fiscal-review,.fiscal-workspace .fiscal-confirm{padding:18px;border:1px solid #e0e5ea;border-radius:12px;background:#fbfcfd;margin-top:12px}
+.fiscal-workspace .fiscal-confirm{display:grid;gap:1rem}
+.fiscal-workspace .fiscal-confirm label{display:flex;gap:9px;align-items:flex-start;line-height:1.5}
+.fiscal-workspace .status-message{padding:12px 15px;border-radius:10px;background:#eff8f1;color:#2b6340;margin-bottom:12px}
+.fiscal-workspace .error-message{background:#fff0ef;color:#9f2e36}
+.fiscal-workspace .fiscal-adjustment-row{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:10px 0;border-bottom:1px solid #e5e9ed}
+.fiscal-workspace .fiscal-adjustment-total{font-size:1.06rem;font-weight:750;border-bottom:0}
+@media(max-width:700px){.fiscal-workspace{padding:12px}.fiscal-workspace .received-header,.fiscal-workspace .fiscal-candidate,.fiscal-workspace .fiscal-pagination{align-items:stretch;flex-direction:column}.fiscal-workspace .fiscal-panel{padding:14px}.fiscal-workspace .fiscal-input{width:100%;max-width:none}.fiscal-workspace .table-container{font-size:.9rem}}
+
+/* Explicit side-by-side fiscal comparison; same neutral/orange palette as ReceivedDocuments. */
+.fiscal-workspace .fiscal-document-comparison{padding:18px;margin-top:16px;border:1px solid #e0e5ea;border-radius:12px;background:#fff}
+.fiscal-workspace .fiscal-comparison-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:12px 0 18px}
+.fiscal-workspace .fiscal-comparison-document{min-width:0;padding:16px;border:1px solid #e0e5ea;border-radius:10px;background:#fbfcfd}
+.fiscal-workspace .fiscal-comparison-document h4{margin:10px 0;color:#17212b;font-size:1rem}
+.fiscal-workspace .fiscal-comparison-document dl{display:grid;grid-template-columns:minmax(90px,110px) minmax(0,1fr);gap:9px 12px;margin:0;font-size:.82rem}
+.fiscal-workspace .fiscal-comparison-document dt{font-weight:700;color:#64717e}
+.fiscal-workspace .fiscal-comparison-document dd{margin:0;min-width:0;overflow-wrap:anywhere;color:#26313d}
+.fiscal-workspace .fiscal-comparison-warning{color:#805819;background:#fff9ed;border-left:3px solid #f59a00;padding:10px 12px;border-radius:8px}
+@media(max-width:780px){.fiscal-workspace .fiscal-comparison-grid{grid-template-columns:1fr}}
+
+.fiscal-workspace .fiscal-diagnostic-reason{color:#9a4b1b;font-weight:650}

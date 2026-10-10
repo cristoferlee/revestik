@@ -99,6 +99,52 @@
         </section>
     }
 
+    @if (documentCounter is not null)
+    {
+        <section class="received-card accounting-summary-card" aria-label="Contador documental fiscal">
+            <div class="section-heading">
+                <div>
+                    <span class="section-kicker">Evidencia fiscal</span>
+                    <h2>Contador documental neto</h2>
+                    <p>Facturas recibidas menos notas de crédito aprobadas más notas de débito aprobadas. No representa compras operativas, gastos deducibles ni IVA acreditable.</p>
+                </div>
+            </div>
+            <div class="accounting-summary-grid">
+                @foreach (var total in documentCounter.Totals)
+                {
+                    <article class="accounting-currency-card">
+                        <div class="currency-card-header">
+                            <div><span>Moneda</span><strong>@total.CurrencyCode</strong></div>
+                            <div class="currency-card-total"><span>Neto documental</span><strong>@total.NetTotal.ToString("N2")</strong></div>
+                        </div>
+                        <dl class="accounting-metrics">
+                            <div><dt>Facturas</dt><dd>@total.InvoiceTotal.ToString("N2")</dd></div>
+                            <div><dt>NC aprobadas (restan)</dt><dd>@total.CreditNoteTotal.ToString("N2")</dd></div>
+                            <div><dt>ND aprobadas (suman)</dt><dd>@total.DebitNoteTotal.ToString("N2")</dd></div>
+                        </dl>
+                    </article>
+                }
+            </div>
+            <p>Documentos incluidos: @documentCounter.Documents.Count(x => x.IsIncluded). Documentos excluidos: @documentCounter.Documents.Count(x => !x.IsIncluded).</p>
+            <details>
+                <summary>Ver desglose y exclusiones</summary>
+                <table class="table">
+                    <thead><tr><th>Clave</th><th>Tipo</th><th>Fecha</th><th>Moneda</th><th>Importe con signo</th><th>Resultado</th></tr></thead>
+                    <tbody>
+                        @foreach (var item in documentCounter.Documents)
+                        {
+                            <tr>
+                                <td>@item.Clave</td><td>@item.DocumentType</td><td>@item.IssueDate</td><td>@item.CurrencyCode</td>
+                                <td>@item.SignedTotal.ToString("N2")</td>
+                                <td>@(item.IsIncluded ? "Incluido" : item.ExclusionReason)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </details>
+        </section>
+    }
+
     @if (summary.AccountingTotals is { Count: > 0 })
     {
         <section class="received-card accounting-summary-card">
@@ -327,10 +373,15 @@
                                         <strong>Duplicado</strong>
                                         <small>Ya existe en Revestik.</small>
                                     }
+                                    else if (inboxItem.Status == ReceivedDocumentInboxStatus.RecognizedNotEnabled && IsNowSupportedFiscalKind(inboxItem.DocumentKind))
+                                    {
+                                        <strong>Disponible para revisión</strong>
+                                        <small>Documento recibido anteriormente. Se validará otra vez con Hacienda v4.4 antes de aceptarlo.</small>
+                                    }
                                     else if (inboxItem.Status == ReceivedDocumentInboxStatus.RecognizedNotEnabled)
                                     {
-                                        <strong>Válido · soporte pendiente</strong>
-                                        <small>Hacienda v4.4 reconocido; este tipo todavía no se procesa en Revestik.</small>
+                                        <strong>Procesamiento no habilitado</strong>
+                                        <small>El comprobante se conserva en cuarentena.</small>
                                     }
                                     else if (inboxItem.RequiresHighAmountReview)
                                     {
@@ -360,6 +411,31 @@
                                                 Rechazar
                                             </button>
                                         </div>
+                                    }
+                                    else if (inboxItem.Status == ReceivedDocumentInboxStatus.RecognizedNotEnabled && IsNowSupportedFiscalKind(inboxItem.DocumentKind))
+                                    {
+                                        <button type="button" class="primary-button" disabled="@isBusy"
+                                                @onclick="() => AcceptInboxItemAsync(inboxItem.Id)">
+                                            Validar y aceptar
+                                        </button>
+                                    }
+                                    else if (inboxItem.Status == ReceivedDocumentInboxStatus.Duplicate)
+                                    {
+                                        @if (duplicateToDiscard == inboxItem.Id)
+                                        {
+                                            <div class="inbox-actions">
+                                                <span>¿Descartar solo la copia de cuarentena?</span>
+                                                <button type="button" class="secondary-button" disabled="@isBusy"
+                                                        @onclick="() => DiscardDuplicateAsync(inboxItem.Id)">Confirmar</button>
+                                                <button type="button" class="secondary-button" disabled="@isBusy"
+                                                        @onclick="() => duplicateToDiscard = null">Cancelar</button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="secondary-button" disabled="@isBusy"
+                                                    @onclick="() => duplicateToDiscard = inboxItem.Id">Descartar duplicado</button>
+                                        }
                                     }
                                     else
                                     {
@@ -917,6 +993,7 @@
     private IReadOnlyList<ElectronicDocumentLearningRuleResponse> learningRules = [];
     private IReadOnlyList<ReceivedDocumentInboxItemResponse> inboxItems = [];
     private ElectronicDocumentSummaryResponse summary = new(0, 0, 0, 0);
+    private FiscalDocumentCounterResponse? documentCounter;
     private GmailIntegrationStatusResponse gmailStatus = new(false, false, "facturas@revestikcr.com", null, null, null, null, false);
     private ElectronicDocumentDetailResponse? selectedDocument;
     private IBrowserFile? selectedFile;
@@ -966,6 +1043,8 @@
         {
             var token = cancellationTokenSource.Token;
             var pageTask = ElectronicDocumentApi.GetPageAsync(filters, token);
+            var counterTask = GetDocumentCounterAsync(showHistory ? filters.DateFrom : null,
+                showHistory ? filters.DateTo : null, token);
             var summaryTask = showHistory
                 ? GetPeriodSummaryAsync(filters.DateFrom, filters.DateTo, token)
                 : ElectronicDocumentApi.GetSummaryAsync(token);
@@ -978,6 +1057,7 @@
 
             await Task.WhenAll(
                 pageTask,
+                counterTask,
                 summaryTask,
                 pendingSummaryTask,
                 categoriesTask,
@@ -988,6 +1068,7 @@
             documents = page.Items;
             totalCount = page.TotalCount;
             summary = await summaryTask;
+            documentCounter = await counterTask;
             pendingWorkCount = (await pendingSummaryTask).PendingCount;
             categories = await categoriesTask;
             inboxItems = await inboxTask;
@@ -1089,6 +1170,34 @@
         finally { isImporting = false; }
     }
 
+    private Guid? duplicateToDiscard;
+
+    private static bool IsNowSupportedFiscalKind(string kind) => kind is
+        "NotaCreditoElectronica" or "NotaDebitoElectronica" or
+        "TiqueteElectronico" or "FacturaElectronicaCompra" or
+        "FacturaElectronicaExportacion" or "ReciboElectronicoPago";
+
+    private async Task DiscardDuplicateAsync(Guid inboxId)
+    {
+        if (isImporting || duplicateToDiscard != inboxId) return;
+        isImporting = true;
+        errorMessage = null;
+        successMessage = null;
+        try
+        {
+            // Reject only changes the temporary encrypted inbox envelope.
+            var removed = await ElectronicDocumentApi.RejectInboxAsync(inboxId, cancellationTokenSource.Token);
+            successMessage = removed
+                ? "Copia duplicada retirada de cuarentena. El documento original permanece en Revestik."
+                : "La copia ya no estaba disponible.";
+            duplicateToDiscard = null;
+            await RefreshAsync();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isImporting = false; }
+    }
+
     private async Task RejectInboxItemAsync(Guid inboxId)
     {
         if (isImporting) return;
@@ -1112,6 +1221,23 @@
         catch (OperationCanceledException) { }
         catch (Exception exception) { errorMessage = exception.Message; }
         finally { isImporting = false; }
+    }
+
+    private async Task<FiscalDocumentCounterResponse> GetDocumentCounterAsync(
+        DateOnly? dateFrom, DateOnly? dateTo, CancellationToken cancellationToken)
+    {
+        var parameters = new List<string>();
+        if (dateFrom.HasValue)
+            parameters.Add($"DateFrom={Uri.EscapeDataString(dateFrom.Value.ToString("yyyy-MM-dd"))}");
+        if (dateTo.HasValue)
+            parameters.Add($"DateTo={Uri.EscapeDataString(dateTo.Value.ToString("yyyy-MM-dd"))}");
+        var url = "api/purchases/received-documents/document-counter";
+        if (parameters.Count > 0)
+            url += $"?{string.Join("&", parameters)}";
+        using var response = await Http.GetAsync(url, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<FiscalDocumentCounterResponse>(cancellationToken)
+            ?? throw new InvalidOperationException("La API devolvió un contador documental vacío.");
     }
 
     private async Task<ElectronicDocumentSummaryResponse> GetPeriodSummaryAsync(

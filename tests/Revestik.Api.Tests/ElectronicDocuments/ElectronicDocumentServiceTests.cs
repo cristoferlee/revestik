@@ -175,6 +175,7 @@ public sealed class ElectronicDocumentServiceTests
 
         var document = await dbContext.ElectronicDocuments.SingleAsync(x => x.Id == 1);
         document.CategoryId = inventory.Id;
+        document.Direction = ElectronicDocumentDirection.Received;
         document.ProcessingStatus = ElectronicDocumentProcessingStatus.Processed;
         document.TotalDocument = 100_000m;
         dbContext.ElectronicDocumentLines.AddRange(
@@ -197,6 +198,47 @@ public sealed class ElectronicDocumentServiceTests
         Assert.Equal(100_000m, financial.CashTotal);
         Assert.Equal(0m, financial.CreditTotal);
         Assert.Equal(0m, financial.OtherTotal);
+    }
+
+    [Fact]
+    public async Task GetSummaryAsync_OnlyReceivedOrdinaryDocumentsContributeToEconomicTotals()
+    {
+        await using var db = CreateDbContext();
+        var category = await SeedAsync(db);
+        var original = await db.ElectronicDocuments.SingleAsync(x => x.Id == 1);
+        original.Direction = ElectronicDocumentDirection.Received;
+        original.ProcessingStatus = ElectronicDocumentProcessingStatus.Processed;
+        original.CategoryId = category.Id;
+        original.TotalDocument = 100m;
+
+        var credit = CreateDocument(2, "credit-2", ElectronicDocumentProcessingStatus.Processed);
+        credit.DocumentType = ElectronicDocumentType.CreditNote;
+        credit.Direction = ElectronicDocumentDirection.Received;
+        credit.CategoryId = category.Id;
+        credit.TotalDocument = 50m;
+
+        var issued = CreateDocument(3, "issued-3", ElectronicDocumentProcessingStatus.Processed);
+        issued.Direction = ElectronicDocumentDirection.Issued;
+        issued.CategoryId = category.Id;
+        issued.TotalDocument = 500m;
+
+        var usd = CreateDocument(4, "usd-4", ElectronicDocumentProcessingStatus.Processed);
+        usd.Direction = ElectronicDocumentDirection.Received;
+        usd.DocumentType = ElectronicDocumentType.ElectronicTicket;
+        usd.CategoryId = category.Id;
+        usd.CurrencyCode = "USD";
+        usd.TotalDocument = 20m;
+
+        db.ElectronicDocuments.AddRange(credit, issued, usd);
+        await db.SaveChangesAsync();
+
+        var result = await new ElectronicDocumentService(db).GetSummaryAsync(CancellationToken.None);
+        Assert.Equal(4, result.ProcessedCount);
+        Assert.Equal(2, result.AccountingTotals!.Count);
+        Assert.Equal(100m, result.AccountingTotals!.Single(x => x.CurrencyCode == "CRC").PurchasesTotal);
+        Assert.Equal(20m, result.AccountingTotals.Single(x => x.CurrencyCode == "USD").PurchasesTotal);
+        Assert.Equal(100m, result.FinancialTotals!.Single(x => x.CurrencyCode == "CRC").CashTotal);
+        Assert.Equal(20m, result.FinancialTotals!.Single(x => x.CurrencyCode == "USD").CashTotal);
     }
 
     [Fact]

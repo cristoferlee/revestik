@@ -108,6 +108,10 @@ public sealed class ElectronicDocumentService(RevestikDbContext dbContext)
         var classified = await dbContext.ElectronicDocuments
             .AsNoTracking()
             .Where(x =>
+                x.Direction == ElectronicDocumentDirection.Received &&
+                (x.DocumentType == ElectronicDocumentType.Invoice ||
+                 x.DocumentType == ElectronicDocumentType.ElectronicTicket ||
+                 x.DocumentType == ElectronicDocumentType.PurchaseInvoice) &&
                 x.ProcessingStatus == ElectronicDocumentProcessingStatus.Processed &&
                 x.CategoryId != null)
             .Select(x => new
@@ -172,6 +176,10 @@ public sealed class ElectronicDocumentService(RevestikDbContext dbContext)
         var financialSource = await dbContext.ElectronicDocuments
             .AsNoTracking()
             .Where(x =>
+                x.Direction == ElectronicDocumentDirection.Received &&
+                (x.DocumentType == ElectronicDocumentType.Invoice ||
+                 x.DocumentType == ElectronicDocumentType.ElectronicTicket ||
+                 x.DocumentType == ElectronicDocumentType.PurchaseInvoice) &&
                 x.ProcessingStatus == ElectronicDocumentProcessingStatus.Processed &&
                 x.CategoryId != null)
             .Select(x => new

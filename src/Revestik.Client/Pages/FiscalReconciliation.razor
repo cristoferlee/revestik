@@ -1,0 +1,362 @@
+@page "/purchases/fiscal-reconciliation"
+@using System.Net.Http.Json
+@using Revestik.Shared.ElectronicDocuments
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales,Warehouse")]
+@inject HttpClient Http
+
+<PageTitle>Conciliación fiscal | Revestik</PageTitle>
+<section class="received-documents-page fiscal-workspace">
+    <header class="received-header">
+        <div><span class="section-kicker">Compras / Comprobantes electrónicos</span>
+            <h1>Conciliación fiscal</h1>
+            <p>Relaciona evidencia fiscal con compras y documentos originales. Ninguna vinculación altera pagos, gastos o inventario.</p>
+        </div>
+        <button type="button" class="secondary-button" disabled="@busy" @onclick="LoadAsync">Actualizar</button>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    { <div class="status-message @(isError ? "error-message" : "")" role="status">@message</div> }
+
+    <section class="received-card fiscal-panel">
+        <div class="section-heading"><div><span class="section-kicker">Exploración</span><h2>Bandeja de conciliación</h2><p>Las NC/ND se muestran aunque sus referencias no coincidan. Las facturas solo aparecen si existe una compra candidata.</p></div></div>
+        <nav class="received-workflow-nav" aria-label="Tipo de conciliación">
+            <button type="button" class="workflow-tab module-nav-button @(kind == "invoices" ? "active" : "")" @onclick='() => SwitchAsync("invoices")'>Facturas con compras candidatas</button>
+            <button type="button" class="workflow-tab module-nav-button @(kind == "notes" ? "active" : "")" @onclick='() => SwitchAsync("notes")'>Notas NC / ND · diagnóstico</button>
+            <button type="button" class="workflow-tab module-nav-button @(kind == "other" ? "active" : "")" @onclick='() => SwitchAsync("other")'>Otros comprobantes</button>
+        </nav>
+        <div class="fiscal-toolbar">
+            <input class="fiscal-input" aria-label="Buscar emisor o clave" placeholder="Buscar proveedor o clave fiscal" @bind="search" @bind:event="oninput" />
+            <button class="secondary-button" disabled="@busy" @onclick="SearchAsync">Buscar</button>
+        </div>
+        @if (loading) { <p>Cargando documentos…</p> }
+        else if (worklist?.Items.Count == 0) { <div class="fiscal-empty">No hay coincidencias pendientes. Consulta Documentos recibidos para ver los demás XML o notas sin referencia compatible.</div> }
+        else if (worklist is not null)
+        {
+            <div class="table-container"><table><thead><tr><th>Proveedor</th><th>Comprobante</th><th>Emisión</th><th>Importe</th><th>Acción</th></tr></thead>
+            <tbody>@foreach (var doc in worklist.Items)
+            {
+                <tr>
+                    <td data-label="Proveedor"><strong>@doc.IssuerName</strong><small>@doc.Clave</small></td>
+                    <td data-label="Comprobante">@DescribeType(doc.DocumentType)</td>
+                    <td data-label="Emisión">@doc.IssueDate.ToString("dd/MM/yyyy")</td>
+                    <td data-label="Importe"><strong>@doc.CurrencyCode @doc.Total.ToString("N2")</strong></td>
+                    <td data-label="Acción"><button type="button" class="secondary-button" disabled="@busy" @onclick="() => SelectAsync(doc)">Revisar</button></td>
+                </tr>
+            }</tbody></table></div>
+            <div class="fiscal-pagination"><span>@worklist.TotalCount documento(s) · Página @(page)</span>
+                <div class="fiscal-actions"><button class="secondary-button" disabled="@(page == 1 || busy)" @onclick="PreviousAsync">Anterior</button><button class="secondary-button" disabled="@(busy || page * 20 >= worklist.TotalCount)" @onclick="NextAsync">Siguiente</button></div>
+            </div>
+        }
+    </section>
+
+    @if (selected is not null)
+    {
+        <section class="received-card fiscal-panel">
+            <div class="section-heading"><div><span class="section-kicker">Revisión</span><h2>@selected.IssuerName</h2><p>@DescribeType(selected.DocumentType) · @selected.CurrencyCode @selected.Total.ToString("N2")</p></div></div>
+            @if (kind == "invoices")
+            {
+                <div class="fiscal-toolbar"><label for="fiscal-days">Buscar compras de los últimos</label>
+                    <select id="fiscal-days" class="fiscal-input" @bind="days"><option value="30">±30 días</option><option value="90">±90 días</option><option value="3650">Histórico (±10 años)</option></select>
+                    <button type="button" class="secondary-button" disabled="@busy" @onclick="FindCandidatesAsync">Buscar coincidencias</button>
+                </div>
+                @if (candidates is not null)
+                {
+                    <p class="fiscal-note">Las coincidencias son sugerencias. El costo de líneas puede diferir del total XML por impuestos, descuentos y cargos.</p>
+                    @if (candidates.Candidates.Count == 0) { <div class="fiscal-empty">No encontramos compras elegibles. La comparación usa la identidad fiscal y la moneda del proveedor; verifica que haya una compra operativa registrada.</div> }
+                    @foreach (var c in candidates.Candidates)
+                    {
+                        <div class="fiscal-candidate @(selectedPurchaseId == c.PurchaseId ? "fiscal-candidate-selected" : "")">
+                            <div><strong>Compra #@c.PurchaseId · @c.SupplierName</strong><small>@c.Date.ToString("dd/MM/yyyy") · @c.Currency @c.LineCost.ToString("N2")</small>
+                                <small>Diferencia con neto fiscal: @c.NetDifference.ToString("N2")</small>
+                                @foreach (var reason in c.Reasons) { <small>@reason</small> }
+                            </div>
+                            <button type="button" class="secondary-button" disabled="@busy" @onclick="() => ReviewCandidateAsync(c.PurchaseId)">Comparar</button>
+                        </div>
+                    }
+                }
+                @if (review is not null)
+                {
+                    <div class="fiscal-review"><h3>Comparación con compra #@selectedPurchaseId</h3>
+                        <p>Fiscal neto: @review.FiscalNetSale.ToString("N2") · Fiscal total: @review.FiscalTotal.ToString("N2") · Costo compra: @(review.PurchaseLineCost?.ToString("N2") ?? "No disponible")</p>
+                        @foreach (var w in review.Warnings) { <p>• @w.Message</p> }
+                        <strong>@(review.CanLinkUnderCurrentRules ? "Compatible con las reglas de vinculación" : "No compatible: no se puede vincular")</strong>
+                        @if (review.CanLinkUnderCurrentRules)
+                        {
+                            <div class="fiscal-confirm"><label><input type="checkbox" @bind="confirmPurchase" /> Confirmo que ambos registros corresponden a la misma operación y que esta acción no cambia saldos ni inventario.</label>
+                                <button type="button" class="primary-button" disabled="@(busy || !confirmPurchase)" @onclick="LinkPurchaseAsync">Confirmar vinculación</button></div>
+                        }
+                    </div>
+                }
+            }
+            else if (kind == "notes")
+            {
+                <p class="fiscal-note">Los documentos encontrados se muestran para revisión. Solo una referencia fiscal validada permite aprobar un ajuste; consultar un candidato no modifica operaciones económicas.</p>
+                @if (references is not null)
+                {
+                    @if (references.References.Count == 0)
+                    {
+                        <div class="fiscal-empty">Esta nota no contiene referencias fiscales guardadas. No puede relacionarse automáticamente con una factura.</div>
+                    }
+                    @if (references.Preview is not null)
+                    {
+                        <div class="fiscal-review" aria-label="Proyección de ajuste fiscal">
+                            <h3>Proyección fiscal documental</h3>
+                            <div class="fiscal-adjustment-row"><span>Factura original #@references.Preview.OriginalDocumentId</span><strong>@references.Preview.CurrencyCode @references.Preview.OriginalTotal.ToString("N2")</strong></div>
+                            <div class="fiscal-adjustment-row"><span>NC aprobadas/aplicadas</span><strong>−@references.Preview.CurrencyCode @references.Preview.ApprovedCreditNotesTotal.ToString("N2")</strong></div>
+                            <div class="fiscal-adjustment-row"><span>ND aprobadas/aplicadas</span><strong>+@references.Preview.CurrencyCode @references.Preview.ApprovedDebitNotesTotal.ToString("N2")</strong></div>
+                            <div class="fiscal-adjustment-row"><span>Total ajustado actual</span><strong>@references.Preview.CurrencyCode @references.Preview.CurrentAdjustedTotal.ToString("N2")</strong></div>
+                            <div class="fiscal-adjustment-row"><span>@(references.Preview.NoteDelta < 0 ? "Nota de crédito pendiente" : "Nota de débito pendiente")</span><strong>@references.Preview.NoteDelta.ToString("+#,##0.00;-#,##0.00;0.00")</strong></div>
+                            <div class="fiscal-adjustment-row fiscal-adjustment-total"><span>Total fiscal propuesto</span><strong>@references.Preview.CurrencyCode @references.Preview.ProjectedTotal.ToString("N2")</strong></div>
+                            @if (references.Preview.PotentialExcess > 0m)
+                            {
+                                <p class="fiscal-comparison-warning">Excedente documental potencial: @references.Preview.CurrencyCode @references.Preview.PotentialExcess.ToString("N2"). Requiere revisión y no constituye un crédito comercial disponible.</p>
+                            }
+                            <p class="fiscal-note">@references.Preview.Disclaimer Incluye notas previamente aprobadas o aplicadas; no distribuye notas multirreferencia.</p>
+                        </div>
+                    }
+                    else if (references.References.Count > 1)
+                    {
+                        <p class="fiscal-note">Esta nota tiene varias referencias. No se descuenta el total de la nota de cada factura; requiere revisión de asignaciones.</p>
+                    }
+                    @foreach (var r in references.References)
+                    {
+                        <div class="fiscal-candidate"><div><strong>Referencia @r.Number</strong><small>@r.Reason</small><small>Diagnóstico: @DescribeMatch(r.MatchState)</small></div>
+                            @if (r.SuggestedDocumentId.HasValue && references.References.Count == 1)
+                            {
+                                <small>Importe de la nota: @selected.CurrencyCode @selected.Total.ToString("N2"). Si la referencia aplica íntegramente a la factura, este valor se utiliza para calcular el ajuste fiscal propuesto después de verificar el documento original.</small>
+                            }
+                            @if (r.LinkedDocumentId.HasValue) { <strong>Vinculada a #@r.LinkedDocumentId</strong> }
+                            @if ((r.LinkedDocumentId ?? r.SuggestedDocumentId) is int matchId && references.References.Count == 1)
+                            { <button type="button" class="secondary-button" disabled="@busy" @onclick="() => PrepareReference(r.ReferenceId, matchId)">Seleccionar y comparar</button> }
+                            else { <span>Requiere revisión manual</span> }
+                        </div>
+                    }
+                    @if (references.Diagnostics.Count > 0)
+                    {
+                        <div class="fiscal-review">
+                            <h3>Facturas localizadas por clave fiscal</h3>
+                            <p>Los comprobantes incompatibles se muestran para diagnóstico, no para aprobación.</p>
+                            @foreach (var item in references.Diagnostics)
+                            {
+                                <div class="fiscal-candidate">
+                                    <div>
+                                        <strong>@DescribeType(item.Document.DocumentType) · @item.Document.NumeroConsecutivo</strong>
+                                        <small>@item.Document.IssuerName · @item.Document.IssuerIdentification</small>
+                                        <small>Clave: @item.Document.Clave</small>
+                                        <small>Emisión: @item.Document.IssueDate.ToString("dd/MM/yyyy") · @item.Document.CurrencyCode @item.Document.TotalDocument.ToString("N2")</small>
+                                        <small>@(item.Compatible ? "Coincidencia fiscal validada" : "No apta para aprobación")</small>
+                                        @foreach (var reason in item.Reasons)
+                                        {
+                                            <small class="fiscal-diagnostic-reason">@reason</small>
+                                        }
+                                    </div>
+                                    @if (item.Compatible && references.References.Count == 1)
+                                    {
+                                        <button type="button" class="secondary-button" disabled="@busy" @onclick="() => PrepareReference(item.ReferenceId, item.Document.Id)">Seleccionar y comparar</button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (references.References.Count > 0)
+                    {
+                        <div class="fiscal-empty">No se encontró una factura original importada con la clave fiscal indicada. Verifica su existencia en Documentos recibidos.</div>
+                    }
+                    @if (references.Matches.Count > 0)
+                    {
+                        <div class="fiscal-review">
+                            <h3>Documentos coincidentes</h3>
+                            @foreach (var match in references.Matches)
+                            {
+                                <div class="fiscal-candidate @(referenceTargetId == match.Id ? "fiscal-candidate-selected" : "")">
+                                    <div><strong>@DescribeType(match.DocumentType) · @match.NumeroConsecutivo</strong>
+                                        <small>@match.IssuerName · @match.IssuerIdentification</small>
+                                        <small>Clave: @match.Clave</small>
+                                        <small>Emisión: @match.IssueDate.ToString("dd/MM/yyyy")</small>
+                                        <small>@match.CurrencyCode @match.TotalDocument.ToString("N2")</small></div>
+                                    @if (references.References.Count == 1 &&
+                                        (references.References[0].LinkedDocumentId == match.Id ||
+                                         references.References[0].SuggestedDocumentId == match.Id))
+                                    {
+                                        <button type="button" class="secondary-button" disabled="@busy"
+                                                @onclick="() => PrepareReference(references.References[0].ReferenceId, match.Id)">
+                                            Seleccionar y comparar
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (referenceId > 0 && referenceTargetId > 0)
+                    {
+                        var original = references.Matches.FirstOrDefault(x => x.Id == referenceTargetId);
+                        @if (original is not null)
+                        {
+                            <section class="fiscal-document-comparison" aria-label="Comparación entre nota y factura original">
+                                <h3>Comparación de documentos</h3>
+                                <div class="fiscal-comparison-grid">
+                                    <div class="fiscal-comparison-document">
+                                        <span class="section-kicker">Nota a revisar</span>
+                                        <h4>@DescribeType(selected.DocumentType)</h4>
+                                        <dl>
+                                            <dt>Clave</dt><dd>@selected.Clave</dd>
+                                            <dt>Emisor</dt><dd>@selected.IssuerName</dd>
+                                            <dt>Emisión</dt><dd>@selected.IssueDate.ToString("dd/MM/yyyy")</dd>
+                                            <dt>Importe</dt><dd><strong>@selected.CurrencyCode @selected.Total.ToString("N2")</strong></dd>
+                                        </dl>
+                                    </div>
+                                    <div class="fiscal-comparison-document">
+                                        <span class="section-kicker">Documento original localizado</span>
+                                        <h4>@DescribeType(original.DocumentType)</h4>
+                                        <dl>
+                                            <dt>Clave</dt><dd>@original.Clave</dd>
+                                            <dt>Consecutivo</dt><dd>@original.NumeroConsecutivo</dd>
+                                            <dt>Emisor</dt><dd>@original.IssuerName · @original.IssuerIdentification</dd>
+                                            <dt>Emisión</dt><dd>@original.IssueDate.ToString("dd/MM/yyyy")</dd>
+                                            <dt>Importe original</dt><dd><strong>@original.CurrencyCode @original.TotalDocument.ToString("N2")</strong></dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                                <p class="fiscal-note">Referencia fiscal: @references.References[0].Number · @DescribeMatch(references.References[0].MatchState). La aprobación vuelve a validar la relación en el servidor. El importe original del XML permanece intacto.</p>
+                                @if (references.Preview is not null && references.Preview.OriginalDocumentId == original.Id)
+                                {
+                                    <div class="fiscal-adjustment-row"><span>Importe original</span><strong>@original.CurrencyCode @references.Preview.OriginalTotal.ToString("N2")</strong></div>
+                                    <div class="fiscal-adjustment-row"><span>Total con ajustes aprobados/aplicados</span><strong>@original.CurrencyCode @references.Preview.CurrentAdjustedTotal.ToString("N2")</strong></div>
+                                    <div class="fiscal-adjustment-row"><span>Impacto de esta nota pendiente</span><strong>@original.CurrencyCode @references.Preview.NoteDelta.ToString("+#,##0.00;-#,##0.00;0.00")</strong></div>
+                                    <div class="fiscal-adjustment-row fiscal-adjustment-total"><span>Total fiscal proyectado</span><strong>@original.CurrencyCode @references.Preview.ProjectedTotal.ToString("N2")</strong></div>
+                                    @if (references.Preview.PotentialExcess > 0m)
+                                    {
+                                        <p class="fiscal-comparison-warning">Excedente documental potencial: @original.CurrencyCode @references.Preview.PotentialExcess.ToString("N2"). No genera crédito comercial.</p>
+                                    }
+                                }
+                                else
+                                {
+                                    <p class="fiscal-comparison-warning">No hay proyección fiscal aprobable para esta relación. Consulte las incompatibilidades antes de proceder.</p>
+                                }
+                            </section>
+                        }
+                        <div class="fiscal-confirm"><p>Nota fiscal: @selected.Clave</p>
+                            <p>Referencia #@referenceId → factura fiscal #@referenceTargetId</p>
+                            <label><input type="checkbox" @bind="confirmReference" /> Verifiqué los documentos y autorizo aplicar este ajuste al total fiscal mostrado. No modifica saldos, pagos ni inventario.</label>
+                            <button type="button" class="primary-button" disabled="@(busy || !confirmReference || references.References.Count != 1 || !references.Matches.Any(x => x.Id == referenceTargetId) || references.Preview?.OriginalDocumentId != referenceTargetId)" @onclick="ApproveNoteAsync">Aprobar ajuste fiscal</button></div>
+                    }
+                }
+            }
+            else { <div class="fiscal-empty">Los otros comprobantes se consultan desde Documentos recibidos. Esta bandeja muestra solo relaciones accionables.</div> }
+        </section>
+    }
+</section>
+@code {
+    private const string Base = "api/purchases/received-documents/fiscal";
+    private string kind = "notes", search = "";
+    private int page = 1, days = 30, selectedPurchaseId, referenceId, referenceTargetId;
+    private bool busy, loading, confirmPurchase, confirmReference, isError;
+    private string? message;
+    private FiscalWorklistResponse? worklist;
+    private FiscalWorklistItem? selected;
+    private FiscalPurchaseCandidatesResponse? candidates;
+    private FiscalNoteReferencesResponse? references;
+    private ReviewVm? review;
+    private sealed record WarningVm(string Code, string Message);
+    private sealed record ReviewVm(bool CanLinkUnderCurrentRules, decimal FiscalNetSale, decimal FiscalTotal, decimal? PurchaseLineCost, List<WarningVm> Warnings);
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private static string DescribeMatch(string state) => state switch
+    {
+        "ExactMatch" => "Factura original localizada; verificar antes de confirmar",
+        "Linked" => "Referencia ya vinculada",
+        "RequiresManualReview" => "La referencia no identifica una clave fiscal única: revisión manual",
+        "NotFoundOrIncompatible" => "Sin coincidencia fiscal aprobable; consulta las facturas localizadas por clave y sus diagnósticos",
+        "NotFound" => "Factura referenciada no importada; la nota permanece pendiente",
+        "Incompatible" => "Factura localizada pero incompatible; revisa los diagnósticos",
+        "Ambiguous" => "Varias coincidencias posibles: revisión manual",
+        _ => state
+    };
+    private static string DescribeType(string value) => value switch { "Invoice" => "Factura electrónica", "CreditNote" => "Nota de crédito", "DebitNote" => "Nota de débito", "ElectronicTicket" => "Tiquete electrónico", "PurchaseInvoice" => "Factura electrónica de compra", "ExportInvoice" => "Factura de exportación", "ElectronicPaymentReceipt" => "Recibo electrónico de pago", _ => value };
+    private void ResetSelection() { selected = null; candidates = null; references = null; review = null; selectedPurchaseId = 0; referenceId = 0; referenceTargetId = 0; confirmPurchase = false; confirmReference = false; }
+    private async Task SwitchAsync(string value) { kind = value; page = 1; ResetSelection(); await LoadAsync(); }
+    private async Task SearchAsync() { page = 1; ResetSelection(); await LoadAsync(); }
+    private async Task PreviousAsync() { if(page>1) { page--; ResetSelection(); await LoadAsync(); } }
+    private async Task NextAsync() { page++; ResetSelection(); await LoadAsync(); }
+    private async Task LoadAsync()
+    {
+        loading = true; message = null;
+        try { worklist = await Http.GetFromJsonAsync<FiscalWorklistResponse>($"{Base}/worklist?kind={Uri.EscapeDataString(kind)}&search={Uri.EscapeDataString(search)}&page={page}&pageSize=20"); }
+        catch (Exception e) { SetError(e.Message); }
+        finally { loading = false; }
+    }
+    private async Task SelectAsync(FiscalWorklistItem item)
+    {
+        ResetSelection(); selected = item; message = null;
+        if (kind == "notes") await LoadReferencesAsync();
+        else if (kind == "invoices") await FindCandidatesAsync();
+    }
+    private async Task FindCandidatesAsync()
+    {
+        if (selected is null) return;
+        busy = true; candidates = null; review = null; confirmPurchase = false;
+        try { candidates = await Http.GetFromJsonAsync<FiscalPurchaseCandidatesResponse>($"{Base}/documents/{selected.Id}/candidates?days={days}"); }
+        catch (Exception e) { SetError(e.Message); }
+        finally { busy = false; }
+    }
+    private async Task ReviewCandidateAsync(int id)
+    {
+        if (selected is null) return;
+        busy = true; selectedPurchaseId = id; review = null; confirmPurchase = false;
+        try { review = await Http.GetFromJsonAsync<ReviewVm>($"{Base}/documents/{selected.Id}/purchases/{id}/review"); }
+        catch (Exception e) { SetError(e.Message); }
+        finally { busy = false; }
+    }
+    private async Task LinkPurchaseAsync()
+    {
+        if (selected is null || selectedPurchaseId <= 0 || !confirmPurchase || review?.CanLinkUnderCurrentRules != true) return;
+        busy = true;
+        try {
+            using var response = await Http.PostAsJsonAsync($"{Base}/documents/{selected.Id}/link", new PurchaseLinkRequest(selectedPurchaseId));
+            if (!response.IsSuccessStatusCode) { SetError($"La vinculación fue rechazada (HTTP {(int)response.StatusCode}). Actualiza la revisión."); return; }
+            ResetSelection(); await LoadAsync(); SetSuccess("La vinculación se guardó correctamente sin modificar movimientos económicos.");
+        } catch (Exception e) { SetError(e.Message); } finally { busy = false; }
+    }
+    private async Task LoadReferencesAsync()
+    {
+        if (selected is null) return;
+        busy = true;
+        try { references = await Http.GetFromJsonAsync<FiscalNoteReferencesResponse>($"{Base}/documents/{selected.Id}/references"); }
+        catch (Exception e) { SetError(e.Message); }
+        finally { busy = false; }
+    }
+    private void PrepareReference(int id, int targetId) { referenceId = id; referenceTargetId = targetId; confirmReference = false; }
+    private async Task LinkReferenceAsync()
+    {
+        if (!confirmReference || referenceId <= 0 || referenceTargetId <= 0) return;
+        busy = true;
+        try {
+            using var response = await Http.PostAsJsonAsync($"{Base}/references/{referenceId}/link", new FiscalReferenceLinkRequest(referenceTargetId));
+            if (!response.IsSuccessStatusCode) { SetError($"No se pudo relacionar la referencia (HTTP {(int)response.StatusCode})."); return; }
+            referenceId = 0; referenceTargetId = 0; confirmReference = false;
+            await LoadReferencesAsync(); SetSuccess("Referencia fiscal vinculada. No se aplicaron ajustes económicos.");
+        } catch (Exception e) { SetError(e.Message); } finally { busy = false; }
+    }
+    private async Task ApproveNoteAsync()
+    {
+        if (!confirmReference || selected is null || referenceId <= 0 || referenceTargetId <= 0 ||
+            references?.References.Count != 1) return;
+        busy = true;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync($"{Base}/notes/{selected.Id}/approve",
+                new FiscalApprovalRequest(referenceId, referenceTargetId));
+            if (!response.IsSuccessStatusCode)
+            {
+                SetError($"No se pudo aprobar (HTTP {(int)response.StatusCode}). Recarga la revisión.");
+                return;
+            }
+            ResetSelection();
+            await LoadAsync();
+            SetSuccess("Ajuste fiscal aprobado. La nota salió de pendientes y aparecerá en el historial de Documentos recibidos.");
+        }
+        catch (Exception e) { SetError(e.Message); }
+        finally { busy = false; }
+    }
+    private void SetError(string value) { isError = true; message = value; }
+    private void SetSuccess(string value) { isError = false; message = value; }
+}

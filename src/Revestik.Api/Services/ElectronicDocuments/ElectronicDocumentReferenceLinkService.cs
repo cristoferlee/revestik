@@ -28,7 +28,7 @@ public sealed class ElectronicDocumentReferenceLinkService(RevestikDbContext dbC
             var number = reference.ReferenceNumber.Trim();
             // Only exact 50-digit Clave matches can be suggested automatically.
             // Consecutive numbers are not globally unique and require explicit review.
-            if (!IsFiscalKey(number))
+            if (!ElectronicDocumentReferenceCompatibilityEvaluator.IsFiscalKey(number))
             {
                 results.Add(new(reference.Id, null, "RequiresManualReview"));
                 continue;
@@ -38,10 +38,10 @@ public sealed class ElectronicDocumentReferenceLinkService(RevestikDbContext dbC
                 .Where(x => x.Clave == number && x.Id != source.Id)
                 .ToListAsync(cancellationToken);
 
-            var compatible = candidates.Where(x => IsCompatible(source, reference, x)).ToList();
+            var compatible = candidates.Where(x => ElectronicDocumentReferenceCompatibilityEvaluator.Evaluate(source, reference, x).Count == 0).ToList();
             results.Add(compatible.Count == 1
                 ? new(reference.Id, compatible[0].Id, "ExactMatch")
-                : new(reference.Id, null, compatible.Count == 0 ? "NotFoundOrIncompatible" : "Ambiguous"));
+                : new(reference.Id, null, compatible.Count == 0 ? (candidates.Count == 0 ? "NotFound" : "Incompatible") : "Ambiguous"));
         }
 
         return results;
@@ -68,8 +68,11 @@ public sealed class ElectronicDocumentReferenceLinkService(RevestikDbContext dbC
             or ElectronicDocumentAdjustmentStatus.Applied)
             throw new InvalidOperationException("No se puede modificar la vinculación de un ajuste aprobado o aplicado.");
 
-        if (!IsCompatible(reference.ElectronicDocument, reference, target))
-            throw new InvalidOperationException("La referencia no coincide fiscalmente con el comprobante seleccionado.");
+        var reasons = ElectronicDocumentReferenceCompatibilityEvaluator.Evaluate(
+            reference.ElectronicDocument, reference, target);
+        if (reasons.Count > 0)
+            throw new InvalidOperationException(
+                "La referencia no coincide fiscalmente: " + string.Join("; ", reasons));
 
         if (reference.RelatedElectronicDocumentId == relatedDocumentId)
             return;
@@ -77,8 +80,34 @@ public sealed class ElectronicDocumentReferenceLinkService(RevestikDbContext dbC
         if (reference.RelatedElectronicDocumentId.HasValue)
             throw new InvalidOperationException("La referencia ya está vinculada. Se requiere un flujo explícito de corrección.");
 
-        reference.RelatedElectronicDocumentId = relatedDocumentId;
-        await dbContext.SaveChangesAsync(cancellationToken);
+        // EF Core InMemory is used by existing unit tests and does not support
+        // ExecuteUpdate. Production uses the conditional database update below.
+        if (dbContext.Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+        {
+            reference.RelatedElectronicDocumentId = relatedDocumentId;
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        // The reference must STILL be unlinked when SQL performs the write.
+        // Include adjustment status in the predicate, so a concurrently approved
+        // note cannot have its reference linked after approval.
+        var changed = await dbContext.Set<ElectronicDocumentReference>()
+            .Where(x => x.Id == referenceId &&
+                        x.RelatedElectronicDocumentId == null &&
+                        x.ElectronicDocument.AdjustmentStatus != ElectronicDocumentAdjustmentStatus.Approved &&
+                        x.ElectronicDocument.AdjustmentStatus != ElectronicDocumentAdjustmentStatus.Applied)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.RelatedElectronicDocumentId, relatedDocumentId),
+                cancellationToken);
+
+        if (changed != 1)
+            throw new InvalidOperationException(
+                "La referencia fue vinculada o la nota cambió de estado durante la revisión. Actualice la información.");
+
+        // ExecuteUpdate bypasses EF tracking; refresh the tracked entity so
+        // the caller sees the persisted relationship and cannot save stale data.
+        await dbContext.Entry(reference).ReloadAsync(cancellationToken);
     }
 
     private static void EnsureAdjustment(ElectronicDocument document)
@@ -87,51 +116,7 @@ public sealed class ElectronicDocumentReferenceLinkService(RevestikDbContext dbC
             throw new InvalidOperationException("Solo se pueden vincular referencias de notas de crédito o débito.");
     }
 
-    private static bool IsCompatible(ElectronicDocument source,
-        ElectronicDocumentReference reference, ElectronicDocument target)
-    {
-        if (source.Id == target.Id || source.Direction != target.Direction)
-            return false;
 
-        if (string.IsNullOrWhiteSpace(source.IssuerIdentification) ||
-            string.IsNullOrWhiteSpace(source.ReceiverIdentification) ||
-            !string.Equals(source.IssuerIdentification, target.IssuerIdentification, StringComparison.Ordinal) ||
-            !string.Equals(source.ReceiverIdentification, target.ReceiverIdentification, StringComparison.Ordinal) ||
-            !string.Equals(source.IssuerIdentificationType, target.IssuerIdentificationType, StringComparison.Ordinal) ||
-            !string.Equals(source.ReceiverIdentificationType, target.ReceiverIdentificationType, StringComparison.Ordinal))
-            return false;
-
-        var number = reference.ReferenceNumber.Trim();
-        if (!string.Equals(number, target.Clave, StringComparison.Ordinal) &&
-            !string.Equals(number, target.NumeroConsecutivo, StringComparison.Ordinal))
-            return false;
-
-        if (!TryMapFiscalTypeCode(reference.ReferencedDocumentTypeCode, out var expectedType) ||
-            target.DocumentType != expectedType)
-            return false;
-
-        // A fiscal reference can include different timezone offsets; compare instants.
-        return reference.ReferencedIssueDate.ToUniversalTime() == target.FechaEmision.ToUniversalTime();
-    }
-
-    private static bool IsFiscalKey(string number) =>
-        number.Length == 50 && number.All(char.IsAsciiDigit);
-
-    private static bool TryMapFiscalTypeCode(string code, out ElectronicDocumentType documentType)
-    {
-        documentType = code switch
-        {
-            "01" => ElectronicDocumentType.Invoice,
-            "02" => ElectronicDocumentType.DebitNote,
-            "03" => ElectronicDocumentType.CreditNote,
-            "04" => ElectronicDocumentType.ElectronicTicket,
-            "08" => ElectronicDocumentType.PurchaseInvoice,
-            "09" => ElectronicDocumentType.ExportInvoice,
-            "10" => ElectronicDocumentType.ElectronicPaymentReceipt,
-            _ => default
-        };
-        return code is "01" or "02" or "03" or "04" or "08" or "09" or "10";
-    }
 }
 
 public sealed record ElectronicDocumentReferenceSuggestion(int ReferenceId, int? SuggestedDocumentId, string Result);

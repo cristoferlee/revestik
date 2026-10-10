@@ -82,6 +82,58 @@ public sealed class ElectronicDocumentReferenceLinkServiceTests
             new ElectronicDocumentReferenceLinkService(db).LinkAsync(reference.Id, original.Id));
     }
 
+    [Fact]
+    public async Task Suggest_DifferentCurrency_ReturnsIncompatibleAndNeverSuggests()
+    {
+        await using var db = CreateDb();
+        var (note, original, reference) = Seed(db);
+        note.CurrencyCode = "CRC";
+        original.CurrencyCode = "USD";
+        await db.SaveChangesAsync();
+        var suggestion = Assert.Single(await new ElectronicDocumentReferenceLinkService(db).SuggestAsync(note.Id));
+        Assert.Null(suggestion.SuggestedDocumentId);
+        Assert.Equal("Incompatible", suggestion.Result);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new ElectronicDocumentReferenceLinkService(db).LinkAsync(reference.Id, original.Id));
+        Assert.Null(reference.RelatedElectronicDocumentId);
+    }
+
+    [Fact]
+    public async Task Suggest_UnknownFiscalKey_DistinguishesNotFound()
+    {
+        await using var db = CreateDb();
+        var (note, _, reference) = Seed(db);
+        reference.ReferenceNumber = "50602102600310115777600500001010000051684120639724";
+        await db.SaveChangesAsync();
+        var suggestion = Assert.Single(await new ElectronicDocumentReferenceLinkService(db).SuggestAsync(note.Id));
+        Assert.Equal("NotFound", suggestion.Result);
+        Assert.Null(suggestion.SuggestedDocumentId);
+    }
+
+    [Fact]
+    public async Task Suggest_DifferentIssueDate_ReturnsIncompatible()
+    {
+        await using var db = CreateDb();
+        var (note, original, _) = Seed(db);
+        original.FechaEmision = IssueDate.AddDays(-1);
+        await db.SaveChangesAsync();
+        var suggestion = Assert.Single(await new ElectronicDocumentReferenceLinkService(db).SuggestAsync(note.Id));
+        Assert.Equal("Incompatible", suggestion.Result);
+    }
+
+    [Fact]
+    public async Task Link_SameCalendarDayDifferentTime_PreservesOriginalOffset()
+    {
+        await using var db = CreateDb();
+        var (note, original, reference) = Seed(db);
+        note.CurrencyCode = original.CurrencyCode = "CRC";
+        original.FechaEmision = new DateTimeOffset(2026, 10, 2, 23, 58, 0, TimeSpan.FromHours(-6));
+        await db.SaveChangesAsync();
+        await new ElectronicDocumentReferenceLinkService(db).LinkAsync(reference.Id, original.Id);
+        Assert.Equal(original.Id, reference.RelatedElectronicDocumentId);
+        Assert.Equal(ElectronicDocumentAdjustmentStatus.PendingReview, note.AdjustmentStatus);
+    }
+
     private static RevestikDbContext CreateDb() => new(
         new DbContextOptionsBuilder<RevestikDbContext>()
             .UseInMemoryDatabase($"References-{Guid.NewGuid()}").Options);
@@ -120,6 +172,7 @@ public sealed class ElectronicDocumentReferenceLinkServiceTests
         ReceiverIdentificationType = "02",
         ReceiverIdentification = "3102959852",
         TotalDocument = 100m,
+        CurrencyCode = "CRC",
         ProcessingStatus = ElectronicDocumentProcessingStatus.Pending
     };
 }

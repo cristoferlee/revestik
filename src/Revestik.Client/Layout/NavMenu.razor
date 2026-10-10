@@ -64,6 +64,14 @@
                     Documentos recibidos
                 </NavLink>
 
+                <AuthorizeView Roles="Administrator,Accountant">
+                    <NavLink class="navigation-sublink"
+                             href="/purchases/fiscal-reconciliation"
+                             @onclick="CloseNavigation">
+                        Conciliación fiscal
+                    </NavLink>
+                </AuthorizeView>
+
                 <NavLink class="navigation-sublink"
                          href="/purchases/history"
                          @onclick="CloseNavigation">

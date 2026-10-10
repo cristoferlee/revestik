@@ -31,9 +31,15 @@ public sealed class ExpenseReportingService(RevestikDbContext dbContext)
 
         GetAccumulator(totals, "CRC").ManualExpenses += manualTotal;
 
+        // Fiscal evidence is not necessarily a new operating expense. In particular,
+        // adjustments, payment receipts, and issued documents must not inflate totals.
         var documentQuery = dbContext.ElectronicDocuments
             .AsNoTracking()
             .Where(x =>
+                x.Direction == ElectronicDocumentDirection.Received &&
+                (x.DocumentType == ElectronicDocumentType.Invoice ||
+                 x.DocumentType == ElectronicDocumentType.ElectronicTicket ||
+                 x.DocumentType == ElectronicDocumentType.PurchaseInvoice) &&
                 x.ProcessingStatus == ElectronicDocumentProcessingStatus.Processed &&
                 x.CategoryId != null);
 

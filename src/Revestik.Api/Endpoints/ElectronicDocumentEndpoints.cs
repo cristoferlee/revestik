@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Revestik.Api.Authorization;
+using Revestik.Api.Data;
 using Revestik.Api.Services.ElectronicDocuments;
 using Revestik.Api.Models.Identity;
 using Revestik.Shared.ElectronicDocuments;
@@ -40,6 +41,26 @@ public static class ElectronicDocumentEndpoints
                     CancellationToken cancellationToken) =>
                     Results.Ok(await service.GetSummaryAsync(cancellationToken)))
             .WithName("GetReceivedElectronicDocumentSummary");
+
+        group.MapGet(
+                "/document-counter",
+                async (
+                    [AsParameters] ElectronicDocumentSummaryRequest request,
+                    RevestikDbContext dbContext,
+                    CancellationToken cancellationToken) =>
+                {
+                    if (request.DateFrom.HasValue && request.DateTo.HasValue &&
+                        request.DateFrom.Value > request.DateTo.Value)
+                    {
+                        return Results.ValidationProblem(new Dictionary<string, string[]>
+                        {
+                            ["DateTo"] = ["La fecha final no puede ser anterior a la inicial."]
+                        });
+                    }
+                    var service = new ElectronicDocumentPeriodSummaryService(dbContext);
+                    return Results.Ok(await service.GetDocumentCounterAsync(request, cancellationToken));
+                })
+            .WithName("GetReceivedElectronicDocumentCounter");
 
         group.MapGet(
                 "/categories",
