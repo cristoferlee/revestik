@@ -21,6 +21,7 @@ using Revestik.Api.Services.Quotations.Pdf;
 using Revestik.Api.Services.Sales;
 using Revestik.Api.Services.Sales.Pdf;
 using Revestik.Api.Services.Suppliers;
+using Revestik.Api.Services.Projects;
 
 const string ClientCorsPolicy = "ClientCorsPolicy";
 QuestPDF.Settings.License = LicenseType.Community;
@@ -92,6 +93,7 @@ builder.Services.AddSingleton<ISalePdfService, SalePdfService>();
 builder.Services.AddScoped<FiscalAnalyticsService>();
 builder.Services.AddScoped<ElectronicDocumentPurchaseLinkService>();
 builder.Services.AddScoped<ElectronicDocumentPurchaseReconciliationService>();
+builder.Services.AddScoped<IProjectService, ProjectService>();
 
 var haciendaBaseUrl = builder.Configuration["Hacienda:BaseUrl"]
     ?? throw new InvalidOperationException("Hacienda base URL was not configured.");
@@ -161,6 +163,7 @@ app.MapTaxpayerEndpoints();
 app.MapLocationEndpoints();
 app.MapAuthenticationEndpoints();
 app.MapFiscalReconciliationEndpoints();
+app.MapProjectEndpoints();
 
 if (!app.Environment.IsDevelopment())
 {

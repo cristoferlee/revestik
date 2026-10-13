@@ -1851,6 +1851,141 @@ namespace Revestik.Api.Data.Migrations
                     b.ToTable("ProductCategories", (string)null);
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.Project", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("AgreedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("CantonCode")
+                        .HasMaxLength(2)
+                        .HasColumnType("nchar(2)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CurrencyCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<int>("CustomerId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("DistrictCode")
+                        .HasMaxLength(2)
+                        .HasColumnType("nchar(2)")
+                        .IsFixedLength();
+
+                    b.Property<DateOnly?>("EstimatedEndDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EstimatedStartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("OtherSigns")
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<string>("ProvinceCode")
+                        .HasMaxLength(1)
+                        .HasColumnType("nchar(1)")
+                        .IsFixedLength();
+
+                    b.Property<string>("ResponsibleUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ResponsibleUserId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("CustomerId", "NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Projects_Customer_NormalizedName");
+
+                    b.ToTable("Projects", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Projects_AgreedAmount", "[AgreedAmount] IS NULL OR [AgreedAmount] >= 0");
+
+                            t.HasCheckConstraint("CK_Projects_BudgetCurrency", "([AgreedAmount] IS NULL AND [CurrencyCode] IS NULL) OR ([AgreedAmount] IS NOT NULL AND [CurrencyCode] IN ('CRC', 'USD'))");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectContact", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(254)
+                        .HasColumnType("nvarchar(254)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("ProjectContacts", (string)null);
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
                 {
                     b.Property<int>("Id")
@@ -3002,6 +3137,36 @@ namespace Revestik.Api.Data.Migrations
                     b.Navigation("InventoryUnit");
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.Project", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", "ResponsibleUser")
+                        .WithMany()
+                        .HasForeignKey("ResponsibleUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("ResponsibleUser");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectContact", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.Project", "Project")
+                        .WithMany("Contacts")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
                 {
                     b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", "CreatedByUser")
@@ -3252,6 +3417,11 @@ namespace Revestik.Api.Data.Migrations
             modelBuilder.Entity("Revestik.Api.Models.ProductCategory", b =>
                 {
                     b.Navigation("Products");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.Project", b =>
+                {
+                    b.Navigation("Contacts");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>

@@ -7,6 +7,8 @@ public static class PolicyNames
 
     public const string ManageCustomers =
         "ManageCustomers";
+    public const string ManageProjects =
+        "ManageProjects";
 
     public const string ManageInventory =
         "ManageInventory";
