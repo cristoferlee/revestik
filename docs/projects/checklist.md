@@ -1,62 +1,39 @@
-# Projects — Implementation checkpoint and checklist
+# Projects — Implementation checklist / current handoff
 
-**Checkpoint:** 2026-10-13  
-**Current phase:** PLAN pending detailed Block 01 approval; no implementation.  
-**Last confirmed local HEAD in initial investigation:** `ae34ce013a43aa5618c423e813d2477fdbd8430c` (**historical reference only**, re-check local HEAD). 
+**Checkpoint dated:** 2026-10-13. **Current stage:** B02-E closeout, before B02 commit. **Source of detail:** `CHECKPOINT-2026-10-13-B02.md`.
 
-## Status legend
-- [x] Completed and documented
-- [ ] Not completed / pending verification
+## Confirmed progress (user-reported local results)
 
-## Discovery and approval
-- [x] Functional INVESTIGATE: owner's answers 1–97, including final corrections
-- [x] Technical INVESTIGATE: Customers, Quotation/Sale relation, API and Client setup, Identity, CSRF, Dashboard, PDF and integration tests at conceptual scope
-- [x] Conceptual eight-block sequence proposed
-- [ ] Approve detailed technical PLAN for Block 01 before changing application code
-- [ ] Verify actual local Git status, migration state and working tree before any patch
-- [ ] Preserve existing uncommitted fiscal reconciliation changes; don't stage or overwrite them accidentally
+- [x] Original business discovery: 97 answers and later B01 clarifications; documented in `business-rules.md` and `b01-b02-decisions.md`.
+- [x] Initial technical investigation; actual B01 code later verified from GitHub.
+- [x] B01 foundation: Project, ProjectContact, EF Core, API, auth, optimistic Version, SQL tests. Migration `20261013205336_AddProjectsFoundation` user-reported applied. Full suite 787/787 passed at B01.
+- [x] B01 code later confirmed present on GitHub `main`; **do not infer or invent B01 commit SHA**.
+- [x] B02 A+B code: configurable categories, events, timeline, event revisions, update/void. Build passed. Migration `20261013215919_AddProjectActivityFoundation` user-reported applied. Targeted SQL 3/3 passed (~100s).
+- [x] B02 C+D code: append-only comments, event-linked agreements and agreement revisions, administrative audit consultation and authorization endpoints. Build passed. Migration `20261013221354_AddProjectEventDetails` user-reported applied.
+- [x] B02-E targeted SQL: ProjectEventDetailSqlTests 5/5, two compiler nullable warnings found; user received exact fix; later regression succeeded.
+- [x] B02 HTTP authorization baseline: filtered test run 33/33, 0 failed, duration 57.9s (test grouping may include preexisting cases).
+- [x] **Full regression 828/828**, 0 failed/skipped, test duration 318.9s, build duration 319.5s.
+- [x] `git diff --check` no formatting errors; CRLF informational warnings only.
+- [x] User requires no B01/B02 temp README, scripts, or patch archives in project; latest status had none.
 
-## Planned blocks — none implemented
-- [ ] **B01 — Foundation:** Project, Customer FK, responsible Identity user, unique name per Customer, optional address/dates, contacts, status, agreed amount; DTOs/API/services/EF configs/migration and tests
-- [ ] **B02 — Events and audit:** configurable categories, timeline, comments, corrections, void, audit
-- [ ] **B03 — Automatic progress:** milestone weights, duplicate prevention, reversal and completion behavior
-- [ ] **B04 — Documents:** private storage, thumbnails/optimization, versions, references, preview, download, safe deletion
-- [ ] **B05 — Manual payments/abonos:** receipts, amounts by currency, remaining balance, audit and no Sales side effects
-- [ ] **B06 — Tasks/Dashboard:** due dates, responsible owner, upcoming and overdue alerts
-- [ ] **B07 — Blazor UI:** Customer selector, Project selection, tabs, timeline, mobile upload, full navigation
-- [ ] **B08 — PDF and full verification:** summary PDF, regression/smoke and documentation closeout
+## B02 outstanding; do not mark closed prematurely
 
-## Mandatory verification checklist for EACH implementation block
-- [ ] Owner explicitly approved block scope
-- [ ] Changed files list and migration review complete
-- [ ] Build result captured (do not invent)
-- [ ] Targeted xUnit tests passed
-- [ ] SQL Server Testcontainers tests passed where required
-- [ ] Security, authorization, CSRF and concurrent-write tests where applicable
-- [ ] Full regression suite and responsive smoke tests at appropriate milestone
-- [ ] Git diff reviewed; no unrelated changes staged
-- [ ] Updated rules, checklist and technical decisions if changed
-- [ ] Commit and push performed **only with owner's explicit authorization**; save real commit SHA here
-- [ ] STOP: document next action and await instruction
+- [ ] HTTP *non-owner* authorization with **valid CSRF**, exercising event/agreements writes and 403 (separate from role-level 401/403/CSRF 400 checks). Service-layer non-owner behavior has tests.
+- [ ] Recheck local `git status --short`, final staged diff, migration state and whether the owner installed nullable-warning fix. Last full suite succeeded; compiler warnings not explicitly reverified separately.
+- [ ] Update/publish `docs/projects` and B02 code in a scoped commit, on owner authorization. Capture real SHA and remote status.
+- [ ] STOP and request authorization for B03.
 
-## Current evidence
-- Projects source code added: **none confirmed**
-- Projects migration: **none created/applied**
-- Projects build/tests/smoke: **not run**
-- Project module commits: **none confirmed**
-- Documentation checkpoint: **ZIP prepared; publication to GitHub must be verified after local commit/push**
+## Future blocks
 
-## Reuse and boundaries from investigation
-- Existing: `CustomerSelector`, `CustomerService`, `CustomerEndpoints`, `RevestikDbContext`, `ApplicationUser`, `PolicyNames`, `AuthenticationExtensions`, `CookieHandler`, `CsrfHandler`, `Home.razor`, QuestPDF and SQL integration fixture.
-- Customer, Quotation and Sale remain authoritative in their own modules. Attach commercial PDF manually, no model changes without approval.
-- File-storage infrastructure for Projects is **not yet established**; plan before coding. Avoid public URLs and nonpersistent container-local paths.
-- Keep `docs/product/business-rules.md`, general architecture, security and testing docs untouched unless later approved.
+- [x] **B01** Foundation (implemented and tests/migration verified; UI deferred).
+- [ ] **B02** Events/audit (implemented/tested; closeout checklist above still open).
+- [ ] **B03** Optional milestones and weighted automatic progress, idempotence, rollback and terminal states; numeric weights **not approved**.
+- [ ] **B04** Private file storage, photo compression, versions, multi-event linking, preview, download, secure deletion. File-size cap/storage choices open.
+- [ ] **B05** Manual project payments/receipts, balance, audit, currency/overpayment decisions. No Sales/accounting/inventory effects.
+- [ ] **B06** Due tasks, responsibility, alerts on existing Dashboard, lifecycle/close/reopen workflows.
+- [ ] **B07** Cohesive responsive Blazor Projects UI and navigation; Customer selector, tabs Summary/Activity/Documents/Agreements/Payment Receipts/Plans.
+- [ ] **B08** Lightweight PDF, final regression, documentation and **only then** manual UI smoke test.
 
-## NEXT ACTION
-1. Install this documentation-only checkpoint in repository `docs/projects/`.
-2. Review `git status` and `git diff -- docs/projects`; stage **only** the three new files.
-3. With owner's authorization, make a documentation-only commit/push to `main`, then record its actual SHA in this checklist during a future approved update.
-4. Begin the **detailed B01 PLAN**, resolve critical outstanding B01-specific decisions and obtain approval. No entity/migration changes yet.
+## Required protocol each block
 
-## Handoff template
-Date / branch / local commit / remote commit / block / approved changes / files changed / migration status / targeted test results / full suite result / smoke result / known risks / next action. Never label unverified items completed.
+INVESTIGATE actual current relevant code → PLAN → APPROVE → IMPLEMENT ZIP code-only → VERIFY build, targeted xUnit, SQL/authorization/CSRF/concurrency, migration SQL inspection, regression as appropriate → STOP. No unrelated changes or commits without authorization. Local working tree may be newer than GitHub.

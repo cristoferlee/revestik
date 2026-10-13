@@ -1,53 +1,34 @@
-# Projects — Continuity instructions
+# Projects — Continuity instructions (read this first)
 
-**Module:** Projects (Customer-linked project dossier)  
-**Checkpoint date:** 2026-10-13  
-**Status:** Functional INVESTIGATE completed; technical INVESTIGATE completed at integration level. **IMPLEMENTATION NOT STARTED.**
+**Updated:** 2026-10-13. **Phase:** B02 implemented locally, SQL migrations reportedly applied, automated suite 828/828 passing; B02 commit/push and one owner-level HTTP security scenario still pending. **B03 not started.**
 
-## Read first in every new chat
+## Mandatory reading order for a new ChatGPT conversation
 
-1. `docs/projects/business-rules.md`: approved business decisions and unresolved details.
-2. `docs/projects/checklist.md`: current phase, tasks, tests, Git checkpoints, and next action.
-3. Only when needed, the existing repository docs: `docs/product/business-rules.md`, `docs/architecture/architecture-overview.md`, `docs/security/security-overview.md`, `docs/development/testing.md`.
-4. Compare documentation with the **current local code**; local changes may be newer than GitHub.
+1. `docs/projects/CHECKPOINT-2026-10-13-B02.md` — detailed current state, exact migration IDs, files, tests, open risks and handoff.
+2. `docs/projects/checklist.md` — progress and immediate next actions.
+3. `docs/projects/business-rules.md` — approved original 97-answer functional baseline (preserve this document).
+4. `docs/projects/b01-b02-decisions.md` — subsequent decisions, B01/B02 technical implementation and explicit gaps.
+5. Source files listed in the checkpoint, directly from current `main`. Confirm the local working tree/HEAD before any patch; uncommitted changes can be newer than GitHub.
 
-The root `AGENTS.md` was a local Codex-era file and may be ignored by `.gitignore`; do not assume it is published or require it to work on Projects. This file documents the **web ChatGPT + ZIP patches** workflow and does not replace general project architecture.
+**Do not repeat the 97-question functional investigation** or reopen settled business decisions. Perform targeted, short technical investigation only for a new block, changed code or an unresolved design detail; do not claim that reading GitHub replaces inspecting the current local code before modifying it.
 
-## Operating agreement
+## Operating contract
 
-Follow **INVESTIGATE → PLAN → APPROVE → IMPLEMENT → VERIFY → STOP**.
+**INVESTIGATE → PLAN → APPROVE → IMPLEMENT → VERIFY → STOP**. Investigation means inspect actual business rules and *relevant current files*, not invent them. Present PLAN with boundaries, entities, migrations, authorization, file list and test matrix; wait for explicit approval before implementing an unapproved block. The owner explicitly authorized grouped B02 subblocks A+B and C+D and E separately.
 
-- INVESTIGATE functional: ask the owner how the module should behave before proposing architecture. This phase is now completed for the initial scope.
-- INVESTIGATE technical: read relevant actual source and dependencies, distinguish confirmed facts from assumptions. Avoid broad repository dumps.
-- PLAN: present rules, data model, endpoints, contracts, UI, affected files, migrations, risks and test matrix. Await explicit owner approval.
-- IMPLEMENT: deliver ZIP patch with complete files and paths relative to repository root; don't overwrite unrelated code. Do not use brittle mass string replacement.
-- VERIFY: the owner runs build/tests/SQL migrations and reports the actual output. Validate security, CSRF, authorization, concurrency, relational integrity, regressions and visual smoke tests as appropriate.
-- STOP after the approved block. Do not proceed into the next block without a new instruction.
-- No git commit/push, migration application, data deletion or modification of historical business documents without explicit authorization.
-- Keep commits/checkpoints scoped and documented. Before a new block, inspect `git status` and preserve unrelated changes.
+- Discuss in Spanish; C# identifiers and technical repository docs in English; UI copy in Spanish.
+- Clean, SOLID where useful, maintainable, scalable pragmatic modular monolith. .NET 10 / ASP.NET Core Minimal APIs / Blazor WASM / EF Core SQL Server / Identity cookie auth / CSRF / xUnit + SQL Server Testcontainers. Reuse existing conventions; no speculative microservices, CQRS, generic repository, event bus, overengineering.
+- Deliver ZIPs with **only actual source files and repository-relative paths**. **No README, patch scripts, temporary files, or ZIPs inside repository**. No fragile mass replacements; preserve unrelated and local user changes. Existing production files should be diffed/verified against local state before replacement.
+- Server enforces authorization and invariants, not only client. CSRF for mutating Minimal APIs. SQL integrity, concurrency, migrations, and regression must be verified on real outputs.
+- No commit/push, database update, destructive operation or unintended change without user authorization. User executes PowerShell commands in `C:\Projects\Revestik` and reports outputs. Do not invent test results. Scope staging explicitly, check `git diff --cached --check`, `git diff --cached --stat`, `git status`.
+- **User explicitly postponed ALL manual UI smoke tests until the full Projects functionality and coherent responsive Blazor UI are complete** (B07/B08). Continue automated tests per block; do not ask for partial smoke tests.
+- Investigating the suite's performance regression is deferred until Projects is finished. Preserve tests and SQL fixture isolation.
+- Root `AGENTS.md` is a local ignored Codex-era file; rely on this tracked document, not the root file.
 
-## Technology and architecture
+## Boundaries
 
-.NET 10, ASP.NET Core Minimal APIs, Blazor WebAssembly, EF Core, SQL Server, Identity + Google OAuth, cookie authentication, CSRF, xUnit and SQL Server Testcontainers. Pragmatic modular monolith; use existing API / Client / Shared boundaries, DTOs and services. Avoid microservices, unnecessary CQRS, generic repository, event bus and speculative abstractions. Server enforces security and business invariants; database protects uniqueness, foreign keys and transactions.
-
-## Projects boundaries
-
-- A Project belongs to exactly one existing Customer, though it may have multiple additional contacts. One Customer can have many Projects.
-- Projects is an internal, manual documentary/operational dossier, not a replacement for Customer, Quotation, Sale, Inventory, Payments or fiscal accounting.
-- Quotations and sales are manually attached as PDF evidence, not automatically linked/synced; entering a project payment does **not** pay an existing Sale or produce accounting entries.
-- Timeline items, agreements, tasks, documents, manual payments/abonos, status, and progress are Project-specific.
-- Project is managed by one responsible user, with Administrator intervention privileges. Enforce restrictions server-side.
-- The business owner permits permanently deleting a Project and its own attached records/files, but this must never delete independent Customer, Quotation, Sale or other module data.
-- No public customer portal, public file link, video attachments or editable SketchUp files.
-
-## Existing source investigation
-
-The owner provided three targeted ZIPs: `Revestik_Projects_Investigate.zip`, `Revestik_Projects_Investigate_02.zip`, `Revestik_Projects_Final_Investigate.zip`. The prior analysis identified: `Customer`, `CustomerService`, `CustomerEndpoints`, `CustomerConfiguration`, `CustomerSelector.razor`, `Quotation`, `Sale`, `RevestikDbContext`, `PolicyNames`, `AuthenticationExtensions`, `CookieHandler`, `CsrfHandler`, `Home.razor`, QuestPDF, and SQL Server integration test fixture. Revalidate each against local source before edits; the investigated HEAD was reported as `ae34ce013a43aa5618c423e813d2477fdbd8430c` and does not prove current GitHub/local equality.
-
-## Communication, documentation and verification
-
-Discuss decisions with owner in Spanish; write English identifiers, code and repository technical documentation; app-facing text in Spanish. Label **approved business rules** versus **technical proposals**, and **implemented** versus **planned**. Never invent test outcomes or assume code is committed. Update the checklist at the end of every verified block, including commit SHA only after it actually exists.
+Exactly one Customer per Project, many contacts; no automatic Sale/Quotation linkage, no accounting or inventory side effects from manual project payments, private files only. Responsible user edits, administrators intervene, other ManageProjects roles may read. Permanent project deletion deletes only project-owned data, never Customer or unrelated business records. B02 event voids are logical and histories remain until permanent project deletion.
 
 ## Next action
 
-Create/review the **detailed PLAN for Block 01 — Project foundation** (Customer FK, responsibility, unique name, states, contacts, optional location/dates, amount/currency, APIs, CSRF, authorization, EF configurations, tests). Resolve the specific open rules in `business-rules.md` before implementing relevant behaviors. **Do not implement until APPROVE.**
+**Finish B02-E:** add/verify HTTP tests with a valid CSRF token for authorized *non-owner* mutating another owner's event or agreement (expect 403); run affected and full regression as warranted; verify applied migrations and clean git status. Then stage/publish B02 and this documentation only with owner's permission. Record real B02 commit SHA only after it exists. **STOP** until instructed to start B03 progress/milestones. Do not claim B02 fully closed before security test and push are confirmed.
