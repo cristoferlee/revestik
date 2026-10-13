@@ -150,9 +150,12 @@
                                             <small class="fiscal-diagnostic-reason">@reason</small>
                                         }
                                     </div>
-                                    @if (item.Compatible && references.References.Count == 1)
+                                    @if (references.References.Count == 1)
                                     {
-                                        <button type="button" class="secondary-button" disabled="@busy" @onclick="() => PrepareReference(item.ReferenceId, item.Document.Id)">Seleccionar y comparar</button>
+                                        <button type="button" class="secondary-button" disabled="@busy"
+                                                @onclick="() => PrepareReference(item.ReferenceId, item.Document.Id)">
+                                            @(item.Compatible ? "Seleccionar y comparar" : "Revisar discrepancia")
+                                        </button>
                                     }
                                 </div>
                             }
@@ -189,7 +192,9 @@
                     }
                     @if (referenceId > 0 && referenceTargetId > 0)
                     {
-                        var original = references.Matches.FirstOrDefault(x => x.Id == referenceTargetId);
+                        var diagnostic = references.Diagnostics.FirstOrDefault(x => x.ReferenceId == referenceId && x.Document.Id == referenceTargetId);
+                        var original = references.Matches.FirstOrDefault(x => x.Id == referenceTargetId)
+                            ?? diagnostic?.Document;
                         @if (original is not null)
                         {
                             <section class="fiscal-document-comparison" aria-label="Comparación entre nota y factura original">
@@ -218,6 +223,18 @@
                                     </div>
                                 </div>
                                 <p class="fiscal-note">Referencia fiscal: @references.References[0].Number · @DescribeMatch(references.References[0].MatchState). La aprobación vuelve a validar la relación en el servidor. El importe original del XML permanece intacto.</p>
+                                @if (diagnostic is not null && !diagnostic.Compatible)
+                                {
+                                    <div class="fiscal-exception-diagnostic" role="status">
+                                        <strong>Discrepancia fiscal detectada</strong>
+                                        <p>Fecha real de la factura: @original.IssueDate.ToString("dd/MM/yyyy"). La fecha declarada por la NC y los demás motivos se deben contrastar con el XML original.</p>
+                                        @foreach (var reason in diagnostic.Reasons)
+                                        {
+                                            <small class="fiscal-diagnostic-reason">@reason</small>
+                                        }
+                                        <p>Seleccionar esta factura solo abre una revisión; no autoriza ni aprueba el ajuste.</p>
+                                    </div>
+                                }
                                 @if (references.Preview is not null && references.Preview.OriginalDocumentId == original.Id)
                                 {
                                     <div class="fiscal-adjustment-row"><span>Importe original</span><strong>@original.CurrencyCode @references.Preview.OriginalTotal.ToString("N2")</strong></div>
@@ -235,10 +252,81 @@
                                 }
                             </section>
                         }
-                        <div class="fiscal-confirm"><p>Nota fiscal: @selected.Clave</p>
-                            <p>Referencia #@referenceId → factura fiscal #@referenceTargetId</p>
-                            <label><input type="checkbox" @bind="confirmReference" /> Verifiqué los documentos y autorizo aplicar este ajuste al total fiscal mostrado. No modifica saldos, pagos ni inventario.</label>
-                            <button type="button" class="primary-button" disabled="@(busy || !confirmReference || references.References.Count != 1 || !references.Matches.Any(x => x.Id == referenceTargetId) || references.Preview?.OriginalDocumentId != referenceTargetId)" @onclick="ApproveNoteAsync">Aprobar ajuste fiscal</button></div>
+                        @if (diagnostic is not null && !diagnostic.Compatible && references.References.Count == 1)
+                        {
+                            <section class="fiscal-exception-panel" aria-label="Autorizar discrepancia de fecha">
+                                <span class="section-kicker">Revisión excepcional</span>
+                                <h3>Autorizar excepción de fecha</h3>
+                                <p>Solo se admiten discrepancias exclusivamente de fecha. El servidor volverá a comprobar clave, identidades, tipo, moneda y estado de la nota.</p>
+                                <AuthorizeView Roles="Administrator,Accountant">
+                                    <Authorized>
+                                        <label for="fiscal-exception-reason">Justificación de la revisión (20 a 2000 caracteres)</label>
+                                        <textarea id="fiscal-exception-reason" class="fiscal-exception-textarea"
+                                                  @bind="exceptionJustification" @bind:event="oninput"
+                                                  maxlength="2000" rows="4"
+                                                  placeholder="Indica por qué esta factura corresponde a la nota pese a la fecha distinta."></textarea>
+                                        <button type="button" class="primary-button"
+                                                disabled="@(busy || HasDateAuthorization || exceptionJustification.Trim().Length < 20 || exceptionJustification.Trim().Length > 2000)"
+                                                @onclick="AuthorizeDateExceptionAsync">Autorizar excepción de fecha</button>
+                                        <small>Esta decisión se audita y no vincula ni aprueba automáticamente la nota.</small>
+                                    </Authorized>
+                                    <NotAuthorized>
+                                        <p>Solo Administrator y Accountant pueden autorizar excepciones fiscales.</p>
+                                    </NotAuthorized>
+                                </AuthorizeView>
+                            </section>
+                        }
+                        <AuthorizeView Roles="Administrator,Accountant">
+                            <Authorized>
+                                <section class="fiscal-exception-panel" aria-label="Historial de revisión fiscal">
+                                    <div class="fiscal-history-header">
+                                        <div><span class="section-kicker">Auditoría fiscal</span><h3>Historial de autorizaciones</h3></div>
+                                        <button type="button" class="secondary-button" disabled="@busy" @onclick="LoadResolutionHistoryAsync">Actualizar historial</button>
+                                    </div>
+                                    @if (resolutionHistoryLoaded)
+                                    {
+                                        @if (resolutionHistory.Count == 0)
+                                        { <p>No hay autorizaciones registradas para esta referencia.</p> }
+                                        else
+                                        {
+                                            @foreach (var entry in resolutionHistory)
+                                            {
+                                                <div class="fiscal-history-entry">
+                                                    <strong>@(entry.ResolutionType == "DateExceptionAuthorized" ? "Excepción de fecha autorizada" : entry.ResolutionType)</strong>
+                                                    <small>Factura #@entry.OriginalDocumentId · @entry.ResolvedAtUtc.ToString("dd/MM/yyyy HH:mm") UTC</small>
+                                                    <small>Usuario: @entry.ResolvedByUserId</small>
+                                                    <p>@entry.Justification</p>
+                                                    <small>Diagnóstico: @entry.CompatibilityReasons</small>
+                                                </div>
+                                            }
+                                        }
+                                    }
+                                    else { <p>El historial aún no está disponible. Utiliza Actualizar historial.</p> }
+                                </section>
+                                @if (HasDateAuthorization)
+                                { <p class="fiscal-note">Existe una autorización de fecha para esta factura. La vinculación y la aprobación siguen siendo decisiones independientes.</p> }
+                                @if (CanLinkSelected)
+                                {
+                                    <div class="fiscal-confirm" aria-label="Confirmar vinculación fiscal">
+                                        <h3>Vincular factura original</h3>
+                                        <label><input type="checkbox" @bind="confirmLink" /> Confirmo que la referencia #@referenceId corresponde a la factura #@referenceTargetId. Este paso no aprueba el ajuste fiscal.</label>
+                                        <button type="button" class="secondary-button" disabled="@(busy || !confirmLink)" @onclick="LinkReferenceAsync">Vincular factura original</button>
+                                    </div>
+                                }
+                                @if (IsSelectedLinked)
+                                { <p class="fiscal-note">Esta referencia ya está vinculada con la factura seleccionada.</p> }
+                                @if ((IsSelectedCompatible || HasDateAuthorization || IsSelectedLinked) &&
+                                    references.References.Count == 1 && references.Preview?.OriginalDocumentId == referenceTargetId)
+                                {
+                                    <div class="fiscal-confirm" aria-label="Aprobación fiscal independiente">
+                                        <h3>Aprobar ajuste fiscal</h3>
+                                        <p>Esta acción aprueba el ajuste fiscal; el servidor verificará nuevamente la referencia y el estado de la nota.</p>
+                                        <label><input type="checkbox" @bind="confirmReference" /> Revisé la factura y confirmo la aprobación del ajuste fiscal mostrado, sin cambiar pagos ni inventario.</label>
+                                        <button type="button" class="primary-button" disabled="@(busy || !confirmReference)" @onclick="ApproveNoteAsync">Aprobar ajuste fiscal</button>
+                                    </div>
+                                }
+                            </Authorized>
+                        </AuthorizeView>
                     }
                 }
             }
@@ -249,6 +337,9 @@
 @code {
     private const string Base = "api/purchases/received-documents/fiscal";
     private string kind = "notes", search = "";
+    private string exceptionJustification = "";
+    private IReadOnlyList<FiscalReferenceResolutionResponse> resolutionHistory = [];
+    private bool resolutionHistoryLoaded, confirmLink;
     private int page = 1, days = 30, selectedPurchaseId, referenceId, referenceTargetId;
     private bool busy, loading, confirmPurchase, confirmReference, isError;
     private string? message;
@@ -272,7 +363,18 @@
         _ => state
     };
     private static string DescribeType(string value) => value switch { "Invoice" => "Factura electrónica", "CreditNote" => "Nota de crédito", "DebitNote" => "Nota de débito", "ElectronicTicket" => "Tiquete electrónico", "PurchaseInvoice" => "Factura electrónica de compra", "ExportInvoice" => "Factura de exportación", "ElectronicPaymentReceipt" => "Recibo electrónico de pago", _ => value };
-    private void ResetSelection() { selected = null; candidates = null; references = null; review = null; selectedPurchaseId = 0; referenceId = 0; referenceTargetId = 0; confirmPurchase = false; confirmReference = false; }
+    private void ResetSelection() { selected = null; candidates = null; references = null; review = null; selectedPurchaseId = 0; referenceId = 0; referenceTargetId = 0; confirmPurchase = false; confirmReference = false; confirmLink = false; exceptionJustification = ""; resolutionHistory = []; resolutionHistoryLoaded = false; }
+    private bool HasDateAuthorization => resolutionHistoryLoaded && resolutionHistory.Any(x =>
+        x.ReferenceId == referenceId && x.OriginalDocumentId == referenceTargetId &&
+        x.ResolutionType == "DateExceptionAuthorized");
+    private bool IsSelectedLinked => references?.References.Any(x =>
+        x.ReferenceId == referenceId && x.LinkedDocumentId == referenceTargetId) == true;
+    private bool IsSelectedCompatible => references?.Diagnostics.Any(x =>
+        x.ReferenceId == referenceId && x.Document.Id == referenceTargetId && x.Compatible) == true ||
+        references?.References.Any(x => x.ReferenceId == referenceId &&
+            x.SuggestedDocumentId == referenceTargetId) == true;
+    private bool CanLinkSelected => referenceId > 0 && referenceTargetId > 0 &&
+        references?.References.Count == 1 && (IsSelectedCompatible || HasDateAuthorization) && !IsSelectedLinked;
     private async Task SwitchAsync(string value) { kind = value; page = 1; ResetSelection(); await LoadAsync(); }
     private async Task SearchAsync() { page = 1; ResetSelection(); await LoadAsync(); }
     private async Task PreviousAsync() { if(page>1) { page--; ResetSelection(); await LoadAsync(); } }
@@ -324,22 +426,85 @@
         catch (Exception e) { SetError(e.Message); }
         finally { busy = false; }
     }
-    private void PrepareReference(int id, int targetId) { referenceId = id; referenceTargetId = targetId; confirmReference = false; }
+    private async Task PrepareReference(int id, int targetId)
+    {
+        referenceId = id; referenceTargetId = targetId;
+        confirmReference = false; confirmLink = false;
+        exceptionJustification = "";
+        resolutionHistory = []; resolutionHistoryLoaded = false;
+        await LoadResolutionHistoryAsync();
+    }
+    private async Task LoadResolutionHistoryAsync()
+    {
+        if (referenceId <= 0) return;
+        busy = true;
+        try
+        {
+            // This endpoint requires an accounting role; other users may review
+            // diagnostics, but cannot view or authorize fiscal exceptions.
+            using var response = await Http.GetAsync($"{Base}/references/{referenceId}/resolution-history");
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden ||
+                response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                resolutionHistory = [];
+                resolutionHistoryLoaded = false;
+                return;
+            }
+            if (!response.IsSuccessStatusCode)
+            {
+                SetError($"No se pudo consultar el historial (HTTP {(int)response.StatusCode}).");
+                return;
+            }
+            resolutionHistory = await response.Content.ReadFromJsonAsync<List<FiscalReferenceResolutionResponse>>() ?? [];
+            resolutionHistoryLoaded = true;
+        }
+        catch (Exception e) { SetError(e.Message); }
+        finally { busy = false; }
+    }
+    private async Task AuthorizeDateExceptionAsync()
+    {
+        if (references is null || references.References.Count != 1 || referenceId <= 0 ||
+            referenceTargetId <= 0 || exceptionJustification.Trim().Length is < 20 or > 2000 ||
+            !references.Diagnostics.Any(x => x.ReferenceId == referenceId && x.Document.Id == referenceTargetId && !x.Compatible))
+            return;
+        busy = true;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync(
+                $"{Base}/references/{referenceId}/authorize-date-exception",
+                new FiscalDateExceptionRequest(referenceTargetId, exceptionJustification.Trim()));
+            if (!response.IsSuccessStatusCode)
+            {
+                SetError($"No se autorizó la excepción (HTTP {(int)response.StatusCode}). Consulta los diagnósticos o el historial de revisión.");
+                return;
+            }
+            exceptionJustification = "";
+            await LoadResolutionHistoryAsync();
+            SetSuccess("Excepción de fecha autorizada y registrada. La nota todavía no se ha vinculado ni aprobado.");
+            // Keep the selected invoice visible. Linking and approval remain separate actions.
+        }
+        catch (Exception e) { SetError(e.Message); }
+        finally { busy = false; }
+    }
+
     private async Task LinkReferenceAsync()
     {
-        if (!confirmReference || referenceId <= 0 || referenceTargetId <= 0) return;
+        if (!confirmLink || !CanLinkSelected) return;
         busy = true;
         try {
             using var response = await Http.PostAsJsonAsync($"{Base}/references/{referenceId}/link", new FiscalReferenceLinkRequest(referenceTargetId));
             if (!response.IsSuccessStatusCode) { SetError($"No se pudo relacionar la referencia (HTTP {(int)response.StatusCode})."); return; }
-            referenceId = 0; referenceTargetId = 0; confirmReference = false;
-            await LoadReferencesAsync(); SetSuccess("Referencia fiscal vinculada. No se aplicaron ajustes económicos.");
+            confirmLink = false; confirmReference = false;
+            await LoadReferencesAsync();
+            await LoadResolutionHistoryAsync();
+            SetSuccess("Referencia fiscal vinculada. No se aplicaron ajustes económicos.");
         } catch (Exception e) { SetError(e.Message); } finally { busy = false; }
     }
     private async Task ApproveNoteAsync()
     {
         if (!confirmReference || selected is null || referenceId <= 0 || referenceTargetId <= 0 ||
-            references?.References.Count != 1) return;
+            references?.References.Count != 1 || !(IsSelectedCompatible || HasDateAuthorization || IsSelectedLinked) ||
+            references.Preview?.OriginalDocumentId != referenceTargetId) return;
         busy = true;
         try
         {

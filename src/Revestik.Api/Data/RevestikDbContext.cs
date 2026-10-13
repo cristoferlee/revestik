@@ -20,6 +20,7 @@ public sealed class RevestikDbContext(DbContextOptions<RevestikDbContext> option
     public DbSet<CabysItem> CabysItems => Set<CabysItem>();
     public DbSet<ElectronicDocument> ElectronicDocuments => Set<ElectronicDocument>();
     public DbSet<ElectronicDocumentReference> ElectronicDocumentReferences => Set<ElectronicDocumentReference>();
+    public DbSet<ElectronicDocumentReferenceResolution> ElectronicDocumentReferenceResolutions => Set<ElectronicDocumentReferenceResolution>();
     public DbSet<ElectronicDocumentLine> ElectronicDocumentLines => Set<ElectronicDocumentLine>();
     public DbSet<ElectronicDocumentLineDiscount> ElectronicDocumentLineDiscounts => Set<ElectronicDocumentLineDiscount>();
     public DbSet<ElectronicDocumentLineTax> ElectronicDocumentLineTaxes => Set<ElectronicDocumentLineTax>();

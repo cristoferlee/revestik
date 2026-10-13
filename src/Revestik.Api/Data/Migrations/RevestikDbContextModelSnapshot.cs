@@ -1135,6 +1135,59 @@ namespace Revestik.Api.Data.Migrations
                     b.ToTable("ElectronicDocumentReferences", (string)null);
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.ElectronicDocumentReferenceResolution", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CompatibilityReasons")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("ElectronicDocumentReferenceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Justification")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("OriginalDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ResolutionType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("ResolvedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ResolvedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ElectronicDocumentReferenceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ReferenceResolutions_ActiveDateException")
+                        .HasFilter("[ResolutionType] = 'DateExceptionAuthorized'");
+
+                    b.HasIndex("OriginalDocumentId");
+
+                    b.HasIndex("ResolvedByUserId");
+
+                    b.HasIndex("ElectronicDocumentReferenceId", "ResolvedAtUtc");
+
+                    b.ToTable("ElectronicDocumentReferenceResolutions", (string)null);
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.Expense", b =>
                 {
                     b.Property<int>("Id")
@@ -2756,6 +2809,33 @@ namespace Revestik.Api.Data.Migrations
                     b.Navigation("ElectronicDocument");
 
                     b.Navigation("RelatedElectronicDocument");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ElectronicDocumentReferenceResolution", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.ElectronicDocumentReference", "Reference")
+                        .WithMany()
+                        .HasForeignKey("ElectronicDocumentReferenceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.ElectronicDocument", "OriginalDocument")
+                        .WithMany()
+                        .HasForeignKey("OriginalDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", "ResolvedByUser")
+                        .WithMany()
+                        .HasForeignKey("ResolvedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("OriginalDocument");
+
+                    b.Navigation("Reference");
+
+                    b.Navigation("ResolvedByUser");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.HaciendaResponse", b =>

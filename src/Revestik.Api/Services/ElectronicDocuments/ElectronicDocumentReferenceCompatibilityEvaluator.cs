@@ -10,43 +10,57 @@ namespace Revestik.Api.Services.ElectronicDocuments;
 /// </summary>
 public static class ElectronicDocumentReferenceCompatibilityEvaluator
 {
+    // Stable, machine-readable result. Display messages remain backward compatible.
+    public enum CompatibilityIssue
+    {
+        SelfReference, Direction, Issuer, Receiver, ReferenceNumber, DocumentType,
+        IssueDate, Currency
+    }
+
+    public sealed record CompatibilityFinding(CompatibilityIssue Code, string Message);
+
     public static IReadOnlyList<string> Evaluate(
+        ElectronicDocument note, ElectronicDocumentReference reference,
+        ElectronicDocument original) =>
+        EvaluateDetailed(note, reference, original).Select(x => x.Message).ToArray();
+
+    public static IReadOnlyList<CompatibilityFinding> EvaluateDetailed(
         ElectronicDocument note, ElectronicDocumentReference reference,
         ElectronicDocument original)
     {
-        var reasons = new List<string>();
+        var reasons = new List<CompatibilityFinding>();
         if (note.Id == original.Id)
-            reasons.Add("Un documento no puede referenciarse a sí mismo");
+            reasons.Add(new CompatibilityFinding(CompatibilityIssue.SelfReference, "Un documento no puede referenciarse a sí mismo"));
         if (note.Direction != original.Direction)
-            reasons.Add("Dirección fiscal diferente");
+            reasons.Add(new CompatibilityFinding(CompatibilityIssue.Direction, "Dirección fiscal diferente"));
         if (string.IsNullOrWhiteSpace(note.IssuerIdentification) ||
             string.IsNullOrWhiteSpace(note.ReceiverIdentification) ||
             !string.Equals(note.IssuerIdentification, original.IssuerIdentification, StringComparison.Ordinal) ||
             !string.Equals(note.IssuerIdentificationType, original.IssuerIdentificationType, StringComparison.Ordinal))
-            reasons.Add("Identificación fiscal del emisor diferente");
+            reasons.Add(new CompatibilityFinding(CompatibilityIssue.Issuer, "Identificación fiscal del emisor diferente"));
         if (string.IsNullOrWhiteSpace(note.ReceiverIdentification) ||
             !string.Equals(note.ReceiverIdentification, original.ReceiverIdentification, StringComparison.Ordinal) ||
             !string.Equals(note.ReceiverIdentificationType, original.ReceiverIdentificationType, StringComparison.Ordinal))
-            reasons.Add("Identificación fiscal del receptor diferente");
+            reasons.Add(new CompatibilityFinding(CompatibilityIssue.Receiver, "Identificación fiscal del receptor diferente"));
 
         var number = reference.ReferenceNumber?.Trim() ?? string.Empty;
         if (number.Length == 0 ||
             (!string.Equals(number, original.Clave, StringComparison.Ordinal) &&
              !string.Equals(number, original.NumeroConsecutivo, StringComparison.Ordinal)))
-            reasons.Add("Número de referencia diferente");
+            reasons.Add(new CompatibilityFinding(CompatibilityIssue.ReferenceNumber, "Número de referencia diferente"));
 
         if (!TryMapFiscalTypeCode(reference.ReferencedDocumentTypeCode, out var expectedType) ||
             original.DocumentType != expectedType)
-            reasons.Add("Tipo de comprobante referenciado incompatible");
+            reasons.Add(new CompatibilityFinding(CompatibilityIssue.DocumentType, "Tipo de comprobante referenciado incompatible"));
 
         // DateTimeOffset.Date reads the issuer's calendar date without shifting to UTC.
         if (DateOnly.FromDateTime(reference.ReferencedIssueDate.Date) !=
             DateOnly.FromDateTime(original.FechaEmision.Date))
-            reasons.Add("Fecha de emisión referenciada diferente");
+            reasons.Add(new CompatibilityFinding(CompatibilityIssue.IssueDate, "Fecha de emisión referenciada diferente"));
 
         if (string.IsNullOrWhiteSpace(note.CurrencyCode) ||
             !string.Equals(note.CurrencyCode.Trim(), original.CurrencyCode?.Trim(), StringComparison.OrdinalIgnoreCase))
-            reasons.Add("Moneda diferente");
+            reasons.Add(new CompatibilityFinding(CompatibilityIssue.Currency, "Moneda diferente"));
 
         return reasons;
     }

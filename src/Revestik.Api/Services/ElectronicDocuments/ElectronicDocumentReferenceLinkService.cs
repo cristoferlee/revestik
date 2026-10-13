@@ -70,7 +70,9 @@ public sealed class ElectronicDocumentReferenceLinkService(RevestikDbContext dbC
 
         var reasons = ElectronicDocumentReferenceCompatibilityEvaluator.Evaluate(
             reference.ElectronicDocument, reference, target);
-        if (reasons.Count > 0)
+        if (reasons.Count > 0 &&
+            !await FiscalReferenceDateExceptionValidator.IsAuthorizedAsync(
+                dbContext, reference.ElectronicDocument, reference, target, cancellationToken))
             throw new InvalidOperationException(
                 "La referencia no coincide fiscalmente: " + string.Join("; ", reasons));
 

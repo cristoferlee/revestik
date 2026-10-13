@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Revestik.Api.Data;
 using Revestik.Api.Authorization;
@@ -51,7 +52,6 @@ public static class FiscalReconciliationEndpoints
             })
             .AddEndpointFilter<AntiforgeryValidationFilter>();
 
-
         // Assisted discovery. All queries are read-only.
         group.MapGet("/worklist", async (string? kind, string? search, int? page, int? pageSize,
             RevestikDbContext db, CancellationToken ct) =>
@@ -60,6 +60,7 @@ public static class FiscalReconciliationEndpoints
                 .ListAsync(kind ?? "invoices", search, page ?? 1, pageSize ?? 20, ct)); }
             catch (ArgumentOutOfRangeException e) { return Results.BadRequest(new { error = e.Message }); }
         });
+
         group.MapGet("/documents/{id:int}/candidates", async (int id, int? days,
             RevestikDbContext db, CancellationToken ct) =>
         {
@@ -68,12 +69,14 @@ public static class FiscalReconciliationEndpoints
             catch (ArgumentOutOfRangeException e) { return Results.BadRequest(new { error = e.Message }); }
             catch (InvalidOperationException e) { return Results.Conflict(new { error = e.Message }); }
         });
+
         group.MapGet("/documents/{id:int}/references", async (int id, RevestikDbContext db, CancellationToken ct) =>
         {
             try { return Results.Ok(await new FiscalReconciliationCandidateService(db).NoteAsync(id, ct)); }
             catch (KeyNotFoundException e) { return Results.NotFound(new { error = e.Message }); }
             catch (InvalidOperationException e) { return Results.Conflict(new { error = e.Message }); }
         });
+
         group.MapPost("/references/{referenceId:int}/link", async (int referenceId,
             [FromBody] FiscalReferenceLinkRequest request, RevestikDbContext db, CancellationToken ct) =>
         {
@@ -84,7 +87,9 @@ public static class FiscalReconciliationEndpoints
             }
             catch (KeyNotFoundException e) { return Results.NotFound(new { error = e.Message }); }
             catch (InvalidOperationException e) { return Results.Conflict(new { error = e.Message }); }
-        }).AddEndpointFilter<AntiforgeryValidationFilter>();
+        })
+        .RequireAuthorization(PolicyNames.ManageAccountingClassification)
+        .AddEndpointFilter<AntiforgeryValidationFilter>();
 
         group.MapPost("/notes/{noteId:int}/approve", async (int noteId,
             [FromBody] FiscalApprovalRequest request, RevestikDbContext db, CancellationToken ct) =>
@@ -96,7 +101,37 @@ public static class FiscalReconciliationEndpoints
             }
             catch (KeyNotFoundException e) { return Results.NotFound(new { error = e.Message }); }
             catch (InvalidOperationException e) { return Results.Conflict(new { error = e.Message }); }
-        }).AddEndpointFilter<AntiforgeryValidationFilter>();
+        })
+        .RequireAuthorization(PolicyNames.ManageAccountingClassification)
+        .AddEndpointFilter<AntiforgeryValidationFilter>();
+
+        // Audited decision only: these endpoints never link a reference or approve a note.
+        group.MapGet("/references/{referenceId:int}/resolution-history", async (
+            int referenceId, RevestikDbContext db, CancellationToken ct) =>
+        {
+            try { return Results.Ok(await new FiscalReferenceResolutionService(db).GetHistoryAsync(referenceId, ct)); }
+            catch (KeyNotFoundException e) { return Results.NotFound(new { error = e.Message }); }
+        }).RequireAuthorization(PolicyNames.ManageAccountingClassification);
+
+        group.MapPost("/references/{referenceId:int}/authorize-date-exception", async (
+            int referenceId, [FromBody] FiscalDateExceptionRequest request,
+            ClaimsPrincipal user, RevestikDbContext db, CancellationToken ct) =>
+        {
+            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(userId)) return Results.Unauthorized();
+            try
+            {
+                var decision = await new FiscalReferenceResolutionService(db)
+                    .AuthorizeDateExceptionAsync(referenceId, request, userId, ct);
+                return Results.Ok(decision);
+            }
+            catch (ArgumentException e) { return Results.BadRequest(new { error = e.Message }); }
+            catch (UnauthorizedAccessException) { return Results.Forbid(); }
+            catch (KeyNotFoundException e) { return Results.NotFound(new { error = e.Message }); }
+            catch (InvalidOperationException e) { return Results.Conflict(new { error = e.Message }); }
+        })
+        .RequireAuthorization(PolicyNames.ManageAccountingClassification)
+        .AddEndpointFilter<AntiforgeryValidationFilter>();
 
         group.MapPost("/adjusted-totals", async ([FromBody] int[] documentIds,
             RevestikDbContext db, CancellationToken ct) =>

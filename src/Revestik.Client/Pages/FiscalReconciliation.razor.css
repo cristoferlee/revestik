@@ -58,3 +58,21 @@
 @media(max-width:780px){.fiscal-workspace .fiscal-comparison-grid{grid-template-columns:1fr}}
 
 .fiscal-workspace .fiscal-diagnostic-reason{color:#9a4b1b;font-weight:650}
+
+/* Date discrepancy review: same neutral / orange styling as the reconciliation screen. */
+.fiscal-workspace .fiscal-exception-diagnostic{display:grid;gap:7px;padding:14px;margin:14px 0;background:#fff9ed;border:1px solid #eedbb7;border-radius:10px}
+.fiscal-workspace .fiscal-exception-diagnostic p{margin:0}
+.fiscal-workspace .fiscal-exception-panel{display:grid;gap:11px;margin-top:16px;padding:18px;border:1px solid #e0e5ea;border-radius:12px;background:#fbfcfd}
+.fiscal-workspace .fiscal-exception-panel label{font-size:.85rem;font-weight:700;color:#26313d}
+.fiscal-workspace .fiscal-exception-textarea{width:100%;box-sizing:border-box;resize:vertical;min-height:105px;padding:11px 12px;border:1px solid #d9e0e7;border-radius:9px;background:#fff;color:#26313d;font:inherit}
+.fiscal-workspace .fiscal-exception-textarea:focus{outline:2px solid #f59a00;outline-offset:1px}
+.fiscal-workspace .fiscal-exception-panel .primary-button{justify-self:start}
+.fiscal-workspace .fiscal-exception-panel small{font-size:.76rem;color:#6d7884}
+
+/* Fiscal authorization timeline and confirmation controls. */
+.fiscal-workspace .fiscal-history-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.fiscal-workspace .fiscal-history-header h3{margin:8px 0}
+.fiscal-workspace .fiscal-history-entry{display:grid;gap:6px;padding:12px 14px;border:1px solid #e0e5ea;border-radius:10px;background:#fff;overflow-wrap:anywhere}
+.fiscal-workspace .fiscal-history-entry strong{color:#26313d}
+.fiscal-workspace .fiscal-history-entry small{color:#697683;font-size:.76rem}
+.fiscal-workspace .fiscal-history-entry p{color:#3d4956;margin:0;white-space:pre-wrap}
