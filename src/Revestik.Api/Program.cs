@@ -96,6 +96,8 @@ builder.Services.AddScoped<ElectronicDocumentPurchaseReconciliationService>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<ProjectActivityService>();
 builder.Services.AddScoped<ProjectEventDetailService>();
+builder.Services.AddScoped<ProjectMilestoneService>();
+builder.Services.AddScoped<ProjectMilestoneTemplateService>();
 
 var haciendaBaseUrl = builder.Configuration["Hacienda:BaseUrl"]
     ?? throw new InvalidOperationException("Hacienda base URL was not configured.");
@@ -168,6 +170,7 @@ app.MapFiscalReconciliationEndpoints();
 app.MapProjectEndpoints();
 app.MapProjectActivityEndpoints();
 app.MapProjectEventDetailEndpoints();
+app.MapProjectMilestoneEndpoints();
 
 if (!app.Environment.IsDevelopment())
 {

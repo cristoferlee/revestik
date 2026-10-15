@@ -2267,6 +2267,242 @@ namespace Revestik.Api.Data.Migrations
                     b.ToTable("ProjectEventRevisions", (string)null);
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.ProjectMilestone", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CompletedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsExcluded")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
+                    b.Property<decimal>("Weight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ProjectMilestones_Project_NormalizedName_Active")
+                        .HasFilter("[IsExcluded] = 0");
+
+                    b.HasIndex("ProjectId", "IsExcluded", "SortOrder");
+
+                    b.ToTable("ProjectMilestones", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectMilestones_Weight", "[Weight] > 0 AND [Weight] <= 100");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectMilestonePlan", b =>
+                {
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
+                    b.HasKey("ProjectId");
+
+                    b.ToTable("ProjectMilestonePlans", (string)null);
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectMilestoneRevision", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ChangeKind")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ChangedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("MilestoneId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("PreviousCompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PreviousCompletedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<long>("PreviousVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("WasCompleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("WasExcluded")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("Weight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MilestoneId", "PreviousVersion")
+                        .IsUnique();
+
+                    b.ToTable("ProjectMilestoneRevisions", (string)null);
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectMilestoneTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("ProjectMilestoneTemplates", (string)null);
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectMilestoneTemplateItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TemplateId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Weight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TemplateId", "SortOrder")
+                        .IsUnique();
+
+                    b.ToTable("ProjectMilestoneTemplateItems", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectMilestoneTemplateItems_Weight", "[Weight] > 0 AND [Weight] <= 100");
+                        });
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
                 {
                     b.Property<int>("Id")
@@ -3511,6 +3747,50 @@ namespace Revestik.Api.Data.Migrations
                     b.Navigation("ProjectEvent");
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.ProjectMilestone", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.ProjectMilestonePlan", "Plan")
+                        .WithMany("Milestones")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectMilestonePlan", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.Project", "Project")
+                        .WithOne()
+                        .HasForeignKey("Revestik.Api.Models.ProjectMilestonePlan", "ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectMilestoneRevision", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.ProjectMilestone", "Milestone")
+                        .WithMany("Revisions")
+                        .HasForeignKey("MilestoneId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Milestone");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectMilestoneTemplateItem", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.ProjectMilestoneTemplate", "Template")
+                        .WithMany("Items")
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Template");
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
                 {
                     b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", "CreatedByUser")
@@ -3776,6 +4056,21 @@ namespace Revestik.Api.Data.Migrations
             modelBuilder.Entity("Revestik.Api.Models.ProjectEventCategory", b =>
                 {
                     b.Navigation("Events");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectMilestone", b =>
+                {
+                    b.Navigation("Revisions");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectMilestonePlan", b =>
+                {
+                    b.Navigation("Milestones");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectMilestoneTemplate", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
