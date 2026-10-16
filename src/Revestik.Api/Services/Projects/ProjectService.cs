@@ -30,7 +30,6 @@ public sealed class ProjectService(RevestikDbContext db) : IProjectService
                 "Seleccione un cliente activo para crear un proyecto.");
         if (!await db.Users.AnyAsync(x => x.Id == creatorUserId, ct))
             throw new ProjectOperationException(ProjectFailureReason.UserNotFound, "Usuario no encontrado.");
-
         var clean = Validate(request);
         var project = new Project { CustomerId = customerId, ResponsibleUserId = creatorUserId,
             Status = ProjectStatus.Planning, CreatedAtUtc = DateTime.UtcNow };
@@ -49,6 +48,9 @@ public sealed class ProjectService(RevestikDbContext db) : IProjectService
         EnsureEditor(project, actorUserId, isAdmin);
         RequireCurrentVersion(project, request.Version);
         var clean = Validate(request);
+        // B05: monetary mutations require a reason and an immutable revision.
+        if (clean.AgreedAmount != project.AgreedAmount || clean.CurrencyCode != project.CurrencyCode)
+            throw Invalid("Modifique el importe mediante la operación auditada /agreed-amount.");
         Assign(project, clean);
         project.Version++;
         project.UpdatedAtUtc = DateTime.UtcNow;
@@ -75,12 +77,17 @@ public sealed class ProjectService(RevestikDbContext db) : IProjectService
 
     public async Task<bool> DeleteAsync(int id, string actorUserId, bool isAdmin, long version, CancellationToken ct)
     {
-        var project = await db.Set<Project>().SingleOrDefaultAsync(x => x.Id == id, ct);
-        if (project is null) return false;
-        EnsureEditor(project, actorUserId, isAdmin);
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted, ct);
+        // A deletion must participate in the same per-project serialization as payment mutations.
+        var projectExists = await db.Set<Project>().AnyAsync(x => x.Id == id, ct);
+        if (!projectExists) return false;
+        var project = await ProjectPaymentWriteLock.LoadAsync(db, id, actorUserId, isAdmin, ct);
         RequireCurrentVersion(project, version);
+        if (await db.Set<ProjectPayment>().AnyAsync(x => x.ProjectId == id, ct))
+            throw Invalid("El proyecto contiene historial de abonos; no puede eliminarse por esta operación.");
         db.Set<Project>().Remove(project);
         await SaveAsync(ct);
+        await tx.CommitAsync(ct);
         return true;
     }
 
@@ -92,14 +99,12 @@ public sealed class ProjectService(RevestikDbContext db) : IProjectService
             throw new ProjectOperationException(ProjectFailureReason.ConcurrencyConflict,
                 "El proyecto cambió desde su última consulta. Actualice la información antes de continuar.");
     }
-
     private static void EnsureEditor(Project project, string actorId, bool admin)
     {
         if (!admin && project.ResponsibleUserId != actorId)
             throw new ProjectOperationException(ProjectFailureReason.Forbidden,
                 "Solo el responsable del proyecto o un administrador puede modificarlo.");
     }
-
     private static ProjectUpsertRequest Validate(ProjectUpsertRequest request)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length > 150)
@@ -135,13 +140,10 @@ public sealed class ProjectService(RevestikDbContext db) : IProjectService
         }
         return request with { CurrencyCode = currency };
     }
-
     private static bool ValidLocation(string? value, int digits) =>
         value is null || (value.Length == digits && value.All(char.IsDigit));
-
     private static ProjectOperationException Invalid(string message) =>
         new(ProjectFailureReason.Invalid, message);
-
     private static void Assign(Project project, ProjectUpsertRequest request)
     {
         project.Name = request.Name.Trim();
@@ -160,7 +162,6 @@ public sealed class ProjectService(RevestikDbContext db) : IProjectService
             project.Contacts.Add(new ProjectContact { Name = contact.Name.Trim(), Role = contact.Role.Trim(),
                 PhoneNumber = contact.PhoneNumber?.Trim(), Email = contact.Email?.Trim() });
     }
-
     private async Task SaveAsync(CancellationToken ct)
     {
         try { await db.SaveChangesAsync(ct); }
@@ -177,7 +178,6 @@ public sealed class ProjectService(RevestikDbContext db) : IProjectService
                 "Ya existe un proyecto con este nombre para el cliente seleccionado.");
         }
     }
-
     private static ProjectResponse Map(Project x) => new(x.Id, x.CustomerId, x.Name,
         x.Description, x.ResponsibleUserId, x.Status, x.ProvinceCode, x.CantonCode,
         x.DistrictCode, x.OtherSigns, x.EstimatedStartDate, x.EstimatedEndDate,

@@ -1,30 +1,35 @@
-# Projects — Continuity instructions (read first)
+# Projects — Continuity instructions
 
-**Updated:** 2026-10-15. **Current phase:** B03 milestone progress/templates implemented and locally verified (22 targeted tests; full suite 857/857). Git publication is pending until confirmed. **Next block after closeout: B04**, not yet authorized.
+**Updated:** 2026-10-16. **Current phase:** B05 payments/balance locally verified; awaiting scoped Git closeout. Next block after owner-approved B05 publication: B06, not yet authorized.
 
-## Read order
+## Authoritative sources
 
-1. `docs/projects/CHECKPOINT-2026-10-15-B03.md` — authoritative latest checkpoint, exact paths, test counts, limitations, next actions.
-2. `docs/projects/checklist.md` — current implementation and closeout status.
-3. `docs/projects/business-rules.md` — original approved functional baseline; preserve unchanged.
-4. `docs/projects/b01-b02-decisions.md` — approved B01/B02 follow-up choices; preserve unchanged.
-5. `docs/projects/CHECKPOINT-2026-10-13-B02.md` — historical B02 handoff, superseded for current status.
-6. Current source and Git working tree; local uncommitted changes can be newer than GitHub.
+1. `docs/projects/business-rules.md` — original 97 approved answers in PRJ-001–PRJ-037; the functional baseline.
+2. `docs/projects/b01-b02-decisions.md` — follow-up approved decisions.
+3. `docs/projects/checklist.md` — latest implementation/verification and release status.
+4. Historical `docs/projects/CHECKPOINT-2026-10-15-B03.md`, `docs/projects/CHECKPOINT-2026-10-13-B02.md`, `VERIFY_B04_E.md` — historic evidence, not latest status.
+5. Current source/working tree and actual Git refs — verify before coding; local uncommitted code can exceed GitHub.
 
-Do **not** repeat the 97-question discovery or reopen settled business decisions. New blocks need only targeted technical investigation and explicit approval.
+## Latest completed development
 
-## Operating rules
+B01 Customer-bound Projects; B02 events/agreements/revisions; B03 optional milestone plans/templates; B04 private versioned Project documents; B05 manual operational payments and remaining balance with correction, logical void, audited agreed-amount revisions and document references.
 
-**INVESTIGATE → PLAN → APPROVE → IMPLEMENT → VERIFY → STOP.** Communicate with user in Spanish. Keep technical docs and C# identifiers in English and UI copy in Spanish. Pragmatic .NET 10 modular monolith (ASP.NET Core Minimal APIs, Blazor WASM, EF Core SQL Server, Identity, CSRF, xUnit + SQL Server Testcontainers). Prefer existing services and contracts; no speculative microservices, generic repositories or duplicate progress calculations.
+B05 rules approved by owner: reject overpayments; corrections preserve prior values/actor/date/reason; voids logical with reason; CRC/USD payments must match project; evidence optional; agreed amount changes audited and constrained by active payments. No exchange-rate conversion or automated Sales/accounting/inventory/XML effect.
 
-Source patch ZIPs contain only real repo-relative files; no temporary scripts, README, or ZIPs in repo. Protect unrelated user edits. Server enforces authorization/invariants; mutating APIs require CSRF. User executes PowerShell in `C:\Projects\Revestik`, reports actual results. Never invent test/migration/push outcomes. Do not commit, push, apply migrations or perform destructive work without authorization. Before commit examine precise staged paths, `git diff --cached --check` and `git diff --cached --stat`.
+B05-A migration: `20261016183335_AddProjectPayments`. SQL Testcontainers fixture migrates disposable test databases; this does not confirm applying the migration to the developer's database.
 
-**Manual Projects UI smoke testing is postponed to complete coherent responsive B07/B08 UI.** Continue automated tests. Performance tuning of the SQL test suite is deferred until Projects is complete.
+**Latest owner-reported regression (2026-10-16):** `dotnet test Revestik.sln --no-build`, 920 tests succeeded, 487 seconds. The B05-D xUnit2031 warning was corrected before the successful final run. Do not claim a newer result without execution.
 
-## Boundaries / current decisions
+**Published `main` before B05:** `7dde154` (B04). B05 has not yet been staged/pushed at the time this document was written. Verify the remote SHA.
 
-Each Project belongs to exactly one Customer. Responsible user or Administrator edits; other permitted roles may read. Project notes/files/payments do not automatically change Sales, Quotations, inventory, accounting or Customers. B02 events/agreements preserve history. B03 optional progress milestones have manually assigned weights (100% required before activation); completion/reversal updates progress and audit history, without automatically closing the Project. Template application creates independent Project milestones. No parallel progress engine.
+## Method
 
-## Immediate next step
+INVESTIGATE → PLAN → APPROVE → IMPLEMENT → VERIFY → STOP. Spanish conversation; English source identifiers/docs, Spanish UI messages. .NET 10 modular monolith, ASP.NET Core Minimal APIs, Blazor WebAssembly, EF Core SQL Server, Identity, antiforgery, xUnit, SQL Server Testcontainers. Keep SOLID pragmatic and avoid unrelated refactoring, microservices, CQRS, generic repositories or duplicated balance logic.
 
-Finish **B03-E scoped documentation staging and Git publication** only after owner approval and verification of staged diff. Full suite 857/857 and B03 22/22 passed; EF snapshot synced. Strict simultaneous race still not directly tested. Following closeout, STOP and investigate B04 only after owner requests it.
+Only responsible user or Administrator modifies a Project and its operational payments; authorized roles can read. All mutation endpoints protect against CSRF; server-side validation and SQL constraints must protect invariants. Financial mutations must synchronize on the Project to prevent concurrent overpayment and agreed-amount races. Payment evidence uses B04 private document storage; avoid cross-Project references and public file access.
+
+Before any release, inspect actual working tree, stage only scoped files, check staged diff and pending model changes. Never commit, push, alter production databases or delete files without owner authorization. ZIP patches preserve relative repo paths and avoid temporary README/scripts/binaries. Do not claim tests, commits or migrations succeeded without evidence.
+
+## Next phase
+
+Finish B05 scoped Git closeout, confirm SHA/remote push, then STOP. B06 tasks, deadlines, lifecycle and Dashboard alerts must begin with a separate INVESTIGATE and approval. Comprehensive Blazor UI and manual smoke tests are deferred until B07/B08.

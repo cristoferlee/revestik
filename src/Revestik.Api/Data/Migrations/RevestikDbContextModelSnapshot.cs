@@ -1950,6 +1950,64 @@ namespace Revestik.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.ProjectAgreedAmountRevision", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ChangedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<decimal?>("NewAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("NewCurrencyCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<decimal?>("PreviousAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PreviousCurrencyCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<long>("PreviousProjectVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "PreviousProjectVersion")
+                        .IsUnique();
+
+                    b.ToTable("ProjectAgreedAmountRevisions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectAgreedAmountRevisions_NewAmount", "[NewAmount] IS NULL OR [NewAmount] >= 0");
+
+                            t.HasCheckConstraint("CK_ProjectAgreedAmountRevisions_PreviousAmount", "[PreviousAmount] IS NULL OR [PreviousAmount] >= 0");
+
+                            t.HasCheckConstraint("CK_ProjectAgreedAmountRevisions_Reason", "LEN(LTRIM(RTRIM([Reason]))) > 0");
+                        });
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.ProjectContact", b =>
                 {
                     b.Property<int>("Id")
@@ -2660,6 +2718,177 @@ namespace Revestik.Api.Data.Migrations
                     b.ToTable("ProjectMilestoneTemplateItems", null, t =>
                         {
                             t.HasCheckConstraint("CK_ProjectMilestoneTemplateItems_Weight", "[Weight] > 0 AND [Weight] <= 100");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectPayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateOnly>("PaidOn")
+                        .HasColumnType("date");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("VoidedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VoidedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "Status", "PaidOn");
+
+                    b.ToTable("ProjectPayments", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectPayments_Amount", "[Amount] > 0");
+
+                            t.HasCheckConstraint("CK_ProjectPayments_Currency", "[CurrencyCode] IN ('CRC', 'USD')");
+
+                            t.HasCheckConstraint("CK_ProjectPayments_Status", "[Status] IN ('Active', 'Voided')");
+
+                            t.HasCheckConstraint("CK_ProjectPayments_VoidDetails", "([Status] = 'Active' AND [VoidedAtUtc] IS NULL AND [VoidedByUserId] IS NULL AND [VoidReason] IS NULL) OR ([Status] = 'Voided' AND [VoidedAtUtc] IS NOT NULL AND [VoidedByUserId] IS NOT NULL AND [VoidReason] IS NOT NULL AND LEN(LTRIM(RTRIM([VoidReason]))) > 0)");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectPaymentDocumentLink", b =>
+                {
+                    b.Property<int>("ProjectPaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("LinkedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LinkedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.HasKey("ProjectPaymentId", "ProjectDocumentId");
+
+                    b.HasIndex("ProjectDocumentId");
+
+                    b.HasIndex("ProjectDocumentId", "ProjectId");
+
+                    b.HasIndex("ProjectPaymentId", "ProjectId");
+
+                    b.ToTable("ProjectPaymentDocumentLinks", (string)null);
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectPaymentRevision", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ChangedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<decimal>("PreviousAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PreviousCurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("PreviousNotes")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateOnly>("PreviousPaidOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("PreviousReference")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<long>("PreviousVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("ProjectPaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectPaymentId", "PreviousVersion")
+                        .IsUnique();
+
+                    b.ToTable("ProjectPaymentRevisions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectPaymentRevisions_PreviousAmount", "[PreviousAmount] > 0");
+
+                            t.HasCheckConstraint("CK_ProjectPaymentRevisions_Reason", "LEN(LTRIM(RTRIM([Reason]))) > 0");
                         });
                 });
 
@@ -3833,6 +4062,17 @@ namespace Revestik.Api.Data.Migrations
                     b.Navigation("ResponsibleUser");
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.ProjectAgreedAmountRevision", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.ProjectContact", b =>
                 {
                     b.HasOne("Revestik.Api.Models.Project", "Project")
@@ -3998,6 +4238,49 @@ namespace Revestik.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Template");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectPayment", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectPaymentDocumentLink", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.ProjectDocument", "Document")
+                        .WithMany()
+                        .HasForeignKey("ProjectDocumentId", "ProjectId")
+                        .HasPrincipalKey("Id", "ProjectId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.ProjectPayment", "Payment")
+                        .WithMany("DocumentLinks")
+                        .HasForeignKey("ProjectPaymentId", "ProjectId")
+                        .HasPrincipalKey("Id", "ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+
+                    b.Navigation("Payment");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectPaymentRevision", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.ProjectPayment", "ProjectPayment")
+                        .WithMany("Revisions")
+                        .HasForeignKey("ProjectPaymentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProjectPayment");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
@@ -4287,6 +4570,13 @@ namespace Revestik.Api.Data.Migrations
             modelBuilder.Entity("Revestik.Api.Models.ProjectMilestoneTemplate", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectPayment", b =>
+                {
+                    b.Navigation("DocumentLinks");
+
+                    b.Navigation("Revisions");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
