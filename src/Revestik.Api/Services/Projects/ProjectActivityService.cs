@@ -127,6 +127,9 @@ public sealed class ProjectActivityService(RevestikDbContext db)
         if (project is null) throw new ProjectOperationException(ProjectFailureReason.Invalid, "El proyecto no existe.");
         if (!isAdmin && project.ResponsibleUserId != actor)
             throw new ProjectOperationException(ProjectFailureReason.Forbidden, "Solo el responsable o un administrador puede editar eventos.");
+        if (project.Status is ProjectStatus.Completed or ProjectStatus.Cancelled or ProjectStatus.Archived)
+            throw new ProjectOperationException(ProjectFailureReason.Invalid,
+                "El proyecto debe reabrirse o reactivarse antes de modificar su actividad.");
     }
 
     private async Task RequireActiveCategoryAsync(int categoryId, CancellationToken ct)

@@ -2427,6 +2427,73 @@ namespace Revestik.Api.Data.Migrations
                     b.ToTable("ProjectEventComments", (string)null);
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.ProjectEventDeadline", b =>
+                {
+                    b.Property<int>("ProjectEventId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ChangedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateOnly?>("DueOn")
+                        .HasColumnType("date");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
+                    b.HasKey("ProjectEventId");
+
+                    b.HasIndex("DueOn");
+
+                    b.ToTable("ProjectEventDeadlines", (string)null);
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectEventDeadlineRevision", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ChangedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateOnly?>("PreviousDueOn")
+                        .HasColumnType("date");
+
+                    b.Property<long>("PreviousVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("ProjectEventId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectEventId", "PreviousVersion")
+                        .IsUnique();
+
+                    b.ToTable("ProjectEventDeadlineRevisions", (string)null);
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.ProjectEventRevision", b =>
                 {
                     b.Property<long>("Id")
@@ -2483,6 +2550,72 @@ namespace Revestik.Api.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("ProjectEventRevisions", (string)null);
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectLifecycleChange", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("ActorUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly?>("ClosedOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ClosingObservations")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int?>("EvidenceDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NewStatus")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<long>("PreviousProjectVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PreviousStatus")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EvidenceDocumentId", "ProjectId");
+
+                    b.HasIndex("ProjectId", "ChangedAtUtc");
+
+                    b.HasIndex("ProjectId", "PreviousProjectVersion")
+                        .IsUnique();
+
+                    b.ToTable("ProjectLifecycleChanges", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectLifecycleChanges_Action", "[Action] IN ('Transition', 'Close', 'Reopen')");
+                        });
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.ProjectMilestone", b =>
@@ -2890,6 +3023,139 @@ namespace Revestik.Api.Data.Migrations
 
                             t.HasCheckConstraint("CK_ProjectPaymentRevisions_Reason", "LEN(LTRIM(RTRIM([Reason]))) > 0");
                         });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectTask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AssignedToUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CompletedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<DateOnly?>("DueOn")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedToUserId");
+
+                    b.HasIndex("ProjectId", "IsCompleted", "DueOn");
+
+                    b.ToTable("ProjectTasks", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectTasks_Completion", "([IsCompleted] = 0 AND [CompletedAtUtc] IS NULL AND [CompletedByUserId] IS NULL) OR ([IsCompleted] = 1 AND [CompletedAtUtc] IS NOT NULL AND [CompletedByUserId] IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectTaskRevision", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AssignedToUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("ChangedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ChangedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<DateOnly?>("DueOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("PreviousCompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PreviousCompletedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<long>("PreviousVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("ProjectTaskId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("WasCompleted")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectTaskId", "PreviousVersion")
+                        .IsUnique();
+
+                    b.ToTable("ProjectTaskRevisions", (string)null);
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
@@ -4185,6 +4451,28 @@ namespace Revestik.Api.Data.Migrations
                     b.Navigation("ProjectEvent");
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.ProjectEventDeadline", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.ProjectEvent", "ProjectEvent")
+                        .WithOne()
+                        .HasForeignKey("Revestik.Api.Models.ProjectEventDeadline", "ProjectEventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProjectEvent");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectEventDeadlineRevision", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.ProjectEvent", "ProjectEvent")
+                        .WithMany()
+                        .HasForeignKey("ProjectEventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProjectEvent");
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.ProjectEventRevision", b =>
                 {
                     b.HasOne("Revestik.Api.Models.ProjectEvent", "ProjectEvent")
@@ -4194,6 +4482,23 @@ namespace Revestik.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("ProjectEvent");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectLifecycleChange", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.ProjectDocument", null)
+                        .WithMany()
+                        .HasForeignKey("EvidenceDocumentId", "ProjectId")
+                        .HasPrincipalKey("Id", "ProjectId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.ProjectMilestone", b =>
@@ -4281,6 +4586,28 @@ namespace Revestik.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("ProjectPayment");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectTask", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectTaskRevision", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.ProjectTask", "ProjectTask")
+                        .WithMany("Revisions")
+                        .HasForeignKey("ProjectTaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProjectTask");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
@@ -4576,6 +4903,11 @@ namespace Revestik.Api.Data.Migrations
                 {
                     b.Navigation("DocumentLinks");
 
+                    b.Navigation("Revisions");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectTask", b =>
+                {
                     b.Navigation("Revisions");
                 });
 

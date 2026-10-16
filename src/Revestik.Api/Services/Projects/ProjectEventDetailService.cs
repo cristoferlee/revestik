@@ -115,6 +115,9 @@ public sealed class ProjectEventDetailService(RevestikDbContext db)
         if (!admin && project.ResponsibleUserId != actor)
             throw new ProjectOperationException(ProjectFailureReason.Forbidden,
                 "Solo el responsable o un administrador puede modificar este proyecto.");
+        if (project.Status is ProjectStatus.Completed or ProjectStatus.Cancelled or ProjectStatus.Archived)
+            throw new ProjectOperationException(ProjectFailureReason.Invalid,
+                "El proyecto debe reabrirse o reactivarse antes de modificar comentarios o acuerdos.");
     }
 
     private static void Validate(ProjectAgreementUpsertRequest request)

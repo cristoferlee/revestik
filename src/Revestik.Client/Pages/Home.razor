@@ -1,4 +1,10 @@
-﻿@page "/"
+@page "/"
+@using System.Net
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Authorization
+@using Revestik.Shared.Projects
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthenticationState
 
 <PageTitle>Dashboard | Revestik</PageTitle>
 
@@ -43,7 +49,47 @@
     <section class="dashboard-panels">
         <article class="dashboard-panel">
             <h2>Alertas</h2>
-            <p>No hay alertas disponibles.</p>
+            <AuthorizeView Roles="Administrator,Accountant,Sales">
+                <Authorized>
+                    @if (isLoadingAlerts)
+                    {
+                        <p role="status">Cargando alertas de proyectos...</p>
+                    }
+                    else if (alertError is not null)
+                    {
+                        <p role="alert">@alertError</p>
+                        <button type="button" class="dashboard-refresh" @onclick="LoadAlertsAsync">Reintentar</button>
+                    }
+                    else if (alerts.Count == 0)
+                    {
+                        <p>No hay vencimientos pendientes o próximos en los siguientes 7 días.</p>
+                    }
+                    else
+                    {
+                        <div class="project-alert-counts" aria-label="Resumen de vencimientos">
+                            <span><strong>@alerts.Count(x => x.IsOverdue)</strong> vencidas</span>
+                            <span><strong>@alerts.Count(x => x.DueOn == today)</strong> vencen hoy</span>
+                            <span><strong>@alerts.Count(x => x.DueOn > today)</strong> próximas</span>
+                        </div>
+                        <ul class="project-alert-list">
+                            @foreach (var alert in alerts)
+                            {
+                                <li class="project-alert-item @(alert.IsOverdue ? "is-overdue" : "")">
+                                    <span class="project-alert-kind">@(alert.Kind == "Task" ? "Tarea" : "Evento / compromiso")</span>
+                                    <strong>@alert.Title</strong>
+                                    <span>@alert.ProjectName</span>
+                                    <time datetime="@alert.DueOn.ToString("yyyy-MM-dd")">
+                                        @(alert.IsOverdue ? "Vencida" : alert.DueOn == today ? "Vence hoy" : "Vence") · @alert.DueOn.ToString("dd/MM/yyyy")
+                                    </time>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </Authorized>
+                <NotAuthorized>
+                    <p>Las alertas de proyectos están disponibles para usuarios autorizados.</p>
+                </NotAuthorized>
+            </AuthorizeView>
         </article>
 
         <article class="dashboard-panel">
@@ -52,3 +98,53 @@
         </article>
     </section>
 </section>
+@code {
+    private IReadOnlyList<ProjectDashboardAlertResponse> alerts = [];
+    private DateOnly today;
+    private bool isLoadingAlerts;
+    private string? alertError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Do not query a policy-protected endpoint for users outside ManageProjects.
+        var state = await AuthenticationState.GetAuthenticationStateAsync();
+        var user = state.User;
+        if (user.Identity?.IsAuthenticated == true &&
+            (user.IsInRole("Administrator") || user.IsInRole("Accountant") || user.IsInRole("Sales")))
+            await LoadAlertsAsync();
+    }
+
+    private async Task LoadAlertsAsync()
+    {
+        isLoadingAlerts = true;
+        alertError = null;
+        try
+        {
+            using var response = await Http.GetAsync("api/dashboard/project-alerts");
+            if (response.IsSuccessStatusCode)
+            {
+                alerts = await response.Content.ReadFromJsonAsync<List<ProjectDashboardAlertResponse>>() ?? [];
+                // The API calculates the business-day window in Costa Rica; the earliest
+                // non-overdue due date is not used to infer the current day here.
+                today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+                    DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica")));
+            }
+            else
+            {
+                alertError = "No fue posible consultar las alertas de proyectos.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            alertError = "No fue posible conectar con el servicio de alertas.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            alertError = "La respuesta de alertas no tiene el formato esperado.";
+        }
+        finally
+        {
+            isLoadingAlerts = false;
+        }
+    }
+}

@@ -111,6 +111,9 @@ builder.Services.AddScoped<ProjectMilestoneTemplateService>();
 builder.Services.AddScoped<ProjectDocumentService>();
 builder.Services.AddScoped<ProjectDocumentQueryService>();
 builder.Services.AddScoped<ProjectPaymentService>();
+builder.Services.AddScoped<ProjectTaskDeadlineService>();
+builder.Services.AddScoped<ProjectLifecycleService>();
+builder.Services.AddScoped<ProjectDeadlineQueryService>();
 builder.Services.Configure<ProjectFileStorageOptions>(builder.Configuration.GetSection(ProjectFileStorageOptions.SectionName));
 builder.Services.PostConfigure<ProjectFileStorageOptions>(options =>
 {
@@ -193,6 +196,9 @@ app.MapProjectEventDetailEndpoints();
 app.MapProjectMilestoneEndpoints();
 app.MapProjectDocumentEndpoints();
 app.MapProjectPaymentEndpoints();
+app.MapProjectTaskDeadlineEndpoints();
+app.MapProjectLifecycleEndpoints();
+app.MapProjectDashboardAlertEndpoints();
 
 if (!app.Environment.IsDevelopment())
 {
