@@ -1,0 +1,101 @@
+@page "/projects"
+@using Microsoft.AspNetCore.Authorization
+@using Revestik.Client.Services.Customers
+@using Revestik.Client.Services.Projects
+@using Revestik.Shared.Customers
+@using Revestik.Shared.Projects
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales")]
+@inject ICustomerApiService Customers
+@inject ProjectApiService ProjectsApi
+@inject NavigationManager Navigation
+
+<PageTitle>Proyectos | Revestik</PageTitle>
+<section class="projects-page">
+    <header class="projects-header">
+        <div><h1>Proyectos</h1><p>Expedientes operativos vinculados a clientes existentes.</p></div>
+        <a class="secondary-button" href="/customers">Administrar clientes</a>
+    </header>
+    @if (error is not null) { <p class="status-message error-message" role="alert">@error</p> }
+    <section class="projects-card">
+        <div class="section-title"><h2>Seleccionar cliente</h2><p>Busca por nombre o identificación y consulta sus expedientes.</p></div>
+        <form class="search-row" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+            <input type="search" maxlength="150" placeholder="Nombre o identificación del cliente" aria-label="Buscar cliente" @bind="search" />
+            <button class="primary-button" type="submit" disabled="@busy">Buscar</button>
+        </form>
+        @if (busy) { <p role="status">Cargando clientes...</p> }
+        else if (customers.Count == 0) { <p class="empty">No hay clientes para mostrar.</p> }
+        else
+        {
+            <div class="item-grid">
+                @foreach (var customer in customers)
+                {
+                    <button type="button" class="customer-item @(selected?.Id == customer.Id ? "selected" : "")" @onclick="() => SelectAsync(customer)">
+                        <strong>@customer.Name</strong><small>@customer.IdentificationNumber · @(customer.IsActive ? "Activo" : "Inactivo")</small>
+                    </button>
+                }
+            </div>
+            <div class="pager">
+                <button class="secondary-button" disabled="@(busy || page == 1)" @onclick="PreviousAsync">Anterior</button>
+                <span>Página @(page)</span>
+                <button class="secondary-button" disabled="@(busy || customers.Count < 20)" @onclick="NextAsync">Siguiente</button>
+            </div>
+        }
+    </section>
+    @if (selected is not null)
+    {
+        <section class="projects-card">
+            <div class="section-title projects-between">
+                <div><h2>Proyectos de @selected.Name</h2><p>@(selected.IsActive ? "Cliente activo" : "Cliente inactivo: consulta histórica disponible")</p></div>
+                @if (selected.IsActive) { <a class="primary-button" href="@($"/projects/customer/{selected.Id}/new")">Nuevo proyecto</a> }
+            </div>
+            @if (loadingProjects) { <p role="status">Cargando proyectos...</p> }
+            else if (projectList.Count == 0) { <p class="empty">Este cliente todavía no tiene proyectos registrados.</p> }
+            else
+            {
+                <div class="item-grid">
+                    @foreach (var project in projectList)
+                    {
+                        <a class="project-item" href="@($"/projects/{project.Id}")">
+                            <strong>@project.Name</strong><span class="status-chip">@StatusLabel(project.Status)</span>
+                            <small>Registrado: @project.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</small>
+                        </a>
+                    }
+                </div>
+            }
+        </section>
+    }
+</section>
+@code {
+    private string search = "";
+    private int page = 1;
+    private bool busy, loadingProjects;
+    private string? error;
+    private List<CustomerListItemResponse> customers = [];
+    private CustomerListItemResponse? selected;
+    private IReadOnlyList<ProjectSummaryResponse> projectList = [];
+    protected override Task OnInitializedAsync() => LoadCustomersAsync();
+    private async Task SearchAsync() { page = 1; selected = null; projectList = []; await LoadCustomersAsync(); }
+    private async Task PreviousAsync() { page--; await LoadCustomersAsync(); }
+    private async Task NextAsync() { page++; await LoadCustomersAsync(); }
+    private async Task LoadCustomersAsync()
+    {
+        busy = true; error = null;
+        try { var result = await Customers.GetPageAsync(new CustomerListRequest { Search = search, Page = page, PageSize = 20 }); customers = result.Items.ToList(); }
+        catch (Exception ex) { error = "No se pudieron consultar los clientes. " + ex.Message; customers = []; }
+        finally { busy = false; }
+    }
+    private async Task SelectAsync(CustomerListItemResponse customer)
+    {
+        selected = customer; loadingProjects = true; error = null;
+        try { projectList = await ProjectsApi.ListAsync(customer.Id); }
+        catch (Exception ex) { projectList = []; error = "No se pudieron consultar los proyectos. " + ex.Message; }
+        finally { loadingProjects = false; }
+    }
+    private static string StatusLabel(ProjectStatus status) => status switch
+    {
+        ProjectStatus.Planning => "Planificación", ProjectStatus.PendingApproval => "Pendiente de aprobación",
+        ProjectStatus.Active => "Activo", ProjectStatus.Paused => "Pausado",
+        ProjectStatus.Completed => "Completado", ProjectStatus.Cancelled => "Cancelado",
+        ProjectStatus.Archived => "Archivado", _ => status.ToString()
+    };
+}

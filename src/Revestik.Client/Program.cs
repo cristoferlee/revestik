@@ -10,6 +10,7 @@ using Revestik.Client.Services.Expenses;
 using Revestik.Client.Services.Inventory;
 using Revestik.Client.Services.Locations;
 using Revestik.Client.Services.Products;
+using Revestik.Client.Services.Projects;
 using Revestik.Client.Services.Purchases;
 using Revestik.Client.Services.Quotations;
 using Revestik.Client.Services.Sales;
@@ -94,5 +95,8 @@ builder.Services.AddScoped<IElectronicDocumentApiService, ElectronicDocumentApiS
 builder.Services.AddScoped<IGmailIntegrationApiService, GmailIntegrationApiService>();
 builder.Services.AddScoped<ITaxpayerApiService, TaxpayerApiService>();
 builder.Services.AddScoped<ILocationApiService, LocationApiService>();
+builder.Services.AddScoped<ProjectApiService>();
+builder.Services.AddScoped<ProjectWorkspaceApiService>();
+builder.Services.AddScoped<ProjectFinancePlanApiService>();
 
 await builder.Build().RunAsync();

@@ -1,0 +1,98 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using Revestik.Shared.Projects
+@using Revestik.Client.Services.Projects
+@inject ProjectWorkspaceApiService Api
+<section class="workspace-stack">
+    <header class="workspace-heading"><div><h2>Documentos y fotografías</h2><p>Expediente privado con versiones y evidencias.</p></div><button class="secondary-button" disabled="@busy" @onclick="LoadAsync">Actualizar</button></header>
+    @if(busy){<p role="status">Procesando documentos...</p>}
+    @if(error is not null){<p role="alert" class="status-message error-message">@error</p>}
+    @if(notice is not null){<p role="status" class="status-message">@notice</p>}
+    @if(CanWrite)
+    {
+        <div class="workspace-card"><h3>Adjuntar archivo</h3><div class="workspace-fields"><label>Nombre visible<input maxlength="150" @bind="displayName" /></label><label>Categoría<select @bind="category"><option>Fotografías</option><option>Contratos</option><option>Planos</option><option>Comprobantes</option><option>Entregas</option><option>Otros</option></select></label><label class="wide">Archivo (máximo 20 MB)<InputFile OnChange="FileChanged" /></label></div><button class="primary-button" disabled="@(busy || uploadFile is null)" @onclick="() => UploadAsync()">Subir al expediente</button></div>
+    }
+    <div class="workspace-switch"><button class="@(view == "list" ? "active" : "")" @onclick='() => view = "list"'>Todos</button><button class="@(view == "gallery" ? "active" : "")" @onclick="OpenGalleryAsync">Galería</button></div>
+    @if(view == "gallery" && photoIds.Count > 1)
+    {
+        <div class="workspace-card"><h3>Comparar fotografías: antes / después</h3>
+            <div class="workspace-fields"><label>Antes<select @bind="beforeId">@foreach(var id in photoIds){<option value="@id">@documents.First(x => x.Id == id).DisplayName</option>}</select></label><label>Después<select @bind="afterId">@foreach(var id in photoIds){<option value="@id">@documents.First(x => x.Id == id).DisplayName</option>}</select></label></div>
+            <div class="workspace-compare"><div><span>Antes</span><img src="@Api.FileUrl(ProjectId,beforeId,preview:true)" alt="Fotografía antes" /></div><div><span>Después</span><img src="@Api.FileUrl(ProjectId,afterId,preview:true)" alt="Fotografía después" /></div></div>
+        </div>
+    }
+    @if(documents.Count == 0 && !busy){<p class="workspace-empty">No hay documentos en este proyecto.</p>}
+    <div class="@(view == "gallery" ? "workspace-gallery" : "workspace-stack")">
+        @foreach(var doc in documents)
+        {
+            <article class="workspace-card" @key="doc.Id">
+                <h3>@doc.DisplayName</h3><small>@doc.Category · @doc.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</small>
+                @if(view == "gallery" && imageTypes.ContainsKey(doc.Id) && imageTypes[doc.Id])
+                {
+                    <a href="@Api.FileUrl(ProjectId,doc.Id,preview:true)" target="_blank" rel="noopener noreferrer"><img class="workspace-thumbnail" src="@Api.FileUrl(ProjectId,doc.Id,preview:true)" alt="Vista previa de @doc.DisplayName" loading="lazy" /></a>
+                }
+                <div class="workspace-actions"><button class="secondary-button" @onclick="() => SelectAsync(doc)">Versiones y detalles</button><a class="secondary-button" target="_blank" rel="noopener noreferrer" href="@Api.FileUrl(ProjectId,doc.Id,preview:true)">Abrir / descargar</a>@if(CanWrite){<button class="secondary-button" @onclick="() => pendingDelete = doc">Eliminar</button>}</div>
+                @if(pendingDelete?.Id == doc.Id && CanWrite){<p>¿Confirma la eliminación lógica de este documento?</p><div class="workspace-actions"><button class="secondary-button" @onclick="() => DeleteAsync(doc)">Confirmar</button><button class="secondary-button" @onclick="() => pendingDelete = null">Cancelar</button></div>}
+                @if(details?.Document.Id == doc.Id)
+                {
+                    <div class="workspace-detail"><h4>Historial de versiones</h4>@foreach(var version in details.Versions){<p>v@version.Number — @version.OriginalFileName · @(version.SizeBytes / 1024.0).ToString("N0") KB <a target="_blank" rel="noopener noreferrer" href="@Api.FileUrl(ProjectId,doc.Id,version.Id)">Descargar</a></p>}
+                        @if(CanWrite){<h4>Agregar versión</h4><InputFile OnChange="FileChanged" /><button class="secondary-button" disabled="@(busy || uploadFile is null)" @onclick="() => UploadAsync(doc)">Subir nueva versión</button><h4>Asociar a actividad</h4><p>Escriba el ID de un evento de este proyecto.</p><label>ID de evento<input type="number" min="1" @bind="eventId" /></label><div class="workspace-actions"><button class="secondary-button" @onclick="() => LinkAsync(doc,true)">Vincular</button><button class="secondary-button" @onclick="() => LinkAsync(doc,false)">Desvincular</button></div><small>La lista de asociaciones existentes aún no está expuesta por la API.</small>}
+                    </div>
+                }
+            </article>
+        }
+    </div>
+</section>
+@code {
+    [Parameter, EditorRequired] public int ProjectId { get; set; }
+    [Parameter] public bool CanWrite { get; set; }
+    private bool busy;
+    private string? error, notice;
+    private string displayName = "", category = "Fotografías", view = "list";
+    private int? eventId;
+    private int beforeId, afterId;
+    private List<int> photoIds = [];
+    private IBrowserFile? uploadFile;
+    private IReadOnlyList<ProjectDocumentListItem> documents = [];
+    private readonly Dictionary<int,bool> imageTypes = [];
+    private ProjectDocumentDetails? details;
+    private ProjectDocumentListItem? pendingDelete;
+    protected override Task OnParametersSetAsync() => LoadAsync();
+    private void FileChanged(InputFileChangeEventArgs e) => uploadFile = e.File;
+    private async Task Execute(Func<Task> action)
+    {
+        if(busy)return;busy=true;error=notice=null;
+        try { await action(); } catch(Exception ex){error=ex.Message;} finally{busy=false;}
+    }
+    private Task LoadAsync() => Execute(async () => { documents=await Api.DocumentsAsync(ProjectId);details=null; });
+    private Task OpenGalleryAsync() => Execute(async () =>
+    {
+        view = "gallery";
+        photoIds = [];
+        foreach(var doc in documents)
+        {
+            var info = await Api.DocumentAsync(ProjectId,doc.Id);
+            var isImage = info?.Versions.FirstOrDefault(x => x.IsCurrent)?.ContentType.StartsWith("image/",StringComparison.OrdinalIgnoreCase) == true;
+            imageTypes[doc.Id] = isImage;
+            if(isImage) photoIds.Add(doc.Id);
+        }
+        if(photoIds.Count > 0){ beforeId = photoIds[0]; afterId = photoIds[^1]; }
+    });
+    private Task SelectAsync(ProjectDocumentListItem doc) => Execute(async () =>
+    {
+        if(details?.Document.Id == doc.Id){details=null;return;}
+        details=await Api.DocumentAsync(ProjectId,doc.Id);
+        imageTypes[doc.Id]=details?.Versions.FirstOrDefault(x => x.IsCurrent)?.ContentType.StartsWith("image/",StringComparison.OrdinalIgnoreCase)==true;
+    });
+    private Task UploadAsync(ProjectDocumentListItem? existing = null) => Execute(async () =>
+    {
+        if(!CanWrite || uploadFile is null) return;
+        if(uploadFile.Size > 20L*1024*1024)throw new InvalidOperationException("El archivo supera 20 MB.");
+        if(existing is null && string.IsNullOrWhiteSpace(displayName))throw new InvalidOperationException("Indique el nombre del documento.");
+        await using var stream=uploadFile.OpenReadStream(20L*1024*1024);
+        await Api.UploadAsync(ProjectId,displayName,category,stream,uploadFile.Name,uploadFile.ContentType,existing?.Id,existing?.Version);
+        uploadFile=null; displayName="";documents=await Api.DocumentsAsync(ProjectId);details=null;notice="Documento guardado.";
+    });
+    private Task DeleteAsync(ProjectDocumentListItem doc) => Execute(async () =>
+    { if(!CanWrite)return;await Api.DeleteDocumentAsync(ProjectId,doc.Id,doc.Version);pendingDelete=null;documents=await Api.DocumentsAsync(ProjectId);details=null;notice="Documento retirado del listado."; });
+    private Task LinkAsync(ProjectDocumentListItem doc,bool link) => Execute(async () =>
+    { if(!CanWrite || eventId is null or <=0)throw new InvalidOperationException("Indique un ID de evento válido.");if(link)await Api.LinkEventAsync(ProjectId,doc.Id,eventId.Value);else await Api.UnlinkEventAsync(ProjectId,doc.Id,eventId.Value);notice=link?"Evidencia vinculada.":"Evidencia desvinculada."; });
+}

@@ -1,0 +1,92 @@
+@using Revestik.Client.Services.Projects
+@using Revestik.Shared.Projects
+@inject ProjectFinancePlanApiService Api
+<section class="efg-stack">
+    <header class="efg-heading"><div><h2>Abonos del proyecto</h2><p>Control manual, sin efectos en ventas ni contabilidad.</p></div><button class="secondary-button" disabled="@busy" @onclick="LoadAsync">Actualizar</button></header>
+    @if (busy) { <p role="status">Cargando abonos...</p> }
+    @if (error is not null) { <p role="alert" class="efg-error">@error</p> }
+    @if (notice is not null) { <p role="status" class="efg-notice">@notice</p> }
+    @if (balance is not null)
+    {
+        <div class="efg-kpis"><article><span>Monto acordado</span><strong>@Money(balance.AgreedAmount, balance.CurrencyCode)</strong></article><article><span>Abonado</span><strong>@Money(balance.PaidAmount, balance.CurrencyCode)</strong></article><article><span>Pendiente</span><strong>@Money(balance.RemainingBalance, balance.CurrencyCode)</strong></article></div>
+    }
+    @if (CanWrite)
+    {
+        <article class="efg-card"><h3>@(editing is null ? "Registrar abono" : "Corregir abono")</h3>
+            <div class="efg-grid"><label>Monto<input type="number" min="0.01" step="0.01" @bind="amount" /></label><label>Moneda<select @bind="currency"><option value="CRC">CRC</option><option value="USD">USD</option></select></label><label>Fecha del pago<input type="date" @bind="paidOn" /></label><label>Referencia<input maxlength="150" @bind="reference" /></label><label class="efg-wide">Observaciones<textarea maxlength="2000" @bind="notes"></textarea></label>
+            @if (editing is not null) { <label class="efg-wide">Motivo de corrección *<input maxlength="500" @bind="reason" /></label> }
+            </div><div class="efg-actions"><button class="primary-button" disabled="@busy" @onclick="SaveAsync">@(editing is null ? "Registrar" : "Guardar corrección")</button>@if(editing is not null){<button class="secondary-button" @onclick="Reset">Cancelar</button>}</div>
+        </article>
+    }
+    @if (!busy && payments.Count == 0) { <p class="efg-empty">Todavía no se han registrado abonos.</p> }
+    @foreach (var payment in payments.OrderByDescending(x => x.PaidOn).ThenByDescending(x => x.Id))
+    {
+        <article class="efg-card" @key="payment.Id"><div class="efg-heading"><div><strong>@Money(payment.Amount, payment.CurrencyCode)</strong><p>@payment.PaidOn.ToString("dd/MM/yyyy") · @(string.IsNullOrWhiteSpace(payment.Reference) ? "Sin referencia" : payment.Reference)</p></div><span class="efg-status">@(payment.Status == "Active" ? "Vigente" : "Anulado")</span></div>
+            @if(!string.IsNullOrWhiteSpace(payment.Notes)){<p>@payment.Notes</p>}
+            <div class="efg-actions"><button class="secondary-button" disabled="@busy" @onclick="() => HistoryAsync(payment.Id)">Historial</button>@if (CanWrite && payment.Status == "Active") { <button class="secondary-button" @onclick="() => Edit(payment)">Corregir</button><button class="secondary-button" @onclick="() => SelectVoid(payment)">Anular</button> }</div>
+            @if (historyId == payment.Id) { @if (history.Count == 0) { <p class="efg-empty">Sin correcciones anteriores.</p> } @foreach (var revision in history) { <p class="efg-history">@revision.ChangedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @revision.Reason · anterior: @Money(revision.PreviousAmount, revision.PreviousCurrencyCode)</p> } }
+            @if (CanWrite && payment.Status == "Active")
+            {
+                <div class="efg-evidence"><label>ID de documento del expediente <input type="number" min="1" @bind="evidenceDocumentId" /></label><button class="secondary-button" disabled="@busy" @onclick="() => LinkAsync(payment.Id, true)">Vincular evidencia</button><button class="secondary-button" disabled="@busy" @onclick="() => LinkAsync(payment.Id, false)">Desvincular</button></div>
+            }
+            @if (voidId == payment.Id && CanWrite) { <div class="efg-evidence"><label>Motivo de anulación *<input maxlength="500" @bind="voidReason" /></label><button class="secondary-button" disabled="@busy" @onclick="() => VoidAsync(payment)">Confirmar anulación</button><button class="secondary-button" @onclick="() => voidId = null">Cancelar</button></div> }
+        </article>
+    }
+    <article class="efg-card"><div class="efg-heading"><h3>Historial del monto acordado</h3><button class="secondary-button" @onclick="LoadAmountHistoryAsync" disabled="@busy">Consultar</button></div>
+        @if (showAmountHistory) { @if (amountHistory.Count == 0) {<p class="efg-empty">Sin cambios previos.</p>} @foreach (var item in amountHistory) {<p class="efg-history">@item.ChangedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @item.Reason · @Money(item.PreviousAmount, item.PreviousCurrencyCode) → @Money(item.NewAmount, item.NewCurrencyCode)</p>} }
+    </article>
+</section>
+@code {
+    [Parameter, EditorRequired] public int ProjectId { get; set; }
+    [Parameter] public bool CanWrite { get; set; }
+    private List<ProjectPaymentResponse> payments = [];
+    private ProjectBalanceResponse? balance;
+    private List<ProjectPaymentRevisionResponse> history = [];
+    private List<ProjectAgreedAmountRevisionResponse> amountHistory = [];
+    private int? historyId, voidId, evidenceDocumentId;
+    private bool showAmountHistory, busy;
+    private string? error, notice;
+    private ProjectPaymentResponse? editing;
+    private decimal amount;
+    private string currency = "CRC", reference = "", notes = "", reason = "", voidReason = "";
+    private DateOnly paidOn = DateOnly.FromDateTime(DateTime.Today);
+    protected override Task OnParametersSetAsync() => LoadAsync();
+    private async Task RunAsync(Func<Task> action)
+    {
+        if (busy) return;
+        busy = true; error = notice = null;
+        try { await action(); }
+        catch (ProjectClientException ex) { error = ex.Message; }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+    private Task LoadAsync() => RunAsync(async () => { payments = await Api.PaymentsAsync(ProjectId); balance = await Api.BalanceAsync(ProjectId); });
+    private void Reset() { editing = null; amount = 0; currency = balance?.CurrencyCode ?? "CRC"; paidOn = DateOnly.FromDateTime(DateTime.Today); reference = notes = reason = ""; }
+    private void Edit(ProjectPaymentResponse item) { editing = item; amount = item.Amount; currency = item.CurrencyCode; paidOn = item.PaidOn; reference = item.Reference; notes = item.Notes; reason = ""; }
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        if (!CanWrite) return;
+        if (amount <= 0 || (editing is not null && string.IsNullOrWhiteSpace(reason))) throw new InvalidOperationException("Indique un monto positivo y, para corregir, un motivo.");
+        var request = new ProjectPaymentUpsertRequest(amount, currency, paidOn, reference, notes, editing?.Version, editing is null ? null : reason.Trim());
+        if (editing is null) await Api.AddPaymentAsync(ProjectId, request);
+        else await Api.UpdatePaymentAsync(ProjectId, editing.Id, request);
+        Reset(); payments = await Api.PaymentsAsync(ProjectId); balance = await Api.BalanceAsync(ProjectId); notice = "Abono guardado correctamente.";
+    });
+    private void SelectVoid(ProjectPaymentResponse item) { voidId = item.Id; voidReason = ""; }
+    private Task VoidAsync(ProjectPaymentResponse item) => RunAsync(async () =>
+    {
+        if (!CanWrite || string.IsNullOrWhiteSpace(voidReason)) throw new InvalidOperationException("Indique el motivo de anulación.");
+        await Api.VoidPaymentAsync(ProjectId, item.Id, new(item.Version, voidReason.Trim()));
+        voidId = null; payments = await Api.PaymentsAsync(ProjectId); balance = await Api.BalanceAsync(ProjectId); notice = "Abono anulado con historial.";
+    });
+    private Task HistoryAsync(int id) => RunAsync(async () => { historyId = id; history = await Api.PaymentHistoryAsync(ProjectId, id); });
+    private Task LoadAmountHistoryAsync() => RunAsync(async () => { amountHistory = await Api.AmountHistoryAsync(ProjectId); showAmountHistory = true; });
+    private Task LinkAsync(int paymentId, bool link) => RunAsync(async () =>
+    {
+        if (!CanWrite || evidenceDocumentId is null or <= 0) throw new InvalidOperationException("Seleccione un ID de documento válido del expediente.");
+        if (link) await Api.LinkPaymentDocumentAsync(ProjectId, paymentId, evidenceDocumentId.Value);
+        else await Api.UnlinkPaymentDocumentAsync(ProjectId, paymentId, evidenceDocumentId.Value);
+        notice = link ? "Evidencia vinculada." : "Evidencia desvinculada.";
+    });
+    private static string Money(decimal? value, string? code) => value is null ? "Sin definir" : $"{code ?? "CRC"} {value.Value:N2}";
+}

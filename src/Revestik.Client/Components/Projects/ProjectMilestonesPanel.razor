@@ -1,0 +1,110 @@
+@using Revestik.Client.Services.Projects
+@using Revestik.Shared.Projects
+@inject ProjectFinancePlanApiService Api
+<section class="efg-stack">
+    <header class="efg-heading"><div><h2>Plan e hitos</h2><p>Seguimiento opcional con pesos. El progreso no cierra el proyecto automáticamente.</p></div><button class="secondary-button" disabled="@busy" @onclick="LoadAsync">Actualizar</button></header>
+    @if (busy) { <p role="status">Cargando plan...</p> }
+    @if (error is not null) { <p role="alert" class="efg-error">@error</p> }
+    @if (notice is not null) { <p role="status" class="efg-notice">@notice</p> }
+    @if (progress is not null)
+    {
+        <article class="efg-card"><div class="efg-heading"><div><h3>Avance del proyecto</h3><p>@(progress.IsActive ? "Plan activo" : progress.IsConfigured ? "Plan sin activar" : "Sin configurar")</p></div><strong>@(progress.Percent?.ToString("N2") ?? "—")%</strong></div>
+            @if (progress.Percent is decimal value) { <progress class="efg-progress" value="@value" max="100" aria-label="Avance de hitos">@value%</progress> }
+            @if(progress.IsActive) {<p class="efg-empty">El cumplimiento de todos los hitos no cambia el estado del proyecto.</p>}
+        </article>
+    }
+    @if(CanWrite && progress is not null)
+    {
+        <article class="efg-card"><h3>Configurar plan</h3><p class="efg-empty">Los pesos deben sumar exactamente 100% para activar el plan.</p>
+            @foreach(var item in rows)
+            {
+                <div class="efg-milestone-row" @key="item"><label>Hito<input maxlength="150" @bind="item.Name" /></label><label>Peso %<input type="number" step="0.01" min="0.01" max="100" @bind="item.Weight" /></label><label>Descripción<input maxlength="2000" @bind="item.Description" /></label><button class="secondary-button" @onclick="() => rows.Remove(item)" disabled="@busy">Quitar</button></div>
+            }
+            <div class="efg-actions"><button class="secondary-button" disabled="@busy || rows.Count >= 100" @onclick="AddRow">Añadir hito</button><button class="primary-button" disabled="@busy" @onclick="ConfigureAsync">Guardar configuración</button>
+                @if(progress.IsConfigured && !progress.IsActive && progress.PlanVersion is long v) {<button class="secondary-button" disabled="@busy" @onclick="() => ActivateAsync(v)">Activar plan</button>}
+            </div>
+            <p class="efg-empty">Suma actual: @rows.Sum(x => x.Weight).ToString("N2")% · @rows.Count hito(s)</p>
+        </article>
+        <article class="efg-card"><h3>Aplicar plantilla existente</h3><div class="efg-actions"><select aria-label="Seleccionar plantilla" @bind="templateId"><option value="0">Seleccionar plantilla</option>@foreach(var t in templates.Where(x => x.IsActive)) {<option value="@t.Id">@t.Name</option>}</select><button class="secondary-button" disabled="@busy || templateId == 0" @onclick="ApplyTemplateAsync">Aplicar plantilla</button></div><p class="efg-empty">Aplicar una plantilla reemplaza la configuración de hitos del proyecto. Revise los cambios antes de continuar.</p></article>
+    }
+    @if (progress is not null)
+    {
+        <article class="efg-card"><h3>Hitos registrados</h3>
+            @if (progress.Milestones.Count(x => !x.IsExcluded) == 0) {<p class="efg-empty">Sin hitos configurados.</p>}
+            @foreach(var item in progress.Milestones.Where(x => !x.IsExcluded).OrderBy(x => x.SortOrder))
+            {
+                <div class="efg-milestone" @key="item.Id"><div><strong>@item.Name</strong><p>@item.Description</p><small>@item.Weight.ToString("N2")% · @(item.IsCompleted ? "Completado" : "Pendiente")</small></div>
+                    @if(CanWrite && progress.IsActive)
+                    {
+                        @if(item.IsCompleted) { <div class="efg-evidence"><label>Motivo de reversión *<input maxlength="500" @bind="revertReason" /></label><button class="secondary-button" disabled="@busy" @onclick="() => CompleteAsync(item, false)">Revertir</button></div> }
+                        else { <button class="secondary-button" disabled="@busy" @onclick="() => CompleteAsync(item, true)">Marcar completado</button> }
+                    }
+                </div>
+            }
+        </article>
+    }
+    @if(IsAdmin)
+    {
+        <article class="efg-card"><h3>Administración de plantillas</h3><div class="efg-grid"><label>Nombre de la nueva plantilla<input maxlength="150" @bind="newTemplateName" /></label></div><button class="secondary-button" disabled="@busy" @onclick="CreateTemplateAsync">Crear plantilla con los hitos visibles</button>
+            @foreach (var item in templates) {<div class="efg-heading"><span>@item.Name @(item.IsActive ? "" : "(Inactiva)")</span>@if(item.IsActive){<button class="secondary-button" disabled="@busy" @onclick="() => DeactivateTemplateAsync(item.Id)">Desactivar</button>}</div>}
+        </article>
+    }
+</section>
+@code {
+    [Parameter, EditorRequired] public int ProjectId { get; set; }
+    [Parameter] public bool CanWrite { get; set; }
+    [Parameter] public bool IsAdmin { get; set; }
+    private ProjectProgressView? progress;
+    private List<ProjectMilestoneTemplateResponse> templates = [];
+    private List<MilestoneRow> rows = [];
+    private int templateId;
+    private bool busy;
+    private string? error, notice;
+    private string revertReason = "", newTemplateName = "";
+    protected override Task OnParametersSetAsync() => LoadAsync();
+    private async Task RunAsync(Func<Task> work)
+    {
+        if(busy) return; busy = true; error = notice = null;
+        try { await work(); }
+        catch(ProjectClientException ex) { error = ex.Message; }
+        catch(Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+    private Task LoadAsync() => RunAsync(async () => { await ReloadAsync(); });
+    private async Task ReloadAsync()
+    {
+        progress = await Api.ProgressAsync(ProjectId);
+        templates = await Api.TemplatesAsync();
+        rows = progress.Milestones.Where(x => !x.IsExcluded).OrderBy(x => x.SortOrder).Select(x => new MilestoneRow { Id = x.Id, Name = x.Name, Description = x.Description, Weight = x.Weight }).ToList();
+    }
+    private void AddRow() => rows.Add(new MilestoneRow());
+    private Task ConfigureAsync() => RunAsync(async () =>
+    {
+        if(!CanWrite || progress is null) return;
+        if(rows.Count > 100 || rows.Any(x => string.IsNullOrWhiteSpace(x.Name) || x.Weight <= 0 || x.Weight > 100)) throw new InvalidOperationException("Indique nombre y peso válido para cada hito.");
+        if(progress.IsActive && rows.Sum(x => x.Weight) != 100m) throw new InvalidOperationException("Los pesos de un plan activo deben sumar exactamente 100%.");
+        var req = new ConfigureProjectMilestonesRequest(rows.Select((x, i) => new ProjectMilestoneInputRequest(x.Id, x.Name, x.Description, x.Weight, i)).ToList(), progress.PlanVersion);
+        await Api.ConfigureAsync(ProjectId, req); await ReloadAsync(); notice = "Plan actualizado.";
+    });
+    private Task ActivateAsync(long version) => RunAsync(async () => { if(!CanWrite) return; await Api.ActivateAsync(ProjectId, version); await ReloadAsync(); notice = "Plan activado."; });
+    private Task CompleteAsync(ProjectMilestoneItem item, bool completed) => RunAsync(async () =>
+    {
+        if(!CanWrite || progress?.PlanVersion is not long version) return;
+        if(!completed && string.IsNullOrWhiteSpace(revertReason)) throw new InvalidOperationException("Indique un motivo para revertir.");
+        await Api.CompleteAsync(ProjectId, item.Id, new(completed, version, item.Version, completed ? null : revertReason.Trim()));
+        revertReason = ""; await ReloadAsync(); notice = "Cumplimiento actualizado.";
+    });
+    private Task ApplyTemplateAsync() => RunAsync(async () =>
+    {
+        if(!CanWrite || progress is null || templateId <= 0) return;
+        await Api.ApplyTemplateAsync(ProjectId, new(templateId, progress.PlanVersion)); await ReloadAsync(); notice = "Plantilla aplicada.";
+    });
+    private Task CreateTemplateAsync() => RunAsync(async () =>
+    {
+        if(!IsAdmin || string.IsNullOrWhiteSpace(newTemplateName) || rows.Count == 0 || rows.Sum(x => x.Weight) != 100m) throw new InvalidOperationException("La plantilla requiere un nombre e hitos que sumen exactamente 100%.");
+        await Api.CreateTemplateAsync(new(newTemplateName.Trim(), null, rows.Select((x,i) => new ProjectMilestoneTemplateItemRequest(x.Name, x.Description, x.Weight, i)).ToList()));
+        newTemplateName = ""; await ReloadAsync(); notice = "Plantilla creada.";
+    });
+    private Task DeactivateTemplateAsync(int id) => RunAsync(async () => { if(!IsAdmin) return; await Api.DeleteTemplateAsync(id); await ReloadAsync(); notice = "Plantilla desactivada."; });
+    private sealed class MilestoneRow { public int? Id { get; set; } public string Name { get; set; } = ""; public string? Description { get; set; } public decimal Weight { get; set; } }
+}

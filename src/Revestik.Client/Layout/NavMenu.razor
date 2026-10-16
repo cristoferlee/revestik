@@ -20,6 +20,12 @@
             <span class="nav-icon" aria-hidden="true">◎</span><span>Clientes</span>
         </NavLink>
 
+        <AuthorizeView Roles="Administrator,Accountant,Sales">
+            <NavLink class="navigation-link" href="/projects" @onclick="CloseNavigation">
+                <span class="nav-icon" aria-hidden="true">▣</span><span>Proyectos</span>
+            </NavLink>
+        </AuthorizeView>
+
         <NavLink class="navigation-link" href="/quotes" @onclick="CloseNavigation">
             <span class="nav-icon" aria-hidden="true">▤</span><span>Cotizaciones</span>
         </NavLink>
@@ -129,26 +135,6 @@
         isNavigationOpen = !isNavigationOpen;
     }
 
-    private void TogglePurchasesGroup()
-    {
-        isPurchasesOpen = !isPurchasesOpen;
-    }
-
-    private void CloseNavigation()
-    {
-        isNavigationOpen = false;
-    }
-
-    private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
-    {
-        if (IsPurchasesUri(args.Location))
-        {
-            isPurchasesOpen = true;
-        }
-
-        _ = InvokeAsync(StateHasChanged);
-    }
-
     private bool IsPurchasesUri(string uri)
     {
         var relative = Navigation.ToBaseRelativePath(uri);
@@ -159,8 +145,14 @@
                relative.StartsWith("cabys?", StringComparison.OrdinalIgnoreCase);
     }
 
-    public void Dispose()
+    private void TogglePurchasesGroup() => isPurchasesOpen = !isPurchasesOpen;
+    private void CloseNavigation() => isNavigationOpen = false;
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
     {
-        Navigation.LocationChanged -= HandleLocationChanged;
+        if (IsPurchasesUri(args.Location)) isPurchasesOpen = true;
+        _ = InvokeAsync(StateHasChanged);
     }
+
+    public void Dispose() => Navigation.LocationChanged -= HandleLocationChanged;
 }

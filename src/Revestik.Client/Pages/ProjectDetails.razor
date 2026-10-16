@@ -1,0 +1,261 @@
+@page "/projects/{ProjectId:int}"
+@page "/projects/customer/{CustomerId:int}/new"
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Revestik.Client.Services.Customers
+@using Revestik.Client.Services.Locations
+@using Revestik.Client.Services.Projects
+@using Revestik.Client.Components.Projects
+@using Revestik.Shared.Customers
+@using Revestik.Shared.Locations
+@using Revestik.Shared.Projects
+@attribute [Authorize(Roles = "Administrator,Accountant,Sales")]
+@inject ProjectApiService Api
+@inject ICustomerApiService Customers
+@inject ILocationApiService Locations
+@inject AuthenticationStateProvider Auth
+@inject NavigationManager Navigation
+
+<PageTitle>Expediente de proyecto | Revestik</PageTitle>
+<section class="projects-page">
+    <header class="projects-header">
+        <div><a href="/projects" class="back-link">← Proyectos</a><h1>@(isNew ? "Nuevo proyecto" : project?.Name ?? "Expediente")</h1><p>@(customer?.Name ?? "Cliente")</p></div>
+        @if (project is not null) { <span class="status-chip">@StatusLabel(project.Status)</span> }
+    </header>
+    @if (loading) { <p role="status">Cargando expediente...</p> }
+    else if (error is not null && project is null && !isNew) { <p role="alert" class="status-message error-message">@error</p> }
+    else
+    {
+        @if (error is not null) { <p role="alert" class="status-message error-message">@error</p> }
+        @if (success is not null) { <p role="status" class="status-message">@success</p> }
+        @if (project is not null)
+        {
+            <div class="projects-kpis">
+                <article><span>Estado</span><strong>@StatusLabel(project.Status)</strong></article>
+                <article><span>Responsable</span><strong>@(isOwner ? "Yo" : project.ResponsibleUserId)</strong></article>
+                <article><span>Monto acordado</span><strong>@(project.AgreedAmount.HasValue ? $"{project.CurrencyCode} {project.AgreedAmount:N2}" : "Sin definir")</strong></article>
+                <article><span>Saldo operativo</span><strong>@(balance?.RemainingBalance is decimal amount ? $"{balance.CurrencyCode} {amount:N2}" : "Sin definir")</strong></article>
+            </div>
+            <div class="projects-tabs" role="navigation" aria-label="Secciones del expediente">
+                <button class="@(activeTab == "summary" ? "active-tab" : "future-tab")" @onclick='() => activeTab = "summary"'>Resumen</button><button class="@(activeTab == "activity" ? "active-tab" : "future-tab")" @onclick='() => activeTab = "activity"'>Actividad y tareas</button><button class="@(activeTab == "documents" ? "active-tab" : "future-tab")" @onclick='() => activeTab = "documents"'>Documentos</button><button class="@(activeTab == "payments" ? "active-tab" : "future-tab")" @onclick='() => activeTab = "payments"'>Abonos</button><button class="@(activeTab == "milestones" ? "active-tab" : "future-tab")" @onclick='() => activeTab = "milestones"'>Planes e hitos</button>
+            </div>
+        }
+        @if(project is not null && activeTab == "activity")
+        {
+            <ProjectActivityPanel ProjectId="@project.Id" CanWrite="@(canEdit && !IsClosed)" />
+        }
+        @if(project is not null && activeTab == "documents")
+        {
+            <ProjectDocumentsPanel ProjectId="@project.Id" CanWrite="@(canEdit && !IsClosed)" />
+        }
+        @if(project is not null && activeTab == "payments")
+        {
+            <ProjectPaymentsPanel ProjectId="@project.Id" CanWrite="@(canEdit && !IsClosed)" />
+        }
+        @if(project is not null && activeTab == "milestones")
+        {
+            <ProjectMilestonesPanel ProjectId="@project.Id" CanWrite="@(canEdit && !IsClosed)" IsAdmin="@isAdmin" />
+        }
+        @if(isNew || activeTab == "summary")
+        {
+        <section class="projects-card">
+            <div class="section-title"><h2>@(isNew ? "Registrar expediente" : "Información general")</h2><p>@(canEdit ? "Complete la información operativa del proyecto." : "Vista de consulta. Solo el responsable o Administrator pueden editar.")</p></div>
+            <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
+                <fieldset disabled="@(saving || !canEdit)" class="projects-fieldset">
+                    <div class="projects-fields">
+                        <div class="field"><label for="name">Nombre *</label><input id="name" required maxlength="150" @bind="form.Name" /></div>
+                        <div class="field"><label for="start">Inicio estimado</label><input id="start" type="date" @bind="form.Start" /></div>
+                        <div class="field"><label for="end">Fin estimado</label><input id="end" type="date" @bind="form.End" /></div>
+                        <div class="field span-all"><label for="description">Descripción</label><textarea id="description" maxlength="2000" rows="3" @bind="form.Description"></textarea></div>
+                        <div class="field"><label for="province">Provincia</label><select id="province" value="@form.Province" @onchange="ProvinceChangedAsync"><option value="">Sin seleccionar</option>@foreach (var p in provinces) { <option value="@p.Code">@p.Name</option> }</select></div>
+                        <div class="field"><label for="canton">Cantón</label><select id="canton" value="@form.Canton" @onchange="CantonChangedAsync" disabled="@(form.Province is null)"><option value="">Sin seleccionar</option>@foreach (var c in cantons) { <option value="@c.Code">@c.Name</option> }</select></div>
+                        <div class="field"><label for="district">Distrito</label><select id="district" @bind="form.District" disabled="@(form.Canton is null)"><option value="">Sin seleccionar</option>@foreach (var d in districts) { <option value="@d.Code">@d.Name</option> }</select></div>
+                        <div class="field span-all"><label for="signs">Otras señas</label><input id="signs" maxlength="160" @bind="form.OtherSigns" /></div>
+                    </div>
+                    <h3>Contactos del proyecto</h3>
+                    @foreach (var item in form.Contacts)
+                    {
+                        <div class="contact-row" @key="item"><input aria-label="Nombre del contacto" maxlength="150" placeholder="Nombre" @bind="item.Name" /><input aria-label="Rol del contacto" maxlength="100" placeholder="Rol" @bind="item.Role" /><input aria-label="Teléfono" maxlength="20" placeholder="Teléfono" @bind="item.Phone" /><input aria-label="Correo" type="email" maxlength="254" placeholder="Correo" @bind="item.Email" /><button type="button" class="secondary-button" @onclick="() => form.Contacts.Remove(item)">Quitar</button></div>
+                    }
+                    @if (canEdit && form.Contacts.Count < 30) { <button type="button" class="secondary-button" @onclick="() => form.Contacts.Add(new())">Agregar contacto</button> }
+                    @if (isNew)
+                    {
+                        <h3>Monto inicial opcional</h3>
+                        <div class="projects-fields"><div class="field"><label>Monto acordado</label><input type="number" min="0" step="0.01" @bind="form.AgreedAmount" /></div><div class="field"><label>Moneda</label><select @bind="form.Currency"><option value="">Sin monto</option><option value="CRC">CRC</option><option value="USD">USD</option></select></div></div>
+                    }
+                </fieldset>
+                @if (canEdit) { <div class="actions"><button class="primary-button" type="submit" disabled="@saving">@(saving ? "Guardando..." : isNew ? "Crear proyecto" : "Guardar cambios")</button></div> }
+            </form>
+        </section>
+        @if (project is not null && canEdit)
+        {
+            <section class="projects-card">
+                <div class="section-title"><h2>Monto acordado</h2><p>Las modificaciones se registran con historial; no forman parte de la edición general.</p></div>
+                <div class="projects-fields"><div class="field"><label>Importe</label><input type="number" min="0" step="0.01" @bind="newAmount" /></div><div class="field"><label>Moneda</label><select @bind="newCurrency"><option value="">Sin monto</option><option value="CRC">CRC</option><option value="USD">USD</option></select></div><div class="field span-all"><label>Motivo obligatorio</label><textarea rows="2" maxlength="500" @bind="amountReason"></textarea></div></div>
+                <button class="secondary-button" disabled="@saving" @onclick="ChangeAmountAsync">Actualizar monto con historial</button>
+            </section>
+            <section class="projects-card">
+                <div class="section-title"><h2>Ciclo de vida</h2><p>Las transiciones son manuales y quedan auditadas.</p></div>
+                @if (project.Status == ProjectStatus.Completed)
+                {
+                    <div class="projects-fields"><div class="field"><label>Reabrir en estado</label><select @bind="target"><option value="@ProjectStatus.Planning">Planificación</option><option value="@ProjectStatus.Active">Activo</option></select></div><div class="field span-all"><label>Motivo de reapertura *</label><textarea maxlength="500" @bind="reason"></textarea></div></div>
+                    <button class="primary-button" disabled="@saving" @onclick="ReopenAsync">Reabrir proyecto</button>
+                }
+                else
+                {
+                    <div class="projects-fields"><div class="field"><label>Nuevo estado</label><select @bind="target">@foreach (var value in Enum.GetValues<ProjectStatus>().Where(x => x != ProjectStatus.Completed)) { <option value="@value">@StatusLabel(value)</option> }</select></div><div class="field span-all"><label>Motivo (obligatorio para cancelar o archivar)</label><textarea maxlength="500" @bind="reason"></textarea></div></div>
+                    <button class="secondary-button" disabled="@saving" @onclick="TransitionAsync">Cambiar estado</button>
+                    @if (project.Status is not (ProjectStatus.Cancelled or ProjectStatus.Archived))
+                    {
+                        <h3>Cierre formal</h3><div class="projects-fields"><div class="field"><label>Fecha real de cierre *</label><input type="date" @bind="closedOn" /></div><div class="field"><label>ID de evidencia documental (opcional)</label><input type="number" min="1" @bind="closingEvidenceId" /></div><div class="field span-all"><label>Observaciones</label><textarea maxlength="2000" @bind="closingNotes"></textarea></div></div>
+                        <button class="primary-button" disabled="@saving" @onclick="CloseAsync">Completar y cerrar</button>
+                    }
+                }
+            </section>
+            @if (isAdmin)
+            {
+                <section class="projects-card"><div class="section-title"><h2>Reasignación administrativa</h2><p>Indique un ID de usuario existente. La API verificará su validez.</p></div><div class="field"><label>ID del nuevo responsable</label><input @bind="newResponsible" /></div><button class="secondary-button" disabled="@saving" @onclick="ReassignAsync">Reasignar responsable</button></section>
+            }
+        }
+        }
+    }
+</section>
+@code {
+    [Parameter] public int ProjectId { get; set; }
+    [Parameter] public int CustomerId { get; set; }
+    private bool isNew => CustomerId > 0;
+    private bool loading = true, saving, isAdmin, isOwner;
+    private string activeTab = "summary";
+    private bool IsClosed => project?.Status is ProjectStatus.Completed or ProjectStatus.Cancelled or ProjectStatus.Archived;
+    private bool canEdit => isNew || isAdmin || isOwner;
+    private string? error, success, userId;
+    private ProjectResponse? project;
+    private CustomerResponse? customer;
+    private ProjectBalanceResponse? balance;
+    private ProjectForm form = new();
+    private IReadOnlyList<LocationOptionResponse> provinces = [], cantons = [], districts = [];
+    private ProjectStatus target = ProjectStatus.Active;
+    private string reason = "", closingNotes = "", amountReason = "", newResponsible = "";
+    private DateOnly closedOn = DateOnly.FromDateTime(DateTime.Today);
+    private int? closingEvidenceId;
+    private decimal? newAmount;
+    private string? newCurrency;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true; error = success = null;
+        try
+        {
+            var auth = (await Auth.GetAuthenticationStateAsync()).User;
+            userId = auth.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            isAdmin = auth.IsInRole("Administrator");
+            provinces = await Locations.GetProvincesAsync();
+            project = isNew ? null : await Api.GetAsync(ProjectId);
+            if (!isNew && project is null) { error = "Proyecto no encontrado."; return; }
+            customer = await Customers.GetByIdAsync(isNew ? CustomerId : project!.CustomerId);
+            if (customer is null) { error = "Cliente no encontrado."; return; }
+            isOwner = project is not null && project.ResponsibleUserId == userId;
+            if (isNew && !customer.IsActive) { error = "No se pueden crear proyectos para clientes inactivos."; return; }
+            form = project is null ? new() : ProjectForm.From(project);
+            if (form.Province is not null) cantons = await Locations.GetCantonsAsync(form.Province);
+            if (form.Province is not null && form.Canton is not null) districts = await Locations.GetDistrictsAsync(form.Province, form.Canton);
+            if (project is not null) { balance = await Api.BalanceAsync(project.Id); newAmount = project.AgreedAmount; newCurrency = project.CurrencyCode; target = project.Status == ProjectStatus.Completed ? ProjectStatus.Planning : project.Status; }
+        }
+        catch (Exception ex) { error = "No fue posible cargar el expediente. " + ex.Message; }
+        finally { loading = false; }
+    }
+    private async Task ProvinceChangedAsync(ChangeEventArgs args)
+    {
+        form.Province = args.Value?.ToString() is { Length: > 0 } s ? s : null;
+        form.Canton = form.District = null; cantons = districts = [];
+        if (form.Province is not null) try { cantons = await Locations.GetCantonsAsync(form.Province); } catch (Exception ex) { error = ex.Message; }
+    }
+    private async Task CantonChangedAsync(ChangeEventArgs args)
+    {
+        form.Canton = args.Value?.ToString() is { Length: > 0 } s ? s : null; form.District = null; districts = [];
+        if (form.Province is not null && form.Canton is not null) try { districts = await Locations.GetDistrictsAsync(form.Province, form.Canton); } catch (Exception ex) { error = ex.Message; }
+    }
+    private async Task SaveAsync()
+    {
+        if (!canEdit || saving || customer is null || (isNew && !customer.IsActive)) return;
+        await RunAsync(async () =>
+        {
+            var req = form.ToRequest(project?.Version);
+            project = isNew ? await Api.CreateAsync(CustomerId, req) : await Api.UpdateAsync(project!.Id, req);
+            Navigation.NavigateTo($"/projects/{project.Id}");
+        });
+    }
+    private async Task RefreshAsync()
+    {
+        if (project is null) return;
+        project = await Api.GetAsync(project.Id);
+        if (project is not null) { form = ProjectForm.From(project); balance = await Api.BalanceAsync(project.Id); isOwner = project.ResponsibleUserId == userId; target = project.Status == ProjectStatus.Completed ? ProjectStatus.Planning : project.Status; newAmount = project.AgreedAmount; newCurrency = project.CurrencyCode; }
+    }
+    private Task ChangeAmountAsync() => RunAsync(async () =>
+    {
+        if (project is null || string.IsNullOrWhiteSpace(amountReason)) throw new InvalidOperationException("Indique un motivo para cambiar el monto.");
+        if ((newAmount is null) != string.IsNullOrWhiteSpace(newCurrency)) throw new InvalidOperationException("Monto y moneda deben indicarse juntos.");
+        await Api.ChangeAgreedAmountAsync(project.Id, new(newAmount, newCurrency, project.Version, amountReason));
+        await RefreshAsync(); amountReason = "";
+    });
+    private Task TransitionAsync() => RunAsync(async () =>
+    {
+        if (project is null) return;
+        await Api.TransitionAsync(project.Id, new(target, project.Version, reason)); await RefreshAsync(); reason = "";
+    });
+    private Task CloseAsync() => RunAsync(async () =>
+    {
+        if (project is null) return;
+        await Api.CloseAsync(project.Id, new(closedOn, closingNotes, closingEvidenceId, project.Version)); await RefreshAsync();
+    });
+    private Task ReopenAsync() => RunAsync(async () =>
+    {
+        if (project is null || string.IsNullOrWhiteSpace(reason)) throw new InvalidOperationException("Indique el motivo de reapertura.");
+        await Api.ReopenAsync(project.Id, new(target, project.Version, reason)); await RefreshAsync(); reason = "";
+    });
+    private Task ReassignAsync() => RunAsync(async () =>
+    {
+        if (!isAdmin || project is null || string.IsNullOrWhiteSpace(newResponsible)) throw new InvalidOperationException("Indique el usuario responsable.");
+        await Api.ReassignAsync(project.Id, new(newResponsible.Trim(), project.Version)); await RefreshAsync(); newResponsible = "";
+    });
+    private async Task RunAsync(Func<Task> work)
+    {
+        if (saving) return; saving = true; error = success = null;
+        try { await work(); success = "Cambios guardados correctamente."; }
+        catch (ProjectClientException ex) { error = ex.Message; if (ex.StatusCode == System.Net.HttpStatusCode.Conflict) error += " Recargue el expediente para obtener la versión actual."; }
+        catch (Exception ex) { error = ex.Message; }
+        finally { saving = false; }
+    }
+    private static string StatusLabel(ProjectStatus s) => s switch
+    {
+        ProjectStatus.Planning => "Planificación", ProjectStatus.PendingApproval => "Pendiente de aprobación",
+        ProjectStatus.Active => "Activo", ProjectStatus.Paused => "Pausado", ProjectStatus.Completed => "Completado",
+        ProjectStatus.Cancelled => "Cancelado", ProjectStatus.Archived => "Archivado", _ => s.ToString()
+    };
+    private sealed class ContactForm { public string Name { get; set; } = ""; public string Role { get; set; } = ""; public string? Phone { get; set; } public string? Email { get; set; } }
+    private sealed class ProjectForm
+    {
+        public string Name { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string? Province { get; set; }
+        public string? Canton { get; set; }
+        public string? District { get; set; }
+        public string? OtherSigns { get; set; }
+        public DateOnly? Start { get; set; }
+        public DateOnly? End { get; set; }
+        public decimal? AgreedAmount { get; set; }
+        public string? Currency { get; set; }
+        public List<ContactForm> Contacts { get; set; } = [];
+        public ProjectUpsertRequest ToRequest(long? version) => new(Name, Description, Province, Canton, District,
+            OtherSigns, Start, End, AgreedAmount, Currency,
+            Contacts.Select(x => new ProjectContactInput(x.Name, x.Role, x.Phone, x.Email)).ToList(), version);
+        public static ProjectForm From(ProjectResponse p) => new()
+        {
+            Name = p.Name, Description = p.Description, Province = p.ProvinceCode, Canton = p.CantonCode,
+            District = p.DistrictCode, OtherSigns = p.OtherSigns, Start = p.EstimatedStartDate,
+            End = p.EstimatedEndDate, AgreedAmount = p.AgreedAmount, Currency = p.CurrencyCode,
+            Contacts = p.Contacts.Select(x => new ContactForm { Name = x.Name, Role = x.Role, Phone = x.PhoneNumber, Email = x.Email }).ToList()
+        };
+    }
+}
