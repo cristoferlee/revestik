@@ -1986,6 +1986,166 @@ namespace Revestik.Api.Data.Migrations
                     b.ToTable("ProjectContacts", (string)null);
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.ProjectDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int?>("CurrentVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurrentVersionId", "Id");
+
+                    b.HasIndex("ProjectId", "DeletedAtUtc");
+
+                    b.ToTable("ProjectDocuments", (string)null);
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectDocumentEventLink", b =>
+                {
+                    b.Property<int>("ProjectDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectEventId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("LinkedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LinkedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.HasKey("ProjectDocumentId", "ProjectEventId");
+
+                    b.HasIndex("ProjectEventId");
+
+                    b.HasIndex("ProjectDocumentId", "ProjectId");
+
+                    b.HasIndex("ProjectEventId", "ProjectId");
+
+                    b.ToTable("ProjectDocumentEventLinks", (string)null);
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectDocumentVersion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<int>("ProjectDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Sha256Hex")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(16)");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(160)");
+
+                    b.Property<string>("ThumbnailStorageKey")
+                        .HasMaxLength(160)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(160)");
+
+                    b.Property<DateTime>("UploadedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UploadedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.HasIndex("ProjectDocumentId", "Number")
+                        .IsUnique();
+
+                    b.ToTable("ProjectDocumentVersions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProjectDocumentVersions_Number", "[Number] > 0");
+
+                            t.HasCheckConstraint("CK_ProjectDocumentVersions_SizeBytes", "[SizeBytes] >= 0");
+
+                            t.HasCheckConstraint("CK_ProjectDocumentVersions_State", "[State] IN ('Pending', 'Ready', 'Failed')");
+                        });
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.ProjectEvent", b =>
                 {
                     b.Property<int>("Id")
@@ -3684,6 +3844,55 @@ namespace Revestik.Api.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.ProjectDocument", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.ProjectDocumentVersion", null)
+                        .WithMany()
+                        .HasForeignKey("CurrentVersionId", "Id")
+                        .HasPrincipalKey("Id", "ProjectDocumentId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectDocumentEventLink", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.ProjectDocument", "Document")
+                        .WithMany("EventLinks")
+                        .HasForeignKey("ProjectDocumentId", "ProjectId")
+                        .HasPrincipalKey("Id", "ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.ProjectEvent", "Event")
+                        .WithMany()
+                        .HasForeignKey("ProjectEventId", "ProjectId")
+                        .HasPrincipalKey("Id", "ProjectId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+
+                    b.Navigation("Event");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectDocumentVersion", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.ProjectDocument", "Document")
+                        .WithMany("Versions")
+                        .HasForeignKey("ProjectDocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.ProjectEvent", b =>
                 {
                     b.HasOne("Revestik.Api.Models.ProjectEventCategory", "Category")
@@ -4046,6 +4255,13 @@ namespace Revestik.Api.Data.Migrations
             modelBuilder.Entity("Revestik.Api.Models.Project", b =>
                 {
                     b.Navigation("Contacts");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.ProjectDocument", b =>
+                {
+                    b.Navigation("EventLinks");
+
+                    b.Navigation("Versions");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.ProjectEvent", b =>

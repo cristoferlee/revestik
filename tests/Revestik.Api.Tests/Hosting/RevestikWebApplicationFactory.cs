@@ -15,109 +15,63 @@ namespace Revestik.Api.Tests.Hosting;
 
 public sealed class RevestikWebApplicationFactory(
     string environmentName,
-    string? databaseConnectionString = null)
+    string? databaseConnectionString = null,
+    string? projectFileStorageRoot = null)
     : WebApplicationFactory<Program>
 {
-    private readonly string inMemoryDatabaseName =
-        $"RevestikHostingTests-{Guid.NewGuid()}";
+    private readonly string inMemoryDatabaseName = $"RevestikHostingTests-{Guid.NewGuid()}";
 
-    protected override void ConfigureWebHost(
-        IWebHostBuilder builder)
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(environmentName);
         builder.UseWebRoot(GetClientWebRoot());
-        builder.UseSetting(
-            "ConnectionStrings:RevestikDatabase",
-            databaseConnectionString ??
-            "Server=(local);Database=RevestikHostingTests;");
+        builder.UseSetting("ConnectionStrings:RevestikDatabase",
+            databaseConnectionString ?? "Server=(local);Database=RevestikHostingTests;");
 
-        builder.ConfigureLogging(logging =>
-        {
-            logging.ClearProviders();
-        });
-
+        builder.ConfigureLogging(logging => logging.ClearProviders());
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
-            configuration.AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:RevestikDatabase"] =
-                        databaseConnectionString ??
-                        "Server=(local);Database=RevestikHostingTests;",
-                    ["AllowedOrigins:0"] =
-                        "https://localhost:7081",
-                    ["Authentication:ClientBaseUrl"] =
-                        "https://localhost:7081",
-                    ["ReloadStaticAssetsAtRuntime"] = "false"
-                });
+            configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:RevestikDatabase"] = databaseConnectionString ??
+                    "Server=(local);Database=RevestikHostingTests;",
+                ["AllowedOrigins:0"] = "https://localhost:7081",
+                ["Authentication:ClientBaseUrl"] = "https://localhost:7081",
+                ["ReloadStaticAssetsAtRuntime"] = "false",
+                ["ProjectFileStorage:RootPath"] = projectFileStorageRoot ??
+                    Path.Combine(Path.GetTempPath(), "revestik-test-files-" + inMemoryDatabaseName)
+            });
         });
-
         builder.ConfigureServices(services =>
         {
-            services.RemoveAll<
-                DbContextOptions<RevestikDbContext>>();
-            services.RemoveAll<
-                IDbContextOptionsConfiguration<RevestikDbContext>>();
+            services.RemoveAll<DbContextOptions<RevestikDbContext>>();
+            services.RemoveAll<IDbContextOptionsConfiguration<RevestikDbContext>>();
             services.RemoveAll<IDatabaseProvider>();
             services.RemoveAll<RevestikDbContext>();
-
             services.AddDbContext<RevestikDbContext>(options =>
             {
                 if (databaseConnectionString is null)
-                {
-                    options.UseInMemoryDatabase(
-                        inMemoryDatabaseName);
-                }
-                else
-                {
-                    options.UseSqlServer(databaseConnectionString);
-                }
+                    options.UseInMemoryDatabase(inMemoryDatabaseName);
+                else options.UseSqlServer(databaseConnectionString);
             });
         });
-
         builder.ConfigureTestServices(services =>
         {
-            services
-                .AddAuthentication(options =>
-                {
-                    options.DefaultAuthenticateScheme =
-                        TestAuthenticationHandler.SchemeName;
-                    options.DefaultChallengeScheme =
-                        TestAuthenticationHandler.SchemeName;
-                })
-                .AddScheme<
-                    AuthenticationSchemeOptions,
-                    TestAuthenticationHandler>(
-                    TestAuthenticationHandler.SchemeName,
-                    _ =>
-                    {
-                    });
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = TestAuthenticationHandler.SchemeName;
+                options.DefaultChallengeScheme = TestAuthenticationHandler.SchemeName;
+            }).AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(
+                TestAuthenticationHandler.SchemeName, _ => { });
         });
     }
 
     private static string GetClientWebRoot()
     {
-        var directory = new DirectoryInfo(
-            AppContext.BaseDirectory);
-
-        while (directory is not null &&
-               !File.Exists(Path.Combine(
-                   directory.FullName,
-                   "Revestik.sln")))
-        {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Revestik.sln")))
             directory = directory.Parent;
-        }
-
-        if (directory is null)
-        {
-            throw new InvalidOperationException(
-                "The repository root could not be located.");
-        }
-
-        return Path.Combine(
-            directory.FullName,
-            "src",
-            "Revestik.Client",
-            "wwwroot");
+        if (directory is null) throw new InvalidOperationException("The repository root could not be located.");
+        return Path.Combine(directory.FullName, "src", "Revestik.Client", "wwwroot");
     }
 }

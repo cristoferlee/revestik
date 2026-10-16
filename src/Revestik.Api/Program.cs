@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http.Features;
 using QuestPDF.Infrastructure;
 using Revestik.Api.Configuration;
 using Revestik.Api.Data;
@@ -22,6 +23,7 @@ using Revestik.Api.Services.Sales;
 using Revestik.Api.Services.Sales.Pdf;
 using Revestik.Api.Services.Suppliers;
 using Revestik.Api.Services.Projects;
+using Revestik.Api.Services.Projects.Documents;
 
 const string ClientCorsPolicy = "ClientCorsPolicy";
 QuestPDF.Settings.License = LicenseType.Community;
@@ -40,6 +42,14 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.Path = "/";
     options.Cookie.IsEssential = true;
+});
+
+// Keep multipart buffering below the document upload contract's maximum request size.
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 21L * 1024 * 1024;
+    options.ValueLengthLimit = 4096;
+    options.ValueCountLimit = 20;
 });
 
 if (builder.Environment.IsDevelopment())
@@ -79,8 +89,8 @@ builder.Services.AddSingleton<IGmailOAuthStateService, GmailOAuthStateService>()
 builder.Services.AddSingleton<GmailSyncCoordinator>();
 builder.Services.AddScoped<IGmailIntegrationService, GmailIntegrationService>();
 builder.Services.AddScoped<InventoryService>();
-builder.Services.AddScoped<IInventoryService, PricingAwareInventoryService>();
 builder.Services.AddScoped<IInventoryPurchaseReceiptService, InventoryPurchaseReceiptService>();
+builder.Services.AddScoped<IInventoryService, PricingAwareInventoryService>();
 builder.Services.AddScoped<IInventoryCostResolutionService, InventoryCostResolutionService>();
 builder.Services.AddScoped<IInventoryPhysicalCountService, InventoryPhysicalCountService>();
 builder.Services.AddScoped<IInventoryCatalogService, InventoryCatalogService>();
@@ -98,6 +108,15 @@ builder.Services.AddScoped<ProjectActivityService>();
 builder.Services.AddScoped<ProjectEventDetailService>();
 builder.Services.AddScoped<ProjectMilestoneService>();
 builder.Services.AddScoped<ProjectMilestoneTemplateService>();
+builder.Services.AddScoped<ProjectDocumentService>();
+builder.Services.AddScoped<ProjectDocumentQueryService>();
+builder.Services.Configure<ProjectFileStorageOptions>(builder.Configuration.GetSection(ProjectFileStorageOptions.SectionName));
+builder.Services.PostConfigure<ProjectFileStorageOptions>(options =>
+{
+    if (string.IsNullOrWhiteSpace(options.RootPath))
+        options.RootPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "RevestikPrivateDocuments"));
+});
+builder.Services.AddSingleton<IProjectFileStorage, LocalProjectFileStorage>();
 
 var haciendaBaseUrl = builder.Configuration["Hacienda:BaseUrl"]
     ?? throw new InvalidOperationException("Hacienda base URL was not configured.");
@@ -171,6 +190,7 @@ app.MapProjectEndpoints();
 app.MapProjectActivityEndpoints();
 app.MapProjectEventDetailEndpoints();
 app.MapProjectMilestoneEndpoints();
+app.MapProjectDocumentEndpoints();
 
 if (!app.Environment.IsDevelopment())
 {
