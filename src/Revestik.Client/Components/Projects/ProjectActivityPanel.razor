@@ -6,35 +6,100 @@
     @if (busy) { <p role="status">Cargando actividad...</p> }
     @if (error is not null) { <p role="alert" class="status-message error-message">@error</p> }
     @if (notice is not null) { <p role="status" class="status-message">@notice</p> }
-    <div class="workspace-switch"><button class="@(mode == "events" ? "active" : "")" @onclick='() => mode = "events"'>Línea de tiempo</button><button class="@(mode == "tasks" ? "active" : "")" @onclick='() => mode = "tasks"'>Tareas (@tasks.Count)</button></div>
+    <div class="workspace-switch" role="group" aria-label="Vista de actividad"><button type="button" aria-pressed="@(mode == "events")" class="@(mode == "events" ? "active" : "")" @onclick='() => mode = "events"'>Línea de tiempo</button><button type="button" aria-pressed="@(mode == "tasks")" class="@(mode == "tasks" ? "active" : "")" @onclick='() => mode = "tasks"'>Tareas (@tasks.Count)</button></div>
     @if (mode == "events")
     {
-        @if (CanWrite && !busy)
-        {
-            <div class="workspace-card"><h3>@(editingEvent is null ? "Registrar actividad" : "Editar actividad")</h3>
-                <div class="workspace-fields"><label>Categoría<select @bind="categoryId"><option value="0">Seleccione categoría</option>@foreach (var c in categories.Where(x => x.IsActive)){<option value="@c.Id">@c.Name</option>}</select></label><label>Fecha real<input type="date" @bind="occurred" /></label><label class="wide">Título<input maxlength="150" @bind="title" /></label><label class="wide">Descripción<textarea rows="3" maxlength="4000" @bind="description"></textarea></label></div>
-                <div class="workspace-actions"><button class="primary-button" disabled="@busy" @onclick="SaveEventAsync">@(editingEvent is null ? "Registrar evento" : "Guardar corrección")</button>@if (editingEvent is not null){<button class="secondary-button" @onclick="ClearEvent">Cancelar</button>}</div>
+        <div class="workspace-section-bar">
+            <div>
+                <h3>Línea de tiempo</h3>
+                <p>Consulta las visitas, los acuerdos y los avances registrados.</p>
             </div>
+            @if (CanWrite)
+            {
+                <button type="button" class="primary-button" disabled="@(busy || !categories.Any(x => x.IsActive))" @onclick="OpenNewEvent">Nueva actividad</button>
+            }
+        </div>
+        @if (IsAdmin)
+        {
+            <div class="workspace-category-toolbar">
+                <button type="button" class="secondary-button" disabled="@busy" aria-expanded="@showCategorySettings" aria-controls="project-category-settings" @onclick="() => showCategorySettings = !showCategorySettings">@(showCategorySettings ? "Cerrar configuración" : "Administrar categorías")</button>
+            </div>
+            @if (showCategorySettings)
+            {
+                <section id="project-category-settings" class="workspace-card workspace-category-settings" aria-label="Configuración de categorías">
+                    <div class="workspace-heading"><div><h3>Configuración de categorías</h3><p>Las categorías se comparten entre los proyectos.</p></div></div>
+                    <div class="workspace-category-create">
+                        <label for="project-category-name">Nueva categoría</label>
+                        <input id="project-category-name" maxlength="100" @bind="newCategoryName" @bind:event="oninput" placeholder="Ej. Visita de inspección" />
+                        <button type="button" class="primary-button" disabled="@(busy || string.IsNullOrWhiteSpace(newCategoryName))" @onclick="CreateCategoryAsync">Guardar categoría</button>
+                    </div>
+                    @if (categories.Count == 0) { <p class="workspace-hint">Todavía no hay categorías configuradas.</p> }
+                    else
+                    {
+                        <div class="workspace-category-list" aria-label="Categorías existentes">
+                            @foreach (var category in categories)
+                            {
+                                <div class="workspace-category-item" @key="category.Id">
+                                    <span>@category.Name @(category.IsActive ? "" : "(Inactiva)")</span>
+                                    @if (category.IsActive)
+                                    {
+                                        <button type="button" class="secondary-button" disabled="@busy" @onclick="() => DeactivateCategoryAsync(category.Id)">Desactivar</button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </section>
+            }
         }
-        <div class="workspace-filters"><label>Categoría<select @bind="filterCategory"><option value="0">Todas</option>@foreach(var c in categories){<option value="@c.Id">@c.Name</option>}</select></label><label><input type="checkbox" @bind="includeVoided" /> Incluir anulados</label><button class="secondary-button" disabled="@busy" @onclick="LoadEventsAsync">Filtrar</button></div>
-        @if (events.Count == 0 && !busy) { <p class="workspace-empty">No hay eventos para mostrar.</p> }
+        @if (CanWrite && !categories.Any(x => x.IsActive) && !busy)
+        {
+            <p class="workspace-guidance" role="status">Aún no hay categorías de actividad disponibles. Un administrador debe configurar una categoría antes de registrar actividades.</p>
+        }
+        @if (CanWrite && showEventEditor)
+        {
+            <section class="workspace-card workspace-editor" aria-label="Edición de actividad">
+                <div class="workspace-heading"><div><h3>@(editingEvent is null ? "Nueva actividad" : "Editar actividad")</h3><p>Registra lo ocurrido; la fecha corresponde al día del evento.</p></div></div>
+                <div class="workspace-fields">
+                    <label>Categoría <span aria-hidden="true">*</span><select @bind="categoryId" required aria-required="true"><option value="0">Seleccione categoría</option>@foreach (var c in categories.Where(x => x.IsActive)){<option value="@c.Id">@c.Name</option>}</select></label>
+                    <label>Fecha real <input type="date" @bind="occurred" /></label>
+                    <label class="wide">Título <span aria-hidden="true">*</span><input maxlength="150" @bind="title" required aria-required="true" /></label>
+                    <label class="wide">Descripción <textarea rows="3" maxlength="4000" @bind="description"></textarea></label>
+                </div>
+                <p class="workspace-hint">* Campos obligatorios. Si falta algún dato, se mostrará un mensaje antes de guardar.</p>
+                <div class="workspace-actions"><button type="button" class="primary-button" disabled="@busy" @onclick="SaveEventAsync">@(editingEvent is null ? "Registrar actividad" : "Guardar corrección")</button><button type="button" class="secondary-button" disabled="@busy" @onclick="CancelEventEditor">Cancelar</button></div>
+            </section>
+        }
+        <div class="workspace-filters" aria-label="Filtros de actividades">
+            <label>Categoría<select @bind="filterCategory"><option value="0">Todas</option>@foreach(var c in categories){<option value="@c.Id">@c.Name</option>}</select></label>
+            <label class="workspace-check"><input type="checkbox" @bind="includeVoided" /> Incluir anulados</label>
+            <button type="button" class="secondary-button" disabled="@busy" @onclick="LoadEventsAsync">Filtrar</button>
+        </div>
+        @if (events.Count == 0 && !busy) { <div class="workspace-empty"><strong>Aún no hay actividades para mostrar.</strong><span>Cuando registres una actividad, aparecerá aquí ordenada por fecha.</span></div> }
+        <div class="workspace-timeline">
         @foreach(var ev in events.OrderByDescending(x => x.OccurredOn).ThenByDescending(x => x.Id))
         {
-            <article class="workspace-card" @key="ev.Id"><header class="workspace-heading"><div><small>@ev.OccurredOn.ToString("dd/MM/yyyy") · @ev.CategoryName · @ev.CreatedByUserId</small><h3>@ev.Title</h3></div>@if(ev.IsVoided){<span class="status-chip">Anulado</span>}</header><p>@ev.Description</p>
-                <div class="workspace-actions"><button class="secondary-button" @onclick="() => OpenEventAsync(ev)">Detalles, comentarios y acuerdos</button>@if(CanWrite && !ev.IsVoided){<button class="secondary-button" @onclick="() => EditEvent(ev)">Editar</button><button class="secondary-button" @onclick="() => pendingVoid = ev">Anular</button>}</div>
-                @if (pendingVoid?.Id == ev.Id && CanWrite){<div class="workspace-fields"><label class="wide">Motivo de anulación<input maxlength="500" @bind="voidReason" /></label></div><div class="workspace-actions"><button class="secondary-button" @onclick="() => VoidAsync(ev)">Confirmar anulación</button><button class="secondary-button" @onclick="() => pendingVoid = null">Cancelar</button></div>}
+            <article class="workspace-card workspace-timeline-entry" @key="ev.Id">
+                <header class="workspace-heading">
+                    <div><small>@ev.OccurredOn.ToString("dd/MM/yyyy") · @ev.CategoryName</small><h3>@ev.Title</h3></div>
+                    @if(ev.IsVoided){<span class="status-chip">Anulado</span>}
+                </header>
+                <p>@ev.Description</p>
+                <div class="workspace-actions"><button type="button" class="secondary-button" aria-expanded="@(selected?.Id == ev.Id)" disabled="@busy" @onclick="() => ToggleEventDetailsAsync(ev)">@(selected?.Id == ev.Id ? "Ocultar detalles" : "Ver detalles y acuerdos")</button>@if(CanWrite && !ev.IsVoided){<button type="button" class="secondary-button" disabled="@busy" @onclick="() => EditEvent(ev)">Editar</button><button type="button" class="secondary-button" disabled="@busy" @onclick="() => pendingVoid = ev">Anular</button>}</div>
+                @if (pendingVoid?.Id == ev.Id && CanWrite){<div class="workspace-fields"><label class="wide">Motivo de anulación <span aria-hidden="true">*</span><input maxlength="500" @bind="voidReason" /></label></div><div class="workspace-actions"><button type="button" class="secondary-button" disabled="@busy" @onclick="() => VoidAsync(ev)">Confirmar anulación</button><button type="button" class="secondary-button" @onclick="() => pendingVoid = null">Cancelar</button></div>}
                 @if(selected?.Id == ev.Id)
                 {
                     <div class="workspace-detail"><h4>Comentarios</h4>@foreach(var comment in comments){<p><strong>@comment.CreatedByUserId</strong> · @comment.Text</p>}@if(comments.Count == 0){<p>Sin comentarios.</p>}
-                        @if(CanWrite && !ev.IsVoided){<label>Nuevo comentario<textarea maxlength="4000" @bind="commentText"></textarea></label><button class="secondary-button" @onclick="AddCommentAsync">Agregar comentario</button>}
+                        @if(CanWrite && !ev.IsVoided){<label>Nuevo comentario<textarea maxlength="4000" @bind="commentText"></textarea></label><button type="button" class="secondary-button" disabled="@busy" @onclick="AddCommentAsync">Agregar comentario</button>}
                         <h4>Acuerdo</h4>@if(agreement is null){<p>Sin acuerdo registrado.</p>}else{<p>@agreement.Status · @(agreement.AcceptedBy ?? "Sin aceptante")</p>}
-                        @if(CanWrite && !ev.IsVoided){<div class="workspace-fields"><label>Estado<select @bind="agreementStatus">@foreach(var status in Enum.GetValues<ProjectAgreementStatus>()){<option value="@status">@status</option>}</select></label><label>Aceptado por<input maxlength="150" @bind="acceptedBy" /></label><label>Fecha de aceptación<input type="date" @bind="acceptedOn" /></label><label>Medio<input maxlength="150" @bind="medium" /></label><label class="wide">Observaciones<textarea maxlength="2000" @bind="agreementNotes"></textarea></label></div><button class="secondary-button" @onclick="SaveAgreementAsync">Guardar acuerdo</button>}
+                        @if(CanWrite && !ev.IsVoided){<div class="workspace-fields"><label>Estado<select @bind="agreementStatus">@foreach(var status in Enum.GetValues<ProjectAgreementStatus>()){<option value="@status">@status</option>}</select></label><label>Aceptado por<input maxlength="150" @bind="acceptedBy" /></label><label>Fecha de aceptación<input type="date" @bind="acceptedOn" /></label><label>Medio<input maxlength="150" @bind="medium" /></label><label class="wide">Observaciones<textarea maxlength="2000" @bind="agreementNotes"></textarea></label></div><button type="button" class="secondary-button" disabled="@busy" @onclick="SaveAgreementAsync">Guardar acuerdo</button>}
                         <h4>Vencimiento del evento</h4><p>@(deadline?.DueOn?.ToString("dd/MM/yyyy") ?? "Sin vencimiento")</p>
-                        @if(CanWrite && !ev.IsVoided){<div class="workspace-fields"><label>Fecha límite<input type="date" @bind="dueOn" /></label><label>Motivo del cambio<input maxlength="500" @bind="deadlineReason" /></label></div><button class="secondary-button" @onclick="SaveDeadlineAsync">Guardar vencimiento</button>}
+                        @if(CanWrite && !ev.IsVoided){<div class="workspace-fields"><label>Fecha límite<input type="date" @bind="dueOn" /></label><label>Motivo del cambio<input maxlength="500" @bind="deadlineReason" /></label></div><button type="button" class="secondary-button" disabled="@busy" @onclick="SaveDeadlineAsync">Guardar vencimiento</button>}
                     </div>
                 }
             </article>
         }
+        </div>
     }
     else
     {
@@ -46,9 +111,11 @@
 @code {
     [Parameter, EditorRequired] public int ProjectId { get; set; }
     [Parameter] public bool CanWrite { get; set; }
-    private bool busy, includeVoided, taskCompleted;
+    [Parameter] public bool IsAdmin { get; set; }
+    private bool busy, includeVoided, taskCompleted, showEventEditor, showCategorySettings;
     private string mode = "events", title = "", description = "", commentText = "", acceptedBy = "", medium = "", agreementNotes = "", deadlineReason = "", voidReason = "", taskTitle = "", taskDescription = "", taskAssignee = "", taskReason = "";
     private string? error, notice;
+    private string newCategoryName = "";
     private int categoryId, filterCategory;
     private DateOnly occurred = DateOnly.FromDateTime(DateTime.Today);
     private DateOnly? acceptedOn, dueOn, taskDue;
@@ -62,6 +129,25 @@
     private IReadOnlyList<ProjectEventCategoryResponse> categories = [];
     private IReadOnlyList<ProjectTaskResponse> tasks = [];
     protected override Task OnParametersSetAsync() => LoadAsync();
+    private Task CreateCategoryAsync() => Execute(async () =>
+    {
+        if (!IsAdmin) throw new InvalidOperationException("Solo un administrador puede configurar categorías.");
+        var name = newCategoryName.Trim();
+        if (name.Length is < 1 or > 100) throw new InvalidOperationException("Indique un nombre de hasta 100 caracteres.");
+        var created = await Api.CreateCategoryAsync(name);
+        categories = await Api.CategoriesAsync();
+        categoryId = created.Id;
+        newCategoryName = "";
+        notice = "Categoría guardada y disponible para seleccionar.";
+    });
+    private Task DeactivateCategoryAsync(int id) => Execute(async () =>
+    {
+        if (!IsAdmin) throw new InvalidOperationException("Solo un administrador puede configurar categorías.");
+        await Api.DeactivateCategoryAsync(id);
+        categories = await Api.CategoriesAsync();
+        if (categoryId == id) categoryId = 0;
+        notice = "Categoría desactivada. Los registros históricos se conservan.";
+    });
     private Task LoadEventsAsync() => Execute(async () => events = await Api.EventsAsync(ProjectId, filterCategory == 0 ? null : filterCategory, includeVoided));
     private Task LoadAsync() => Execute(async () => { categories = await Api.CategoriesAsync(); events = await Api.EventsAsync(ProjectId, filterCategory == 0 ? null : filterCategory, includeVoided); tasks = await Api.TasksAsync(ProjectId); });
     private async Task Execute(Func<Task> work)
@@ -76,10 +162,17 @@
         if(!CanWrite || categoryId < 1 || string.IsNullOrWhiteSpace(title)) throw new InvalidOperationException("Indique categoría y título.");
         var req = new ProjectEventUpsertRequest(categoryId, title.Trim(), description, occurred, editingEvent?.Version);
         if(editingEvent is null) await Api.CreateEventAsync(ProjectId, req); else await Api.UpdateEventAsync(ProjectId, editingEvent.Id, req);
-        ClearEvent(); events = await Api.EventsAsync(ProjectId); notice = "Actividad guardada.";
+        ClearEvent(); showEventEditor = false; events = await Api.EventsAsync(ProjectId); notice = "Actividad guardada.";
     });
     private void ClearEvent(){ editingEvent = null; title = description = ""; categoryId = 0; occurred = DateOnly.FromDateTime(DateTime.Today); }
-    private void EditEvent(ProjectEventResponse ev){ editingEvent = ev; title = ev.Title; description = ev.Description; categoryId = ev.CategoryId; occurred = ev.OccurredOn; }
+    private void OpenNewEvent(){ ClearEvent(); showEventEditor = true; }
+    private void CancelEventEditor(){ ClearEvent(); showEventEditor = false; }
+    private void EditEvent(ProjectEventResponse ev){ editingEvent = ev; title = ev.Title; description = ev.Description; categoryId = ev.CategoryId; occurred = ev.OccurredOn; showEventEditor = true; }
+    private Task ToggleEventDetailsAsync(ProjectEventResponse ev)
+    {
+        if (selected?.Id == ev.Id) { selected = null; return Task.CompletedTask; }
+        return OpenEventAsync(ev);
+    }
     private Task VoidAsync(ProjectEventResponse ev) => Execute(async () => { if(!CanWrite || string.IsNullOrWhiteSpace(voidReason)) throw new InvalidOperationException("Indique el motivo."); await Api.VoidEventAsync(ProjectId,ev.Id,new(ev.Version,voidReason)); pendingVoid=null;voidReason="";events=await Api.EventsAsync(ProjectId); notice="Evento anulado."; });
     private Task OpenEventAsync(ProjectEventResponse ev) => Execute(async () =>
     {

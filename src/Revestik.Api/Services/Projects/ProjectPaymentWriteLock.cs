@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Data;
 using Revestik.Api.Models;
+using Revestik.Shared.Projects;
 
 namespace Revestik.Api.Services.Projects;
 
@@ -17,6 +18,9 @@ internal static class ProjectPaymentWriteLock
         if (string.IsNullOrWhiteSpace(actor) || (!admin && project.ResponsibleUserId != actor))
             throw new ProjectOperationException(ProjectFailureReason.Forbidden,
                 "Solo el responsable o un administrador puede modificar pagos del proyecto.");
+        if (project.Status is ProjectStatus.Completed or ProjectStatus.Cancelled or ProjectStatus.Archived)
+            throw new ProjectOperationException(ProjectFailureReason.Invalid,
+                "Un proyecto finalizado, cancelado o archivado no admite cambios financieros ni de comprobantes.");
         return project;
     }
 }

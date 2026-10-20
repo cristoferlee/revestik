@@ -13,6 +13,10 @@ public sealed class ProjectWorkspaceApiService(HttpClient http)
 
     public Task<IReadOnlyList<ProjectEventCategoryResponse>> CategoriesAsync(CancellationToken ct = default) =>
         GetListAsync<ProjectEventCategoryResponse>("api/project-event-categories", ct);
+    public Task<ProjectEventCategoryResponse> CreateCategoryAsync(string name, CancellationToken ct = default) =>
+        SendAsync<ProjectEventCategoryResponse>(HttpMethod.Post, "api/project-event-categories", new { Name = name }, ct);
+    public Task DeactivateCategoryAsync(int id, CancellationToken ct = default) =>
+        SendNoContentAsync(HttpMethod.Delete, $"api/project-event-categories/{id}", ct);
     public Task<IReadOnlyList<ProjectEventResponse>> EventsAsync(int id, int? category = null, bool voided = false, CancellationToken ct = default) =>
         GetListAsync<ProjectEventResponse>($"{Root(id)}/events?includeVoided={voided.ToString().ToLowerInvariant()}" + (category is int c ? $"&categoryId={c}" : ""), ct);
     public Task<ProjectEventResponse> CreateEventAsync(int id, ProjectEventUpsertRequest body, CancellationToken ct = default) =>
@@ -39,6 +43,8 @@ public sealed class ProjectWorkspaceApiService(HttpClient http)
         SendAsync<ProjectTaskResponse>(HttpMethod.Post, $"{Root(id)}/tasks", body, ct);
     public Task<ProjectTaskResponse> UpdateTaskAsync(int id, int taskId, ProjectTaskUpdateRequest body, CancellationToken ct = default) =>
         SendAsync<ProjectTaskResponse>(HttpMethod.Put, $"{Root(id)}/tasks/{taskId}", body, ct);
+    public Task<IReadOnlyList<ProjectDocumentLinkResponse>> DocumentLinksAsync(int id, CancellationToken ct = default) =>
+        GetListAsync<ProjectDocumentLinkResponse>($"{Root(id)}/document-links", ct);
     public Task<IReadOnlyList<ProjectDocumentListItem>> DocumentsAsync(int id, CancellationToken ct = default) =>
         GetListAsync<ProjectDocumentListItem>($"{Root(id)}/documents", ct);
     public Task<ProjectDocumentDetails?> DocumentAsync(int id, int documentId, CancellationToken ct = default) =>

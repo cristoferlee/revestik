@@ -1,1 +1,42 @@
-.efg-stack{display:grid;gap:14px}.efg-heading,.efg-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.efg-heading h2,.efg-card h3{margin:0;color:#26313d}.efg-heading p,.efg-empty,.efg-milestone small{color:#728090;font-size:.86rem}.efg-card{display:grid;gap:12px;background:#fff;border:1px solid #dfe4ea;border-radius:8px;padding:18px}.efg-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.efg-grid label,.efg-milestone-row label,.efg-evidence label{display:grid;gap:5px;font-weight:600;font-size:.84rem}.efg-grid input,.efg-milestone-row input,.efg-evidence input,.efg-actions select{width:100%;min-width:0;border:1px solid #d7dde4;border-radius:6px;padding:9px;font:inherit}.efg-milestone-row{display:grid;grid-template-columns:2fr 1fr 2fr auto;gap:8px;align-items:end}.efg-milestone{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;border-top:1px solid #e5e9ee;padding-top:12px}.efg-milestone p{color:#728090}.efg-evidence{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.efg-progress{width:100%;height:12px;accent-color:var(--color-primary)}.efg-error,.efg-notice{border-radius:6px;padding:12px}.efg-error{background:#fff6f5;color:#9f2f27}.efg-notice{background:#f3fbf6;color:#17643a}@media(max-width:700px){.efg-milestone-row,.efg-grid{grid-template-columns:1fr}.efg-card{padding:13px}}
+/* Revestik Projects — UI-04: complete component styles */
+.efg-stack{display:grid;gap:1rem;min-width:0;color:var(--color-text,#1f2937)}
+.efg-heading,.efg-actions{display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap;min-width:0}
+.efg-heading h2,.efg-heading h3,.efg-card h3{margin:0;color:var(--color-text,#1f2937)}
+.efg-heading h2{font-size:1.3rem}.efg-heading h3,.efg-card h3{font-size:1.05rem}
+.efg-heading p,.efg-hint,.efg-empty{margin:.25rem 0 0;color:#596575;font-size:.88rem;line-height:1.5}
+.efg-card{background:var(--color-surface,#fff);border:1px solid var(--color-border,#e5e7eb);border-radius:10px;padding:1.15rem;display:grid;gap:1rem;min-width:0}
+.efg-editor{border-top:3px solid var(--color-primary,#f59e0b)}
+.efg-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}
+.efg-kpis article{display:grid;gap:.5rem;background:var(--color-surface,#fff);border:1px solid var(--color-border,#e5e7eb);border-left:3px solid var(--color-primary,#f59e0b);border-radius:9px;padding:1rem;min-width:0}
+.efg-kpis span,.efg-count{color:#596575;font-size:.85rem}.efg-kpis strong{overflow-wrap:anywhere;font-size:1.1rem;font-variant-numeric:tabular-nums}
+.efg-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.9rem}
+.efg-grid label,.efg-evidence label,.efg-milestone-row label{display:grid;gap:.35rem;font-size:.88rem;font-weight:600;min-width:0}
+.efg-grid input,.efg-grid select,.efg-grid textarea,.efg-evidence input,.efg-evidence select,.efg-milestone-row input,.efg-actions select{width:100%;min-width:0;padding:.65rem;border:1px solid #aeb8c5;border-radius:7px;font:inherit;background:var(--color-surface,#fff);color:var(--color-text,#1f2937)}
+.efg-wide{grid-column:1/-1}
+.efg-stack button{min-height:40px;max-width:100%;font:inherit;font-size:.9rem;font-weight:600;cursor:pointer;border-radius:7px;padding:.6rem .9rem}
+.efg-stack button.primary-button{background:var(--color-primary,#f59e0b);border:1px solid var(--color-primary-dark,#d97706);color:#1f2937}
+.efg-stack button.secondary-button{background:var(--color-surface,#fff);border:1px solid #aeb8c5;color:var(--color-text,#1f2937)}
+.efg-stack button:hover:not(:disabled){filter:brightness(.97)}
+.efg-stack button:disabled{opacity:.55;cursor:not-allowed}
+.efg-stack :is(button,input,select,textarea):focus-visible{outline:3px solid var(--color-primary-dark,#d97706);outline-offset:3px}
+.efg-status{background:#edf2f5;color:#334155;border-radius:100px;padding:.35rem .7rem;font-size:.78rem;font-weight:600}
+.efg-list-heading{padding:.4rem 0}
+.efg-empty-state{text-align:center;padding:1.75rem;border:1px dashed #cbd5e1;border-radius:10px;background:var(--color-surface,#fff)}
+.efg-empty-state strong{display:block;color:var(--color-text,#1f2937);font-size:1rem}
+.efg-history{margin:0;border-left:3px solid #d9dee6;padding:.55rem .8rem;color:#394658;font-size:.88rem;overflow-wrap:anywhere}
+.efg-error,.efg-notice{border-radius:7px;padding:.8rem 1rem;line-height:1.5}
+.efg-error{background:#fff6f5;color:#9f2f27;border:1px solid #e6b6b2}
+.efg-notice{background:#f3fbf6;color:#17643a;border:1px solid #a9d9ba}
+.efg-evidence{display:grid;gap:.6rem;min-width:0}
+.efg-evidence-editor{display:grid;gap:.75rem;border-top:1px solid var(--color-border,#e5e7eb);padding-top:.9rem;min-width:0}
+.efg-milestone-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(100px,1fr) minmax(0,2fr) auto;gap:.75rem;align-items:end;border:1px solid var(--color-border,#e5e7eb);padding:.85rem;border-radius:8px}
+.efg-milestone{display:flex;justify-content:space-between;align-items:center;gap:1rem;border-top:1px solid var(--color-border,#e5e7eb);padding:.9rem 0;min-width:0}
+.efg-milestone>div:first-child{flex:1;min-width:0}.efg-milestone p{margin:.25rem 0;color:#596575;overflow-wrap:anywhere}.efg-milestone small{color:#596575}
+.efg-progress{width:100%;height:12px;accent-color:var(--color-primary-dark,#d97706)}
+@media(max-width:800px){.efg-milestone-row{grid-template-columns:repeat(2,minmax(0,1fr))}.efg-milestone-row label:last-of-type{grid-column:1/-1}}
+@media(max-width:620px){.efg-kpis,.efg-grid,.efg-milestone-row{grid-template-columns:1fr}.efg-wide,.efg-milestone-row label:last-of-type{grid-column:auto}.efg-card{padding:.9rem}.efg-heading{align-items:flex-start}.efg-milestone{align-items:stretch;flex-direction:column}.efg-actions{justify-content:flex-start}.efg-actions>button{flex:0 1 auto}.efg-stack{gap:.85rem}}
+@media(prefers-reduced-motion:reduce){.efg-stack *{scroll-behavior:auto!important;transition:none!important}}
+
+/* PRJ-UX-05 — seguimiento y configuración separados */
+.efg-template-item{border-top:1px solid var(--color-border,#e5e7eb);padding:.6rem 0}
+.efg-stack .efg-actions select{flex:1 1 240px;max-width:100%}

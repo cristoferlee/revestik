@@ -1,64 +1,121 @@
 @page "/projects"
 @using Microsoft.AspNetCore.Authorization
-@using Revestik.Client.Services.Customers
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @using Revestik.Client.Services.Projects
 @using Revestik.Shared.Customers
 @using Revestik.Shared.Projects
 @attribute [Authorize(Roles = "Administrator,Accountant,Sales")]
-@inject ICustomerApiService Customers
 @inject ProjectApiService ProjectsApi
-@inject NavigationManager Navigation
+@inject AuthenticationStateProvider Auth
 
 <PageTitle>Proyectos | Revestik</PageTitle>
 <section class="projects-page">
     <header class="projects-header">
-        <div><h1>Proyectos</h1><p>Expedientes operativos vinculados a clientes existentes.</p></div>
+        <div><h1>Proyectos</h1><p>Consulta y organiza los expedientes de cada cliente.</p></div>
         <a class="secondary-button" href="/customers">Administrar clientes</a>
     </header>
     @if (error is not null) { <p class="status-message error-message" role="alert">@error</p> }
     <section class="projects-card">
-        <div class="section-title"><h2>Seleccionar cliente</h2><p>Busca por nombre o identificación y consulta sus expedientes.</p></div>
+        <div class="section-title"><h2>Buscar cliente</h2><p>Busca cualquier cliente registrado, tenga o no proyectos, para consultar sus expedientes o crear uno nuevo.</p></div>
         <form class="search-row" @onsubmit="SearchAsync" @onsubmit:preventDefault>
-            <input type="search" maxlength="150" placeholder="Nombre o identificación del cliente" aria-label="Buscar cliente" @bind="search" />
+            <label class="visually-hidden" for="projects-customer-search">Nombre o identificación del cliente</label>
+            <input id="projects-customer-search" type="search" maxlength="150" placeholder="Nombre o identificación" @bind="search" />
             <button class="primary-button" type="submit" disabled="@busy">Buscar</button>
         </form>
-        @if (busy) { <p role="status">Cargando clientes...</p> }
-        else if (customers.Count == 0) { <p class="empty">No hay clientes para mostrar.</p> }
-        else
+        @if (searchMode)
         {
-            <div class="item-grid">
-                @foreach (var customer in customers)
-                {
-                    <button type="button" class="customer-item @(selected?.Id == customer.Id ? "selected" : "")" @onclick="() => SelectAsync(customer)">
-                        <strong>@customer.Name</strong><small>@customer.IdentificationNumber · @(customer.IsActive ? "Activo" : "Inactivo")</small>
-                    </button>
-                }
+            <div class="section-title projects-between">
+                <h3>Resultados de búsqueda</h3>
+                <button type="button" class="secondary-button" @onclick="BackToDirectoryAsync" disabled="@busy">Volver a clientes con proyectos</button>
             </div>
-            <div class="pager">
-                <button class="secondary-button" disabled="@(busy || page == 1)" @onclick="PreviousAsync">Anterior</button>
-                <span>Página @(page)</span>
-                <button class="secondary-button" disabled="@(busy || customers.Count < 20)" @onclick="NextAsync">Siguiente</button>
-            </div>
+            @if (busy) { <p role="status">Buscando clientes...</p> }
+            else if (customers.Count == 0) { <p class="empty" role="status">No se encontraron clientes con ese criterio.</p> }
+            else
+            {
+                <div class="customer-results" aria-label="Resultados de clientes">
+                    @foreach (var customer in customers)
+                    {
+                        <button type="button" class="customer-item @(selected?.Id == customer.Id ? "selected" : "")" @onclick="() => SelectAsync(customer)">
+                            <strong>@customer.Name</strong><small>@customer.IdentificationNumber · @(customer.IsActive ? "Cliente activo" : "Cliente inactivo")</small><span class="customer-select-indicator">@(selected?.Id == customer.Id ? "Seleccionado ✓" : "Seleccionar →")</span>
+                        </button>
+                    }
+                </div>
+                <div class="pager">
+                    <button class="secondary-button" disabled="@(busy || page == 1)" @onclick="PreviousAsync">Anterior</button>
+                    <span>Página @(page) de @totalSearchPages</span>
+                    <button class="secondary-button" disabled="@(busy || page >= totalSearchPages)" @onclick="NextAsync">Siguiente</button>
+                </div>
+            }
         }
     </section>
+    @if (!searchMode)
+    {
+        <section class="projects-card">
+            <div class="section-title"><h2>Clientes con proyectos</h2><p>Selecciona un cliente para consultar sus expedientes. Los clientes sin proyectos no aparecen aquí.</p></div>
+            @if (busy) { <p role="status">Cargando clientes con proyectos...</p> }
+            else if (directory.Count == 0) { <p class="empty" role="status">Todavía no hay clientes con proyectos registrados. Utiliza la búsqueda para crear el primero.</p> }
+            else
+            {
+                <div class="customer-results" aria-label="Clientes con proyectos">
+                    @foreach (var customer in directory)
+                    {
+                        <button type="button" class="customer-item @(selected?.Id == customer.Id ? "selected" : "")" @onclick="() => SelectDirectoryAsync(customer)">
+                            <strong>@customer.Name</strong><small>@customer.IdentificationNumber · @(customer.IsActive ? "Cliente activo" : "Cliente inactivo")</small><span class="customer-select-indicator">@(selected?.Id == customer.Id ? "Seleccionado ✓" : "Ver proyectos →")</span>
+                        </button>
+                    }
+                </div>
+                <div class="pager">
+                    <button class="secondary-button" disabled="@(busy || page == 1)" @onclick="PreviousAsync">Anterior</button>
+                    <span>Página @(page) de @Math.Max(1, totalDirectoryPages)</span>
+                    <button class="secondary-button" disabled="@(busy || page >= totalDirectoryPages)" @onclick="NextAsync">Siguiente</button>
+                </div>
+            }
+        </section>
+    }
+    @if (pendingDelete is not null)
+    {
+        <div class="project-dialog-backdrop">
+            <section class="project-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="project-delete-title" aria-describedby="project-delete-description">
+                <h2 id="project-delete-title">¿Estás seguro de eliminar este proyecto?</h2>
+                <p id="project-delete-description">Se eliminará <strong>@pendingDelete.Name</strong>. Después de eliminarlo, no podrás recuperarlo desde la aplicación. Esta acción no puede deshacerse.</p>
+                <p>Por seguridad, los proyectos con historial de abonos no pueden eliminarse mediante esta operación.</p>
+                <div class="project-dialog-actions">
+                    <button type="button" class="secondary-button" disabled="@deleting" @onclick="CancelDelete">Cancelar</button>
+                    <button type="button" class="project-delete-button" disabled="@deleting" @onclick="ConfirmDeleteAsync">@(deleting ? "Eliminando..." : "Eliminar proyecto")</button>
+                </div>
+            </section>
+        </div>
+    }
     @if (selected is not null)
     {
         <section class="projects-card">
             <div class="section-title projects-between">
-                <div><h2>Proyectos de @selected.Name</h2><p>@(selected.IsActive ? "Cliente activo" : "Cliente inactivo: consulta histórica disponible")</p></div>
-                @if (selected.IsActive) { <a class="primary-button" href="@($"/projects/customer/{selected.Id}/new")">Nuevo proyecto</a> }
+                <div><span class="section-eyebrow">Cliente seleccionado</span><h2>@selected.Name</h2><p>@selected.IdentificationNumber · @(selected.IsActive ? "Cliente activo" : "Cliente inactivo: consulta histórica disponible")</p></div>
+                <div class="projects-utility-actions">
+                    <button type="button" class="secondary-button" disabled="@loadingProjects" @onclick="RefreshProjectsAsync">Actualizar proyectos</button>
+                    @if (selected.IsActive) { <a class="primary-button" href="@($"/projects/customer/{selected.Id}/new")">Nuevo proyecto</a> }
+                </div>
             </div>
             @if (loadingProjects) { <p role="status">Cargando proyectos...</p> }
             else if (projectList.Count == 0) { <p class="empty">Este cliente todavía no tiene proyectos registrados.</p> }
             else
             {
+                <p class="projects-result-count" role="status">@projectList.Count expediente(s) encontrado(s)</p>
                 <div class="item-grid">
                     @foreach (var project in projectList)
                     {
-                        <a class="project-item" href="@($"/projects/{project.Id}")">
-                            <strong>@project.Name</strong><span class="status-chip">@StatusLabel(project.Status)</span>
+                        <article class="project-item" @key="project.Id">
+                            <div class="project-item-top"><strong>@project.Name</strong><span class="status-chip">@StatusLabel(project.Status)</span></div>
                             <small>Registrado: @project.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</small>
-                        </a>
+                            <div class="project-card-actions">
+                                <a class="secondary-button" href="@($"/projects/{project.Id}")">Abrir expediente</a>
+                                @if (isAdmin || project.ResponsibleUserId == userId)
+                                {
+                                    <button type="button" class="project-delete-button" disabled="@deleting" @onclick="() => PrepareDeleteAsync(project)">Eliminar</button>
+                                }
+                            </div>
+                        </article>
                     }
                 </div>
             }
@@ -67,35 +124,155 @@
 </section>
 @code {
     private string search = "";
-    private int page = 1;
-    private bool busy, loadingProjects;
+    private int page = 1, totalDirectoryPages = 1, totalSearchPages = 1;
+    private bool busy, loadingProjects, searchMode, isAdmin, deleting;
+    private string? userId;
+    private ProjectResponse? pendingDelete;
     private string? error;
     private List<CustomerListItemResponse> customers = [];
+    private IReadOnlyList<ProjectCustomerDirectoryItem> directory = [];
     private CustomerListItemResponse? selected;
     private IReadOnlyList<ProjectSummaryResponse> projectList = [];
-    protected override Task OnInitializedAsync() => LoadCustomersAsync();
-    private async Task SearchAsync() { page = 1; selected = null; projectList = []; await LoadCustomersAsync(); }
-    private async Task PreviousAsync() { page--; await LoadCustomersAsync(); }
-    private async Task NextAsync() { page++; await LoadCustomersAsync(); }
-    private async Task LoadCustomersAsync()
+
+    protected override async Task OnInitializedAsync()
     {
-        busy = true; error = null;
-        try { var result = await Customers.GetPageAsync(new CustomerListRequest { Search = search, Page = page, PageSize = 20 }); customers = result.Items.ToList(); }
-        catch (Exception ex) { error = "No se pudieron consultar los clientes. " + ex.Message; customers = []; }
+        var user = (await Auth.GetAuthenticationStateAsync()).User;
+        isAdmin = user.IsInRole("Administrator");
+        userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        await LoadDirectoryAsync();
+    }
+
+    private async Task PrepareDeleteAsync(ProjectSummaryResponse summary)
+    {
+        if (deleting || !(isAdmin || summary.ResponsibleUserId == userId)) return;
+        error = null;
+        try
+        {
+            var current = await ProjectsApi.GetAsync(summary.Id);
+            if (current is null) { error = "El proyecto ya no existe."; await RefreshAfterDeleteAsync(); return; }
+            pendingDelete = current;
+        }
+        catch (Exception ex) { error = "No fue posible comprobar el proyecto. " + ex.Message; }
+    }
+
+    private void CancelDelete() => pendingDelete = null;
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (pendingDelete is null || deleting || !(isAdmin || pendingDelete.ResponsibleUserId == userId)) return;
+        deleting = true;
+        error = null;
+        try
+        {
+            await ProjectsApi.DeleteAsync(pendingDelete.Id, pendingDelete.Version);
+            pendingDelete = null;
+            await RefreshAfterDeleteAsync();
+        }
+        catch (Exception ex)
+        {
+            pendingDelete = null;
+            error = "No se eliminó el proyecto. " + ex.Message;
+        }
+        finally { deleting = false; }
+    }
+
+    private async Task RefreshAfterDeleteAsync()
+    {
+        if (selected is not null) await SelectAsync(selected);
+        if (!searchMode) await LoadDirectoryAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        page = 1;
+        selected = null;
+        projectList = [];
+        searchMode = !string.IsNullOrWhiteSpace(search);
+        if (searchMode) await LoadCustomersAsync();
+        else await LoadDirectoryAsync();
+    }
+
+    private async Task BackToDirectoryAsync()
+    {
+        searchMode = false;
+        search = "";
+        page = 1;
+        selected = null;
+        projectList = [];
+        await LoadDirectoryAsync();
+    }
+
+    private async Task PreviousAsync()
+    {
+        if (page <= 1) return;
+        page--;
+        if (searchMode) await LoadCustomersAsync(); else await LoadDirectoryAsync();
+    }
+
+    private async Task NextAsync()
+    {
+        page++;
+        if (searchMode) await LoadCustomersAsync(); else await LoadDirectoryAsync();
+    }
+
+    private async Task LoadDirectoryAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await ProjectsApi.CustomersWithProjectsAsync(page);
+            directory = result.Items;
+            totalDirectoryPages = Math.Max(1, result.TotalPages);
+        }
+        catch (Exception ex)
+        {
+            error = "No se pudieron consultar los clientes con proyectos. " + ex.Message;
+            directory = [];
+        }
         finally { busy = false; }
     }
+
+    private async Task LoadCustomersAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await ProjectsApi.CustomersWithProjectsAsync(page, search: search);
+            customers = result.Items.Select(customer => new CustomerListItemResponse(
+                customer.Id, customer.IdentificationNumber, customer.Name, "", "", default, customer.IsActive)).ToList();
+            totalSearchPages = Math.Max(1, result.TotalPages);
+        }
+        catch (Exception ex)
+        {
+            error = "No se pudieron consultar los clientes. " + ex.Message;
+            customers = [];
+        }
+        finally { busy = false; }
+    }
+
+    private Task RefreshProjectsAsync() => selected is null ? Task.CompletedTask : SelectAsync(selected);
+
+    private Task SelectDirectoryAsync(ProjectCustomerDirectoryItem customer) => SelectAsync(
+        new CustomerListItemResponse(customer.Id, customer.IdentificationNumber,
+            customer.Name, "", "", default, customer.IsActive));
+
     private async Task SelectAsync(CustomerListItemResponse customer)
     {
-        selected = customer; loadingProjects = true; error = null;
+        selected = customer;
+        loadingProjects = true;
+        error = null;
         try { projectList = await ProjectsApi.ListAsync(customer.Id); }
         catch (Exception ex) { projectList = []; error = "No se pudieron consultar los proyectos. " + ex.Message; }
         finally { loadingProjects = false; }
     }
+
     private static string StatusLabel(ProjectStatus status) => status switch
     {
         ProjectStatus.Planning => "Planificación", ProjectStatus.PendingApproval => "Pendiente de aprobación",
         ProjectStatus.Active => "Activo", ProjectStatus.Paused => "Pausado",
-        ProjectStatus.Completed => "Completado", ProjectStatus.Cancelled => "Cancelado",
+        ProjectStatus.Completed => "Finalizado", ProjectStatus.Cancelled => "Cancelado",
         ProjectStatus.Archived => "Archivado", _ => status.ToString()
     };
 }

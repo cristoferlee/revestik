@@ -20,6 +20,7 @@ public sealed class ProjectFinancePlanApiService(HttpClient http)
     public Task VoidPaymentAsync(int id, int paymentId, ProjectPaymentVoidRequest body) => SendAsync(HttpMethod.Post, $"{Path(id)}/payments/{paymentId}/void", body);
     public Task<List<ProjectPaymentRevisionResponse>> PaymentHistoryAsync(int id, int paymentId) => ReadAsync<List<ProjectPaymentRevisionResponse>>($"{Path(id)}/payments/{paymentId}/history");
     public Task<List<ProjectAgreedAmountRevisionResponse>> AmountHistoryAsync(int id) => ReadAsync<List<ProjectAgreedAmountRevisionResponse>>($"{Path(id)}/agreed-amount/history");
+    public Task<List<ProjectPaymentDocumentResponse>> PaymentDocumentsAsync(int id, int paymentId) => ReadAsync<List<ProjectPaymentDocumentResponse>>($"{Path(id)}/payments/{paymentId}/documents");
     public Task LinkPaymentDocumentAsync(int id, int paymentId, int documentId) => SendAsync(HttpMethod.Post, $"{Path(id)}/payments/{paymentId}/documents/{documentId}", null);
     public Task UnlinkPaymentDocumentAsync(int id, int paymentId, int documentId) => SendAsync(HttpMethod.Delete, $"{Path(id)}/payments/{paymentId}/documents/{documentId}", null);
     public Task<ProjectProgressView> ProgressAsync(int id) => ReadAsync<ProjectProgressView>($"{Path(id)}/milestones");

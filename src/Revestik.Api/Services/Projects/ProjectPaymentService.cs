@@ -159,6 +159,21 @@ public sealed class ProjectPaymentService(RevestikDbContext db)
             project.AgreedAmount is null ? null : project.AgreedAmount - paid);
     }
 
+    public async Task<IReadOnlyList<ProjectPaymentDocumentResponse>?> DocumentsAsync(
+        int projectId, int paymentId, CancellationToken ct)
+    {
+        if (!await db.Set<ProjectPayment>().AsNoTracking()
+            .AnyAsync(x => x.Id == paymentId && x.ProjectId == projectId, ct)) return null;
+
+        return await db.Set<ProjectPaymentDocumentLink>().AsNoTracking()
+            .Where(x => x.ProjectId == projectId && x.ProjectPaymentId == paymentId
+                && x.Document.ProjectId == projectId && x.Document.DeletedAtUtc == null)
+            .OrderBy(x => x.Document.DisplayName).ThenBy(x => x.ProjectDocumentId)
+            .Select(x => new ProjectPaymentDocumentResponse(
+                x.ProjectDocumentId, x.Document.DisplayName, x.Document.Category))
+            .ToListAsync(ct);
+    }
+
     public async Task<bool> LinkDocumentAsync(int projectId, int paymentId, int documentId,
         string actor, bool admin, CancellationToken ct)
     {

@@ -16,11 +16,12 @@
 @inject ILocationApiService Locations
 @inject AuthenticationStateProvider Auth
 @inject NavigationManager Navigation
+@inject HttpClient Http
 
 <PageTitle>Expediente de proyecto | Revestik</PageTitle>
 <section class="projects-page">
     <header class="projects-header">
-        <div><a href="/projects" class="back-link">← Proyectos</a><h1>@(isNew ? "Nuevo proyecto" : project?.Name ?? "Expediente")</h1><p>@(customer?.Name ?? "Cliente")</p></div>
+        <div><a href="/projects" class="back-link">← Volver a proyectos</a><h1>@(isNew ? "Nuevo proyecto" : project?.Name ?? "Expediente")</h1><p>Cliente: @(customer?.Name ?? "Sin identificar")</p></div>
         @if (project is not null) { <span class="status-chip">@StatusLabel(project.Status)</span> }
     </header>
     @if (loading) { <p role="status">Cargando expediente...</p> }
@@ -32,18 +33,18 @@
         @if (project is not null)
         {
             <div class="projects-kpis">
-                <article><span>Estado</span><strong>@StatusLabel(project.Status)</strong></article>
-                <article><span>Responsable</span><strong>@(isOwner ? "Yo" : project.ResponsibleUserId)</strong></article>
+                <article><span>Responsable</span><strong>@(isOwner ? "Mi proyecto" : "Responsable asignado")</strong></article>
                 <article><span>Monto acordado</span><strong>@(project.AgreedAmount.HasValue ? $"{project.CurrencyCode} {project.AgreedAmount:N2}" : "Sin definir")</strong></article>
                 <article><span>Saldo operativo</span><strong>@(balance?.RemainingBalance is decimal amount ? $"{balance.CurrencyCode} {amount:N2}" : "Sin definir")</strong></article>
             </div>
-            <div class="projects-tabs" role="navigation" aria-label="Secciones del expediente">
+            <div class="projects-utility-actions"><a class="secondary-button" href="@(new Uri(Http.BaseAddress!, $"api/projects/{project.Id}/report.pdf"))" target="_blank" rel="noopener noreferrer">Descargar PDF</a></div>
+            <nav class="projects-tabs" aria-label="Secciones del expediente">
                 <button class="@(activeTab == "summary" ? "active-tab" : "future-tab")" @onclick='() => activeTab = "summary"'>Resumen</button><button class="@(activeTab == "activity" ? "active-tab" : "future-tab")" @onclick='() => activeTab = "activity"'>Actividad y tareas</button><button class="@(activeTab == "documents" ? "active-tab" : "future-tab")" @onclick='() => activeTab = "documents"'>Documentos</button><button class="@(activeTab == "payments" ? "active-tab" : "future-tab")" @onclick='() => activeTab = "payments"'>Abonos</button><button class="@(activeTab == "milestones" ? "active-tab" : "future-tab")" @onclick='() => activeTab = "milestones"'>Planes e hitos</button>
-            </div>
+            </nav>
         }
         @if(project is not null && activeTab == "activity")
         {
-            <ProjectActivityPanel ProjectId="@project.Id" CanWrite="@(canEdit && !IsClosed)" />
+            <ProjectActivityPanel ProjectId="@project.Id" CanWrite="@(canEdit && !IsClosed)" IsAdmin="@isAdmin" />
         }
         @if(project is not null && activeTab == "documents")
         {
@@ -59,63 +60,170 @@
         }
         @if(isNew || activeTab == "summary")
         {
-        <section class="projects-card">
-            <div class="section-title"><h2>@(isNew ? "Registrar expediente" : "Información general")</h2><p>@(canEdit ? "Complete la información operativa del proyecto." : "Vista de consulta. Solo el responsable o Administrator pueden editar.")</p></div>
+        <section class="projects-card" aria-labelledby="general-title">
+            <div class="section-title projects-between">
+                <div><h2 id="general-title">@(isNew ? "Registrar expediente" : "Información general")</h2><p>@(isNew || showGeneralEditor ? "Los campos obligatorios y condicionales están identificados." : "Información principal y contactos del expediente.")</p></div>
+                @if (!isNew && canEdit && !IsClosed && !showGeneralEditor) { <button type="button" class="secondary-button" @onclick="StartGeneralEdit">Editar datos</button> }
+            </div>
+            @if (!isNew && !showGeneralEditor && project is not null)
+            {
+                <div class="project-read-grid">
+                    <div class="project-read-item project-read-wide"><span>Nombre</span><strong>@project.Name</strong></div>
+                    <div class="project-read-item"><span>Inicio estimado</span><strong>@(project.EstimatedStartDate?.ToString("dd/MM/yyyy") ?? "Sin definir")</strong></div>
+                    <div class="project-read-item"><span>Fin estimado</span><strong>@(project.EstimatedEndDate?.ToString("dd/MM/yyyy") ?? "Sin definir")</strong></div>
+                    <div class="project-read-item project-read-wide"><span>Descripción</span><p>@(string.IsNullOrWhiteSpace(project.Description) ? "Sin descripción" : project.Description)</p></div>
+                    <div class="project-read-item project-read-wide"><span>Ubicación</span><p>@(string.IsNullOrWhiteSpace(project.OtherSigns) ? "Sin señas registradas" : project.OtherSigns)</p>@if (project.ProvinceCode is not null) { <small>Provincia: @project.ProvinceCode · Cantón: @project.CantonCode · Distrito: @project.DistrictCode</small> }</div>
+                </div>
+                <div class="project-read-contacts"><h3>Contactos del proyecto</h3>
+                    @if (project.Contacts.Count == 0) { <p class="empty">No hay contactos adicionales.</p> }
+                    else { <div class="project-contact-list">@foreach (var contact in project.Contacts) { <article><strong>@contact.Name</strong><span>@contact.Role</span>@if(!string.IsNullOrWhiteSpace(contact.PhoneNumber)) { <span>@contact.PhoneNumber</span> }@if(!string.IsNullOrWhiteSpace(contact.Email)) { <span>@contact.Email</span> }</article> }</div> }
+                </div>
+            }
+            @if (isNew || showGeneralEditor)
+            {
+            @if (validationErrors.Count > 0)
+            {
+                <div class="project-validation-summary" role="alert" aria-labelledby="project-validation-title">
+                    <strong id="project-validation-title">Revise los datos antes de guardar:</strong>
+                    <ul>@foreach (var message in validationErrors) { <li>@message</li> }</ul>
+                </div>
+            }
             <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
                 <fieldset disabled="@(saving || !canEdit)" class="projects-fieldset">
                     <div class="projects-fields">
-                        <div class="field"><label for="name">Nombre *</label><input id="name" required maxlength="150" @bind="form.Name" /></div>
-                        <div class="field"><label for="start">Inicio estimado</label><input id="start" type="date" @bind="form.Start" /></div>
-                        <div class="field"><label for="end">Fin estimado</label><input id="end" type="date" @bind="form.End" /></div>
-                        <div class="field span-all"><label for="description">Descripción</label><textarea id="description" maxlength="2000" rows="3" @bind="form.Description"></textarea></div>
-                        <div class="field"><label for="province">Provincia</label><select id="province" value="@form.Province" @onchange="ProvinceChangedAsync"><option value="">Sin seleccionar</option>@foreach (var p in provinces) { <option value="@p.Code">@p.Name</option> }</select></div>
-                        <div class="field"><label for="canton">Cantón</label><select id="canton" value="@form.Canton" @onchange="CantonChangedAsync" disabled="@(form.Province is null)"><option value="">Sin seleccionar</option>@foreach (var c in cantons) { <option value="@c.Code">@c.Name</option> }</select></div>
-                        <div class="field"><label for="district">Distrito</label><select id="district" @bind="form.District" disabled="@(form.Canton is null)"><option value="">Sin seleccionar</option>@foreach (var d in districts) { <option value="@d.Code">@d.Name</option> }</select></div>
-                        <div class="field span-all"><label for="signs">Otras señas</label><input id="signs" maxlength="160" @bind="form.OtherSigns" /></div>
+                        <div class="field"><label for="name">Nombre del proyecto <span class="required-marker">(obligatorio)</span></label><input id="name" required maxlength="150" aria-required="true" aria-describedby="name-help" @bind="form.Name" /><small id="name-help" class="project-field-help">Ejemplo: Remodelación de cocina — máximo 150 caracteres. El nombre no debe repetirse para este cliente.</small></div>
+                        <div class="field"><label for="start">Inicio estimado (opcional)</label><input id="start" type="date" aria-describedby="start-help" @bind="form.Start" /><small id="start-help" class="project-field-help">Ejemplo: 20/10/2026. Si indica fechas, el fin no puede ser anterior al inicio.</small></div>
+                        <div class="field"><label for="end">Fin estimado (opcional)</label><input id="end" type="date" aria-describedby="end-help" @bind="form.End" /><small id="end-help" class="project-field-help">Ejemplo: 30/11/2026. Puede dejarlo vacío mientras no tenga una fecha estimada.</small></div>
+                        <div class="field span-all"><label for="description">Descripción (opcional)</label><textarea id="description" maxlength="2000" rows="3" aria-describedby="description-help" @bind="form.Description"></textarea><small id="description-help" class="project-field-help">Ejemplo: Instalación de cerámica y renovación de muebles; máximo 2.000 caracteres.</small></div>
+                        <div class="field"><label for="province">Provincia (opcional, en conjunto)</label><select id="province" aria-describedby="location-help" value="@form.Province" @onchange="ProvinceChangedAsync"><option value="">Sin seleccionar</option>@foreach (var p in provinces) { <option value="@p.Code">@p.Name</option> }</select><small id="location-help" class="project-field-help">Si registra ubicación, seleccione también cantón y distrito. Puede dejar los tres sin seleccionar.</small></div>
+                        <div class="field"><label for="canton">Cantón (condicional)</label><select id="canton" aria-describedby="canton-help" value="@form.Canton" @onchange="CantonChangedAsync" disabled="@(form.Province is null)"><option value="">Sin seleccionar</option>@foreach (var c in cantons) { <option value="@c.Code">@c.Name</option> }</select><small id="canton-help" class="project-field-help">Obligatorio cuando se selecciona provincia. Ejemplo: cantón correspondiente a la provincia elegida.</small></div>
+                        <div class="field"><label for="district">Distrito (condicional)</label><select id="district" aria-describedby="district-help" @bind="form.District" disabled="@(form.Canton is null)"><option value="">Sin seleccionar</option>@foreach (var d in districts) { <option value="@d.Code">@d.Name</option> }</select><small id="district-help" class="project-field-help">Obligatorio cuando indica provincia y cantón.</small></div>
+                        <div class="field span-all"><label for="signs">Otras señas (opcional)</label><input id="signs" maxlength="160" aria-describedby="signs-help" @bind="form.OtherSigns" /><small id="signs-help" class="project-field-help">Ejemplo: 200 m al norte de la iglesia, casa blanca; máximo 160 caracteres.</small></div>
                     </div>
-                    <h3>Contactos del proyecto</h3>
+                    <h3>Contactos del proyecto (opcional)</h3>
+                    <p class="project-field-help" id="contacts-help">Solo agregue un contacto si lo necesita. Por cada contacto agregado, nombre y rol son obligatorios; teléfono y correo son opcionales. Ejemplo: Miguel Rodríguez — Propietario — 8888-8888 — miguel@ejemplo.com.</p>
                     @foreach (var item in form.Contacts)
                     {
-                        <div class="contact-row" @key="item"><input aria-label="Nombre del contacto" maxlength="150" placeholder="Nombre" @bind="item.Name" /><input aria-label="Rol del contacto" maxlength="100" placeholder="Rol" @bind="item.Role" /><input aria-label="Teléfono" maxlength="20" placeholder="Teléfono" @bind="item.Phone" /><input aria-label="Correo" type="email" maxlength="254" placeholder="Correo" @bind="item.Email" /><button type="button" class="secondary-button" @onclick="() => form.Contacts.Remove(item)">Quitar</button></div>
+                        <div class="project-contact-group" @key="item" role="group" aria-label="Contacto del proyecto">
+                            <div class="contact-row">
+                                <label>Nombre (obligatorio)<input required maxlength="150" aria-required="true" aria-describedby="contacts-help" placeholder="Ej.: Miguel Rodríguez" @bind="item.Name" /></label>
+                                <label>Rol (obligatorio)<input required maxlength="100" aria-required="true" aria-describedby="contacts-help" placeholder="Ej.: Propietario" @bind="item.Role" /></label>
+                                <label>Teléfono (opcional)<input type="tel" maxlength="20" placeholder="Ej.: 8888-8888" @bind="item.Phone" /></label>
+                                <label>Correo (opcional)<input type="email" maxlength="254" placeholder="Ej.: miguel@ejemplo.com" @bind="item.Email" /></label>
+                                <button type="button" class="secondary-button" aria-label="Quitar contacto de esta fila" @onclick="() => form.Contacts.Remove(item)">Quitar</button>
+                            </div>
+                        </div>
                     }
                     @if (canEdit && form.Contacts.Count < 30) { <button type="button" class="secondary-button" @onclick="() => form.Contacts.Add(new())">Agregar contacto</button> }
                     @if (isNew)
                     {
                         <h3>Monto inicial opcional</h3>
-                        <div class="projects-fields"><div class="field"><label>Monto acordado</label><input type="number" min="0" step="0.01" @bind="form.AgreedAmount" /></div><div class="field"><label>Moneda</label><select @bind="form.Currency"><option value="">Sin monto</option><option value="CRC">CRC</option><option value="USD">USD</option></select></div></div>
+                        <div class="projects-fields"><div class="field"><label for="initial-amount">Monto acordado (opcional, en conjunto)</label><input id="initial-amount" type="number" min="0" step="0.01" aria-describedby="initial-amount-help" @bind="form.AgreedAmount" /><small id="initial-amount-help" class="project-field-help">Ejemplo: 125000.00. Si registra un monto, seleccione una moneda; si no, deje ambos vacíos.</small></div><div class="field"><label for="initial-currency">Moneda (condicional)</label><select id="initial-currency" aria-describedby="initial-currency-help" @bind="form.Currency"><option value="">Sin monto</option><option value="CRC">CRC</option><option value="USD">USD</option></select><small id="initial-currency-help" class="project-field-help">Obligatoria si registra un monto. Seleccione CRC (colones) o USD (dólares).</small></div></div>
                     }
                 </fieldset>
-                @if (canEdit) { <div class="actions"><button class="primary-button" type="submit" disabled="@saving">@(saving ? "Guardando..." : isNew ? "Crear proyecto" : "Guardar cambios")</button></div> }
+                @if (canEdit) { <div class="actions">@if (!isNew) { <button type="button" class="secondary-button" disabled="@saving" @onclick="CancelGeneralEdit">Cancelar</button> }<button class="primary-button" type="submit" disabled="@saving">@(saving ? "Guardando..." : isNew ? "Crear proyecto" : "Guardar cambios")</button></div> }
             </form>
+            }
         </section>
         @if (project is not null && canEdit)
         {
             <section class="projects-card">
-                <div class="section-title"><h2>Monto acordado</h2><p>Las modificaciones se registran con historial; no forman parte de la edición general.</p></div>
-                <div class="projects-fields"><div class="field"><label>Importe</label><input type="number" min="0" step="0.01" @bind="newAmount" /></div><div class="field"><label>Moneda</label><select @bind="newCurrency"><option value="">Sin monto</option><option value="CRC">CRC</option><option value="USD">USD</option></select></div><div class="field span-all"><label>Motivo obligatorio</label><textarea rows="2" maxlength="500" @bind="amountReason"></textarea></div></div>
-                <button class="secondary-button" disabled="@saving" @onclick="ChangeAmountAsync">Actualizar monto con historial</button>
-            </section>
-            <section class="projects-card">
-                <div class="section-title"><h2>Ciclo de vida</h2><p>Las transiciones son manuales y quedan auditadas.</p></div>
-                @if (project.Status == ProjectStatus.Completed)
+                <div class="section-title projects-between"><div><h2>Monto acordado</h2><p>Los cambios requieren motivo y se conservan en el historial.</p></div>@if (!showAmountEditor && !IsClosed) { <button type="button" class="secondary-button" @onclick="() => showAmountEditor = true">Modificar monto</button> }</div>
+                <div class="project-inline-summary"><strong>@(project.AgreedAmount.HasValue ? $"{project.CurrencyCode} {project.AgreedAmount:N2}" : "Sin definir")</strong><span>Saldo pendiente: @(balance?.RemainingBalance is decimal pending ? $"{balance.CurrencyCode} {pending:N2}" : "Sin definir")</span></div>
+                @if (showAmountEditor && !IsClosed)
                 {
-                    <div class="projects-fields"><div class="field"><label>Reabrir en estado</label><select @bind="target"><option value="@ProjectStatus.Planning">Planificación</option><option value="@ProjectStatus.Active">Activo</option></select></div><div class="field span-all"><label>Motivo de reapertura *</label><textarea maxlength="500" @bind="reason"></textarea></div></div>
-                    <button class="primary-button" disabled="@saving" @onclick="ReopenAsync">Reabrir proyecto</button>
+                    <div class="projects-fields"><div class="field"><label for="agreed-amount">Nuevo importe</label><input id="agreed-amount" type="number" min="0" step="0.01" @bind="newAmount" /></div><div class="field"><label for="agreed-currency">Moneda</label><select id="agreed-currency" @bind="newCurrency"><option value="">Sin monto</option><option value="CRC">CRC</option><option value="USD">USD</option></select></div><div class="field span-all"><label for="amount-reason">Motivo del cambio (obligatorio)</label><textarea id="amount-reason" rows="2" maxlength="500" aria-describedby="amount-reason-help" @bind="amountReason"></textarea><small id="amount-reason-help" class="project-field-help">Explique por qué se modifica el monto acordado.</small></div></div>
+                    <div class="actions"><button type="button" class="secondary-button" @onclick="CancelAmountEdit">Cancelar</button><button type="button" class="primary-button" disabled="@(saving || string.IsNullOrWhiteSpace(amountReason))" @onclick="ChangeAmountAsync">Guardar monto</button></div>
+                }
+            </section>
+            <section class="projects-card" aria-labelledby="lifecycle-title">
+                <div class="section-title">
+                    <h2 id="lifecycle-title">Estado del proyecto</h2>
+                    <p>El estado indica en qué etapa está el trabajo. Las visitas, acuerdos y cambios diarios se registran en Actividad.</p>
+                </div>
+                <div class="lifecycle-summary">
+                    <div><span class="lifecycle-label">Estado actual</span><strong>@StatusLabel(project.Status)</strong></div>
+                    <p>Los cambios de estado quedan registrados automáticamente con la fecha, hora y usuario que los realizó.</p>
+                </div>
+                @if (!showLifecycleEditor)
+                {
+                    <div class="actions"><button type="button" class="secondary-button" @onclick="OpenLifecycleEditor">Gestionar estado</button></div>
                 }
                 else
                 {
-                    <div class="projects-fields"><div class="field"><label>Nuevo estado</label><select @bind="target">@foreach (var value in Enum.GetValues<ProjectStatus>().Where(x => x != ProjectStatus.Completed)) { <option value="@value">@StatusLabel(value)</option> }</select></div><div class="field span-all"><label>Motivo (obligatorio para cancelar o archivar)</label><textarea maxlength="500" @bind="reason"></textarea></div></div>
-                    <button class="secondary-button" disabled="@saving" @onclick="TransitionAsync">Cambiar estado</button>
-                    @if (project.Status is not (ProjectStatus.Cancelled or ProjectStatus.Archived))
-                    {
-                        <h3>Cierre formal</h3><div class="projects-fields"><div class="field"><label>Fecha real de cierre *</label><input type="date" @bind="closedOn" /></div><div class="field"><label>ID de evidencia documental (opcional)</label><input type="number" min="1" @bind="closingEvidenceId" /></div><div class="field span-all"><label>Observaciones</label><textarea maxlength="2000" @bind="closingNotes"></textarea></div></div>
-                        <button class="primary-button" disabled="@saving" @onclick="CloseAsync">Completar y cerrar</button>
-                    }
+                    <div class="lifecycle-editor">
+                        @if (project.Status == ProjectStatus.Completed)
+                        {
+                            <h3>Reabrir proyecto</h3>
+                            <p class="lifecycle-help">Use esta operación si el proyecto ya finalizado necesita continuar. Debe indicar el motivo.</p>
+                            <div class="projects-fields">
+                                <div class="field"><label for="reopen-target">Volver al estado (obligatorio)</label>
+                                    <select id="reopen-target" @bind="target"><option value="@ProjectStatus.Planning">Planificación</option><option value="@ProjectStatus.Active">Activo</option></select>
+                                    <small id="reopen-target-help" class="lifecycle-help">Por ejemplo: Activo, si se reanudaron los trabajos.</small></div>
+                                <div class="field span-all"><label for="reopen-reason">Motivo de reapertura (obligatorio)</label>
+                                    <textarea id="reopen-reason" maxlength="500" required aria-describedby="reopen-reason-help" @bind="reason"></textarea>
+                                    <small id="reopen-reason-help" class="lifecycle-help">Ejemplo: El cliente solicitó trabajos adicionales. Máximo 500 caracteres.</small></div>
+                            </div>
+                            <div class="actions"><button type="button" class="secondary-button" @onclick="CancelLifecycleEditor">Cancelar</button><button type="button" class="primary-button" disabled="@(saving || string.IsNullOrWhiteSpace(reason))" @onclick="ReopenAsync">Guardar reapertura</button></div>
+                        }
+                        else
+                        {
+                            <h3>Cambiar etapa</h3>
+                            <div class="projects-fields">
+                                <div class="field"><label for="lifecycle-target">Nuevo estado (obligatorio)</label>
+                                    <select id="lifecycle-target" @bind="target" aria-describedby="lifecycle-target-help">
+                                        @foreach (var state in Enum.GetValues<ProjectStatus>().Where(x => x != ProjectStatus.Completed && x != project.Status))
+                                        {
+                                            <option value="@state">@StatusLabel(state)</option>
+                                        }
+                                    </select>
+                                    <small id="lifecycle-target-help" class="lifecycle-help">Ejemplo: Pendiente de aprobación, cuando la propuesta está esperando autorización.</small></div>
+                                <div class="field"><label>Fecha del registro (automática)</label>
+                                    <p class="lifecycle-date" role="status">@DateTime.Today.ToString("dd/MM/yyyy")</p>
+                                    <small class="lifecycle-help">El sistema guarda la fecha y hora reales al confirmar el cambio. No es una fecha retroactiva editable.</small></div>
+                                @if (target is ProjectStatus.Cancelled or ProjectStatus.Archived)
+                                {
+                                    <div class="field span-all"><label for="lifecycle-reason">Motivo (obligatorio)</label>
+                                        <textarea id="lifecycle-reason" maxlength="500" required aria-describedby="lifecycle-reason-help" @bind="reason"></textarea>
+                                        <small id="lifecycle-reason-help" class="lifecycle-help">Explique por qué se cancela o archiva. Ejemplo: El cliente solicitó detener el proyecto. Máximo 500 caracteres.</small></div>
+                                }
+                            </div>
+                            <div class="actions"><button type="button" class="secondary-button" @onclick="CancelLifecycleEditor">Cancelar</button><button type="button" class="primary-button" disabled="@(saving || project.Status == target || ((target is ProjectStatus.Cancelled or ProjectStatus.Archived) && string.IsNullOrWhiteSpace(reason)))" @onclick="TransitionAsync">Guardar estado</button></div>
+                            @if (project.Status is not (ProjectStatus.Cancelled or ProjectStatus.Archived))
+                            {
+                                <div class="lifecycle-finalize">
+                                    @if (!showCloseEditor)
+                                    {
+                                        <h3>¿Terminó el proyecto?</h3>
+                                        <p class="lifecycle-help">Finalizar es distinto de cambiar de etapa. Dejará el proyecto completado y restringirá sus modificaciones.</p>
+                                        <button type="button" class="secondary-button" @onclick="() => showCloseEditor = true">Finalizar proyecto</button>
+                                    }
+                                    else
+                                    {
+                                        <h3>Finalizar proyecto</h3>
+                                        <div class="projects-fields">
+                                            <div class="field"><label for="closing-date">Fecha real de finalización (obligatoria)</label>
+                                                <input id="closing-date" type="date" required @bind="closedOn" aria-describedby="closing-date-help" />
+                                                <small id="closing-date-help" class="lifecycle-help">Día en que terminó realmente el trabajo; puede ser distinto de la fecha estimada.</small></div>
+                                            <div class="field span-all"><label for="closing-notes">Observaciones del cierre (opcional)</label>
+                                                <textarea id="closing-notes" maxlength="2000" @bind="closingNotes" aria-describedby="closing-notes-help"></textarea>
+                                                <small id="closing-notes-help" class="lifecycle-help">Ejemplo: Obra entregada al cliente y pendiente de revisión final. Máximo 2000 caracteres.</small></div>
+                                        </div>
+                                        <p class="lifecycle-help">No se exige documento de respaldo para finalizar. Las evidencias pueden conservarse en la pestaña Documentos.</p>
+                                        <div class="actions"><button type="button" class="secondary-button" @onclick="() => showCloseEditor = false">Cancelar cierre</button><button type="button" class="primary-button" disabled="@saving" @onclick="CloseAsync">Confirmar finalización</button></div>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
                 }
             </section>
             @if (isAdmin)
             {
-                <section class="projects-card"><div class="section-title"><h2>Reasignación administrativa</h2><p>Indique un ID de usuario existente. La API verificará su validez.</p></div><div class="field"><label>ID del nuevo responsable</label><input @bind="newResponsible" /></div><button class="secondary-button" disabled="@saving" @onclick="ReassignAsync">Reasignar responsable</button></section>
+                <section class="projects-card"><div class="section-title projects-between"><div><h2>Responsable del proyecto</h2><p>Gestión administrativa, disponible solo para Administrator.</p></div>@if (!showReassignmentEditor) { <button type="button" class="secondary-button" @onclick="() => showReassignmentEditor = true">Reasignar</button> }</div>
+                    <p class="project-inline-summary">@(isOwner ? "Proyecto a mi cargo" : "Responsable actualmente asignado")</p>
+                    @if (showReassignmentEditor) { <div class="field"><label for="responsible-id">Identificador del usuario de destino</label><input id="responsible-id" aria-describedby="responsible-help" @bind="newResponsible" /><small id="responsible-help" class="project-field-help">Esta operación administrativa utiliza el identificador existente. La selección por nombre requiere una consulta de usuarios autorizados que aún debe verificarse.</small></div><div class="actions"><button type="button" class="secondary-button" @onclick="() => showReassignmentEditor = false">Cancelar</button><button type="button" class="primary-button" disabled="@(saving || string.IsNullOrWhiteSpace(newResponsible))" @onclick="ReassignAsync">Confirmar reasignación</button></div> }
+                </section>
             }
         }
         }
@@ -127,6 +235,7 @@
     private bool isNew => CustomerId > 0;
     private bool loading = true, saving, isAdmin, isOwner;
     private string activeTab = "summary";
+    private bool showLifecycleEditor, showCloseEditor, showGeneralEditor, showAmountEditor, showReassignmentEditor;
     private bool IsClosed => project?.Status is ProjectStatus.Completed or ProjectStatus.Cancelled or ProjectStatus.Archived;
     private bool canEdit => isNew || isAdmin || isOwner;
     private string? error, success, userId;
@@ -134,11 +243,29 @@
     private CustomerResponse? customer;
     private ProjectBalanceResponse? balance;
     private ProjectForm form = new();
+    private readonly List<string> validationErrors = [];
     private IReadOnlyList<LocationOptionResponse> provinces = [], cantons = [], districts = [];
     private ProjectStatus target = ProjectStatus.Active;
     private string reason = "", closingNotes = "", amountReason = "", newResponsible = "";
     private DateOnly closedOn = DateOnly.FromDateTime(DateTime.Today);
-    private int? closingEvidenceId;
+    private void OpenLifecycleEditor()
+    {
+        if (project is null) return;
+        target = project.Status == ProjectStatus.Completed ? ProjectStatus.Planning :
+            Enum.GetValues<ProjectStatus>().First(x => x != ProjectStatus.Completed && x != project.Status);
+        reason = "";
+        showCloseEditor = false;
+        showLifecycleEditor = true;
+    }
+    private void CancelLifecycleEditor()
+    {
+        showLifecycleEditor = false;
+        showCloseEditor = false;
+        reason = "";
+    }
+    private void StartGeneralEdit() { if (project is null) return; form = ProjectForm.From(project); validationErrors.Clear(); showGeneralEditor = true; }
+    private void CancelGeneralEdit() { if (project is not null) form = ProjectForm.From(project); validationErrors.Clear(); showGeneralEditor = false; }
+    private void CancelAmountEdit() { if (project is not null) { newAmount = project.AgreedAmount; newCurrency = project.CurrencyCode; } amountReason = ""; showAmountEditor = false; }
     private decimal? newAmount;
     private string? newCurrency;
 
@@ -158,6 +285,7 @@
             isOwner = project is not null && project.ResponsibleUserId == userId;
             if (isNew && !customer.IsActive) { error = "No se pueden crear proyectos para clientes inactivos."; return; }
             form = project is null ? new() : ProjectForm.From(project);
+            showGeneralEditor = isNew; showAmountEditor = false; showReassignmentEditor = false;
             if (form.Province is not null) cantons = await Locations.GetCantonsAsync(form.Province);
             if (form.Province is not null && form.Canton is not null) districts = await Locations.GetDistrictsAsync(form.Province, form.Canton);
             if (project is not null) { balance = await Api.BalanceAsync(project.Id); newAmount = project.AgreedAmount; newCurrency = project.CurrencyCode; target = project.Status == ProjectStatus.Completed ? ProjectStatus.Planning : project.Status; }
@@ -181,9 +309,27 @@
         if (!canEdit || saving || customer is null || (isNew && !customer.IsActive)) return;
         await RunAsync(async () =>
         {
+            validationErrors.Clear();
+            if (string.IsNullOrWhiteSpace(form.Name)) validationErrors.Add("Nombre: indique el nombre del proyecto.");
+            if (form.Start.HasValue && form.End.HasValue && form.End < form.Start)
+                validationErrors.Add("Fechas: la fecha final no puede ser anterior a la inicial.");
+            if ((form.Province is not null || form.Canton is not null || form.District is not null) &&
+                (form.Province is null || form.Canton is null || form.District is null))
+                validationErrors.Add("Ubicación: indique provincia, cantón y distrito, o deje los tres vacíos.");
+            if (form.AgreedAmount.HasValue != !string.IsNullOrWhiteSpace(form.Currency))
+                validationErrors.Add("Monto inicial: registre monto y moneda juntos, o deje ambos sin definir.");
+            if (form.Contacts.Count > 30) validationErrors.Add("Contactos: máximo 30 contactos.");
+            for (var index = 0; index < form.Contacts.Count; index++)
+            {
+                var contact = form.Contacts[index];
+                if (string.IsNullOrWhiteSpace(contact.Name) || string.IsNullOrWhiteSpace(contact.Role))
+                    validationErrors.Add($"Contacto {index + 1}: complete el nombre y el rol, o quite la fila.");
+            }
+            if (validationErrors.Count > 0) return;
             var req = form.ToRequest(project?.Version);
             project = isNew ? await Api.CreateAsync(CustomerId, req) : await Api.UpdateAsync(project!.Id, req);
-            Navigation.NavigateTo($"/projects/{project.Id}");
+            if (isNew) Navigation.NavigateTo($"/projects/{project.Id}");
+            else { await RefreshAsync(); showGeneralEditor = false; validationErrors.Clear(); }
         });
     }
     private async Task RefreshAsync()
@@ -197,27 +343,27 @@
         if (project is null || string.IsNullOrWhiteSpace(amountReason)) throw new InvalidOperationException("Indique un motivo para cambiar el monto.");
         if ((newAmount is null) != string.IsNullOrWhiteSpace(newCurrency)) throw new InvalidOperationException("Monto y moneda deben indicarse juntos.");
         await Api.ChangeAgreedAmountAsync(project.Id, new(newAmount, newCurrency, project.Version, amountReason));
-        await RefreshAsync(); amountReason = "";
+        await RefreshAsync(); CancelAmountEdit();
     });
     private Task TransitionAsync() => RunAsync(async () =>
     {
         if (project is null) return;
-        await Api.TransitionAsync(project.Id, new(target, project.Version, reason)); await RefreshAsync(); reason = "";
+        await Api.TransitionAsync(project.Id, new(target, project.Version, reason)); await RefreshAsync(); reason = ""; CancelLifecycleEditor();
     });
     private Task CloseAsync() => RunAsync(async () =>
     {
         if (project is null) return;
-        await Api.CloseAsync(project.Id, new(closedOn, closingNotes, closingEvidenceId, project.Version)); await RefreshAsync();
+        await Api.CloseAsync(project.Id, new(closedOn, closingNotes, null, project.Version)); await RefreshAsync(); CancelLifecycleEditor();
     });
     private Task ReopenAsync() => RunAsync(async () =>
     {
         if (project is null || string.IsNullOrWhiteSpace(reason)) throw new InvalidOperationException("Indique el motivo de reapertura.");
-        await Api.ReopenAsync(project.Id, new(target, project.Version, reason)); await RefreshAsync(); reason = "";
+        await Api.ReopenAsync(project.Id, new(target, project.Version, reason)); await RefreshAsync(); reason = ""; CancelLifecycleEditor();
     });
     private Task ReassignAsync() => RunAsync(async () =>
     {
         if (!isAdmin || project is null || string.IsNullOrWhiteSpace(newResponsible)) throw new InvalidOperationException("Indique el usuario responsable.");
-        await Api.ReassignAsync(project.Id, new(newResponsible.Trim(), project.Version)); await RefreshAsync(); newResponsible = "";
+        await Api.ReassignAsync(project.Id, new(newResponsible.Trim(), project.Version)); await RefreshAsync(); newResponsible = ""; showReassignmentEditor = false;
     });
     private async Task RunAsync(Func<Task> work)
     {

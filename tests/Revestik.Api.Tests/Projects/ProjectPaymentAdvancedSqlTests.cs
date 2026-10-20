@@ -155,4 +155,74 @@ public sealed class ProjectPaymentAdvancedSqlTests(SqlServerIntegrationTestFixtu
         Assert.False(await db.Set<ProjectPaymentDocumentLink>().AnyAsync(x => x.ProjectPaymentId == payment.Id));
         Assert.True(await db.Set<ProjectDocument>().AnyAsync(x => x.Id == document.Id));
     }
+    [Theory]
+    [InlineData(ProjectStatus.Completed)]
+    [InlineData(ProjectStatus.Cancelled)]
+    [InlineData(ProjectStatus.Archived)]
+    public async Task ClosedProject_RejectsAllFinancialAndEvidenceWrites_EvenForAdministrator(ProjectStatus status)
+    {
+        var projectId = await SeedProjectAsync();
+        int paymentId;
+        int documentId;
+        await using (var db = fixture.CreateDbContext())
+        {
+            var service = new ProjectPaymentService(db);
+            var payment = await service.CreateAsync(projectId, Payment(25), Owner, false, default);
+            paymentId = payment.Id;
+            var document = new ProjectDocument
+            {
+                ProjectId = projectId, Category = "Receipt", DisplayName = "Comprobante de prueba",
+                CreatedByUserId = Owner
+            };
+            db.Set<ProjectDocument>().Add(document);
+            await db.SaveChangesAsync();
+            documentId = document.Id;
+            Assert.True(await service.LinkDocumentAsync(projectId, paymentId, documentId, Owner, false, default));
+            var project = await db.Set<Project>().SingleAsync(x => x.Id == projectId);
+            project.Status = status;
+            await db.SaveChangesAsync();
+        }
+
+        // Use separate contexts because a rejected mutation rolls back its transaction.
+        async Task RejectAsync(Func<ProjectPaymentService, Task> operation)
+        {
+            await using var context = fixture.CreateDbContext();
+            var service = new ProjectPaymentService(context);
+            var exception = await Assert.ThrowsAsync<ProjectOperationException>(() => operation(service));
+            Assert.Equal(ProjectFailureReason.Invalid, exception.Reason);
+        }
+
+        foreach (var admin in new[] { false, true })
+        {
+            await RejectAsync(async service => { await service.CreateAsync(projectId, Payment(10), Owner, admin, default); });
+            await RejectAsync(async service => { await service.CorrectAsync(projectId, paymentId,
+                Payment(20, 1, "Corrección posterior al cierre"), Owner, admin, default); });
+            await RejectAsync(async service => { await service.VoidAsync(projectId, paymentId,
+                new ProjectPaymentVoidRequest(1, "Anulación posterior al cierre"), Owner, admin, default); });
+            await RejectAsync(async service => { await service.ChangeAgreedAmountAsync(projectId,
+                new ProjectAgreedAmountChangeRequest(120, "CRC", 1, "Cambio posterior al cierre"),
+                Owner, admin, default); });
+            await RejectAsync(async service => { await service.LinkDocumentAsync(projectId, paymentId,
+                documentId, Owner, admin, default); });
+            await RejectAsync(async service => { await service.UnlinkDocumentAsync(projectId, paymentId,
+                documentId, Owner, admin, default); });
+        }
+
+        await using var verify = fixture.CreateDbContext();
+        var after = await verify.Set<ProjectPayment>().AsNoTracking()
+            .SingleAsync(x => x.Id == paymentId && x.ProjectId == projectId);
+        Assert.Equal(25m, after.Amount);
+        Assert.Equal("Active", after.Status);
+        Assert.Equal(1, after.Version);
+        Assert.Equal(1, await verify.Set<ProjectPayment>().CountAsync(x => x.ProjectId == projectId));
+        Assert.Equal(0, await verify.Set<ProjectPaymentRevision>().CountAsync(x => x.ProjectPaymentId == paymentId));
+        Assert.Equal(0, await verify.Set<ProjectAgreedAmountRevision>().CountAsync(x => x.ProjectId == projectId));
+        Assert.True(await verify.Set<ProjectPaymentDocumentLink>().AnyAsync(x =>
+            x.ProjectId == projectId && x.ProjectPaymentId == paymentId && x.ProjectDocumentId == documentId));
+        Assert.True(await verify.Set<ProjectDocument>().AnyAsync(x => x.Id == documentId && x.DeletedAtUtc == null));
+        var summary = await new ProjectPaymentService(verify).SummaryAsync(projectId, default);
+        Assert.Equal(25m, summary!.PaidAmount);
+        Assert.Equal(75m, summary.RemainingBalance);
+    }
+
 }

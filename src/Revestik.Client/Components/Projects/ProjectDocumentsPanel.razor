@@ -2,49 +2,119 @@
 @using Revestik.Shared.Projects
 @using Revestik.Client.Services.Projects
 @inject ProjectWorkspaceApiService Api
-<section class="workspace-stack">
-    <header class="workspace-heading"><div><h2>Documentos y fotografías</h2><p>Expediente privado con versiones y evidencias.</p></div><button class="secondary-button" disabled="@busy" @onclick="LoadAsync">Actualizar</button></header>
-    @if(busy){<p role="status">Procesando documentos...</p>}
-    @if(error is not null){<p role="alert" class="status-message error-message">@error</p>}
-    @if(notice is not null){<p role="status" class="status-message">@notice</p>}
-    @if(CanWrite)
-    {
-        <div class="workspace-card"><h3>Adjuntar archivo</h3><div class="workspace-fields"><label>Nombre visible<input maxlength="150" @bind="displayName" /></label><label>Categoría<select @bind="category"><option>Fotografías</option><option>Contratos</option><option>Planos</option><option>Comprobantes</option><option>Entregas</option><option>Otros</option></select></label><label class="wide">Archivo (máximo 20 MB)<InputFile OnChange="FileChanged" /></label></div><button class="primary-button" disabled="@(busy || uploadFile is null)" @onclick="() => UploadAsync()">Subir al expediente</button></div>
-    }
-    <div class="workspace-switch"><button class="@(view == "list" ? "active" : "")" @onclick='() => view = "list"'>Todos</button><button class="@(view == "gallery" ? "active" : "")" @onclick="OpenGalleryAsync">Galería</button></div>
-    @if(view == "gallery" && photoIds.Count > 1)
-    {
-        <div class="workspace-card"><h3>Comparar fotografías: antes / después</h3>
-            <div class="workspace-fields"><label>Antes<select @bind="beforeId">@foreach(var id in photoIds){<option value="@id">@documents.First(x => x.Id == id).DisplayName</option>}</select></label><label>Después<select @bind="afterId">@foreach(var id in photoIds){<option value="@id">@documents.First(x => x.Id == id).DisplayName</option>}</select></label></div>
-            <div class="workspace-compare"><div><span>Antes</span><img src="@Api.FileUrl(ProjectId,beforeId,preview:true)" alt="Fotografía antes" /></div><div><span>Después</span><img src="@Api.FileUrl(ProjectId,afterId,preview:true)" alt="Fotografía después" /></div></div>
+
+<section class="documents-workspace" aria-label="Documentos y fotografías del proyecto">
+    <header class="documents-heading">
+        <div><h2>Documentos y fotografías</h2><p>Archivos privados, fotografías y evidencias del expediente.</p></div>
+        <div class="documents-actions">
+            <button type="button" class="secondary-button" disabled="@busy" @onclick="LoadAsync">Actualizar</button>
+            @if (CanWrite) { <button type="button" class="primary-button" disabled="@busy" @onclick="ToggleUpload">@(showUpload ? "Cerrar formulario" : "+ Adjuntar archivo")</button> }
         </div>
+    </header>
+    @if (busy) { <p role="status" class="documents-feedback">Procesando documentos...</p> }
+    @if (error is not null) { <p role="alert" class="documents-feedback documents-error">@error</p> }
+    @if (notice is not null) { <p role="status" class="documents-feedback documents-notice">@notice</p> }
+
+    @if (CanWrite && showUpload)
+    {
+        <section class="documents-card documents-editor" aria-label="Adjuntar nuevo archivo">
+            <h3>Adjuntar archivo</h3>
+            <p>Introduce un nombre reconocible y selecciona el documento (máximo 20 MB).</p>
+            <div class="documents-fields">
+                <label>Nombre visible <span aria-hidden="true">*</span><input maxlength="150" required @bind="displayName" /></label>
+                <label>Categoría<select @bind="category"><option>Fotografías</option><option>Contratos</option><option>Planos</option><option>Comprobantes</option><option>Entregas</option><option>Otros</option></select></label>
+                <label class="documents-wide">Archivo (máximo 20 MB)<InputFile OnChange="FileChanged" /></label>
+            </div>
+            <div class="documents-actions"><button type="button" class="primary-button" disabled="@(busy || uploadFile is null || string.IsNullOrWhiteSpace(displayName))" @onclick="() => UploadAsync()">Subir al expediente</button><button type="button" class="secondary-button" @onclick="ToggleUpload">Cancelar</button></div>
+        </section>
     }
-    @if(documents.Count == 0 && !busy){<p class="workspace-empty">No hay documentos en este proyecto.</p>}
-    <div class="@(view == "gallery" ? "workspace-gallery" : "workspace-stack")">
-        @foreach(var doc in documents)
+
+    <div class="documents-toolbar">
+        <div class="documents-switch" aria-label="Vista de archivos">
+            <button type="button" class="@(view == "list" ? "selected" : "")" aria-pressed="@(view == "list")" @onclick='() => view = "list"'>Todos los documentos</button>
+            <button type="button" class="@(view == "gallery" ? "selected" : "")" aria-pressed="@(view == "gallery")" @onclick="OpenGalleryAsync">Galería</button>
+        </div>
+        <span class="documents-count">@documents.Count archivo(s)</span>
+    </div>
+
+    @if (view == "gallery" && photoIds.Count > 1)
+    {
+        <section class="documents-card documents-compare-panel">
+            <h3>Comparar fotografías: antes y después</h3>
+            <div class="documents-fields">
+                <label>Antes<select @bind="beforeId">@foreach (var id in photoIds) { <option value="@id">@documents.First(x => x.Id == id).DisplayName</option> }</select></label>
+                <label>Después<select @bind="afterId">@foreach (var id in photoIds) { <option value="@id">@documents.First(x => x.Id == id).DisplayName</option> }</select></label>
+            </div>
+            <div class="documents-compare"><div><span>Antes</span><img src="@Api.FileUrl(ProjectId,beforeId,preview:true)" alt="Fotografía antes" loading="lazy" /></div><div><span>Después</span><img src="@Api.FileUrl(ProjectId,afterId,preview:true)" alt="Fotografía después" loading="lazy" /></div></div>
+        </section>
+    }
+    @if (documents.Count == 0 && !busy)
+    {
+        <div class="documents-empty"><span aria-hidden="true">▧</span><h3>Aún no hay documentos</h3><p>Agrega planos, fotografías, contratos o comprobantes para construir el expediente.</p></div>
+    }
+    <div class="@(view == "gallery" ? "documents-gallery" : "documents-list")">
+        @foreach (var doc in documents)
         {
-            <article class="workspace-card" @key="doc.Id">
-                <h3>@doc.DisplayName</h3><small>@doc.Category · @doc.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</small>
-                @if(view == "gallery" && imageTypes.ContainsKey(doc.Id) && imageTypes[doc.Id])
+            <article class="documents-card documents-item" @key="doc.Id">
+                @if (view == "gallery" && imageTypes.TryGetValue(doc.Id, out var isImage) && isImage)
                 {
-                    <a href="@Api.FileUrl(ProjectId,doc.Id,preview:true)" target="_blank" rel="noopener noreferrer"><img class="workspace-thumbnail" src="@Api.FileUrl(ProjectId,doc.Id,preview:true)" alt="Vista previa de @doc.DisplayName" loading="lazy" /></a>
+                    <a class="documents-image-link" href="@Api.FileUrl(ProjectId,doc.Id,preview:true)" target="_blank" rel="noopener noreferrer" aria-label="Abrir fotografía @doc.DisplayName"><img class="documents-thumbnail" src="@Api.FileUrl(ProjectId,doc.Id,preview:true)" alt="Fotografía: @doc.DisplayName" loading="lazy" /></a>
                 }
-                <div class="workspace-actions"><button class="secondary-button" @onclick="() => SelectAsync(doc)">Versiones y detalles</button><a class="secondary-button" target="_blank" rel="noopener noreferrer" href="@Api.FileUrl(ProjectId,doc.Id,preview:true)">Abrir / descargar</a>@if(CanWrite){<button class="secondary-button" @onclick="() => pendingDelete = doc">Eliminar</button>}</div>
-                @if(pendingDelete?.Id == doc.Id && CanWrite){<p>¿Confirma la eliminación lógica de este documento?</p><div class="workspace-actions"><button class="secondary-button" @onclick="() => DeleteAsync(doc)">Confirmar</button><button class="secondary-button" @onclick="() => pendingDelete = null">Cancelar</button></div>}
-                @if(details?.Document.Id == doc.Id)
-                {
-                    <div class="workspace-detail"><h4>Historial de versiones</h4>@foreach(var version in details.Versions){<p>v@version.Number — @version.OriginalFileName · @(version.SizeBytes / 1024.0).ToString("N0") KB <a target="_blank" rel="noopener noreferrer" href="@Api.FileUrl(ProjectId,doc.Id,version.Id)">Descargar</a></p>}
-                        @if(CanWrite){<h4>Agregar versión</h4><InputFile OnChange="FileChanged" /><button class="secondary-button" disabled="@(busy || uploadFile is null)" @onclick="() => UploadAsync(doc)">Subir nueva versión</button><h4>Asociar a actividad</h4><p>Escriba el ID de un evento de este proyecto.</p><label>ID de evento<input type="number" min="1" @bind="eventId" /></label><div class="workspace-actions"><button class="secondary-button" @onclick="() => LinkAsync(doc,true)">Vincular</button><button class="secondary-button" @onclick="() => LinkAsync(doc,false)">Desvincular</button></div><small>La lista de asociaciones existentes aún no está expuesta por la API.</small>}
+                <div class="documents-item-body">
+                    <h3>@doc.DisplayName</h3>
+                    <p class="documents-meta">@doc.Category · @doc.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</p>
+                    <div class="documents-actions">
+                        <button type="button" class="secondary-button" disabled="@busy" aria-expanded="@(details?.Document.Id == doc.Id)" @onclick="() => SelectAsync(doc)">@(details?.Document.Id == doc.Id ? "Ocultar detalles" : "Ver detalles")</button>
+                        <a class="secondary-button" target="_blank" rel="noopener noreferrer" href="@Api.FileUrl(ProjectId,doc.Id,preview:true)">Abrir / descargar</a>
+                        @if (CanWrite) { <button type="button" class="documents-danger" disabled="@busy" @onclick="() => pendingDelete = doc">Eliminar</button> }
                     </div>
-                }
+                    @if (pendingDelete?.Id == doc.Id && CanWrite)
+                    {
+                        <div class="documents-confirm" role="group" aria-label="Confirmar eliminación"><p>¿Confirmas retirar este documento del listado? Su historial sigue sujeto a las reglas del expediente.</p><div class="documents-actions"><button type="button" class="documents-danger" disabled="@busy" @onclick="() => DeleteAsync(doc)">Confirmar eliminación</button><button type="button" class="secondary-button" @onclick="() => pendingDelete = null">Cancelar</button></div></div>
+                    }
+                </div>
             </article>
         }
     </div>
+
+    @if (details is not null)
+    {
+        var selectedDoc = details.Document;
+        <section class="documents-card documents-detail" aria-label="Detalles del documento">
+            <header class="documents-heading"><div><h3>Detalles: @selectedDoc.DisplayName</h3><p>Versiones y relaciones con el historial del proyecto</p></div><button type="button" class="secondary-button" @onclick="CloseDetails">Cerrar detalles</button></header>
+            <div class="documents-detail-section">
+                <div class="documents-section-heading"><h4>Historial de versiones</h4>@if (CanWrite) { <button type="button" class="secondary-button" @onclick="ToggleVersion">@(showVersion ? "Cancelar nueva versión" : "Agregar versión")</button> }</div>
+                @if (details.Versions.Count == 0) { <p class="documents-muted">No hay versiones disponibles.</p> }
+                @foreach (var version in details.Versions)
+                {
+                    <div class="documents-version" @key="version.Id"><div><strong>Versión @(version.Number)</strong><p>@version.OriginalFileName · @((version.SizeBytes / 1024.0).ToString("N0")) KB</p></div><a class="secondary-button" target="_blank" rel="noopener noreferrer" href="@Api.FileUrl(ProjectId,selectedDoc.Id,version.Id)">Descargar</a></div>
+                }
+                @if (CanWrite && showVersion)
+                {
+                    <div class="documents-editor"><label class="documents-file-label">Seleccionar nueva versión (máximo 20 MB)<InputFile OnChange="FileChanged" /></label><div class="documents-actions"><button type="button" class="primary-button" disabled="@(busy || uploadFile is null)" @onclick="() => UploadAsync(selectedDoc)">Subir nueva versión</button><button type="button" class="secondary-button" @onclick="ToggleVersion">Cancelar</button></div></div>
+                }
+            </div>
+            <div class="documents-detail-section">
+                <div class="documents-section-heading"><h4>Actividades vinculadas</h4>@if (CanWrite && events.Any(x => !x.IsVoided)) { <button type="button" class="secondary-button" @onclick="ToggleLink">@(showLink ? "Cancelar vínculo" : "Vincular actividad")</button> }</div>
+                @if (documentLinks.Count(x => x.DocumentId == selectedDoc.Id) == 0) { <p class="documents-muted">Este documento todavía no tiene actividades vinculadas.</p> }
+                @foreach (var link in documentLinks.Where(x => x.DocumentId == selectedDoc.Id))
+                {
+                    <div class="documents-version" @key="link.EventId"><span>@(events.FirstOrDefault(x => x.Id == link.EventId)?.Title ?? $"Actividad #{link.EventId}")</span>@if (CanWrite) { <button type="button" class="secondary-button" disabled="@busy" @onclick="() => UnlinkAsync(selectedDoc.Id,link.EventId)">Desvincular</button> }</div>
+                }
+                @if (CanWrite && !events.Any(x => !x.IsVoided)) { <p class="documents-muted">Primero registra una actividad para poder asociar este documento como evidencia.</p> }
+                @if (CanWrite && showLink)
+                {
+                    <div class="documents-editor"><label>Actividad<select @bind="eventId"><option value="">Seleccione una actividad</option>@foreach (var evt in events.Where(x => !x.IsVoided)) { <option value="@evt.Id">@evt.OccurredOn.ToString("dd/MM/yyyy") · @evt.Title</option> }</select></label><div class="documents-actions"><button type="button" class="primary-button" disabled="@(busy || eventId is null)" @onclick="() => LinkAsync(selectedDoc,true)">Vincular evidencia</button><button type="button" class="secondary-button" @onclick="ToggleLink">Cancelar</button></div></div>
+                }
+            </div>
+        </section>
+    }
 </section>
 @code {
     [Parameter, EditorRequired] public int ProjectId { get; set; }
     [Parameter] public bool CanWrite { get; set; }
     private bool busy;
+    private bool showUpload, showVersion, showLink;
     private string? error, notice;
     private string displayName = "", category = "Fotografías", view = "list";
     private int? eventId;
@@ -52,17 +122,29 @@
     private List<int> photoIds = [];
     private IBrowserFile? uploadFile;
     private IReadOnlyList<ProjectDocumentListItem> documents = [];
+    private IReadOnlyList<ProjectDocumentLinkResponse> documentLinks = [];
+    private IReadOnlyList<ProjectEventResponse> events = [];
     private readonly Dictionary<int,bool> imageTypes = [];
     private ProjectDocumentDetails? details;
     private ProjectDocumentListItem? pendingDelete;
     protected override Task OnParametersSetAsync() => LoadAsync();
+    private void ToggleUpload() { showUpload = !showUpload; if (!showUpload) { uploadFile = null; displayName = ""; } }
+    private void ToggleVersion() { showVersion = !showVersion; uploadFile = null; }
+    private void ToggleLink() { showLink = !showLink; eventId = null; }
+    private void CloseDetails() { details = null; showVersion = showLink = false; uploadFile = null; eventId = null; }
     private void FileChanged(InputFileChangeEventArgs e) => uploadFile = e.File;
     private async Task Execute(Func<Task> action)
     {
         if(busy)return;busy=true;error=notice=null;
         try { await action(); } catch(Exception ex){error=ex.Message;} finally{busy=false;}
     }
-    private Task LoadAsync() => Execute(async () => { documents=await Api.DocumentsAsync(ProjectId);details=null; });
+    private Task LoadAsync() => Execute(async () =>
+    {
+        documents=await Api.DocumentsAsync(ProjectId);
+        documentLinks=await Api.DocumentLinksAsync(ProjectId);
+        events=await Api.EventsAsync(ProjectId);
+        CloseDetails();
+    });
     private Task OpenGalleryAsync() => Execute(async () =>
     {
         view = "gallery";
@@ -78,7 +160,8 @@
     });
     private Task SelectAsync(ProjectDocumentListItem doc) => Execute(async () =>
     {
-        if(details?.Document.Id == doc.Id){details=null;return;}
+        if(details?.Document.Id == doc.Id){CloseDetails();return;}
+        CloseDetails();
         details=await Api.DocumentAsync(ProjectId,doc.Id);
         imageTypes[doc.Id]=details?.Versions.FirstOrDefault(x => x.IsCurrent)?.ContentType.StartsWith("image/",StringComparison.OrdinalIgnoreCase)==true;
     });
@@ -89,10 +172,17 @@
         if(existing is null && string.IsNullOrWhiteSpace(displayName))throw new InvalidOperationException("Indique el nombre del documento.");
         await using var stream=uploadFile.OpenReadStream(20L*1024*1024);
         await Api.UploadAsync(ProjectId,displayName,category,stream,uploadFile.Name,uploadFile.ContentType,existing?.Id,existing?.Version);
-        uploadFile=null; displayName="";documents=await Api.DocumentsAsync(ProjectId);details=null;notice="Documento guardado.";
+        uploadFile=null; displayName=""; showUpload = showVersion = false; documents=await Api.DocumentsAsync(ProjectId); CloseDetails(); notice="Documento guardado.";
     });
     private Task DeleteAsync(ProjectDocumentListItem doc) => Execute(async () =>
-    { if(!CanWrite)return;await Api.DeleteDocumentAsync(ProjectId,doc.Id,doc.Version);pendingDelete=null;documents=await Api.DocumentsAsync(ProjectId);details=null;notice="Documento retirado del listado."; });
+    { if(!CanWrite)return;await Api.DeleteDocumentAsync(ProjectId,doc.Id,doc.Version);pendingDelete=null;documents=await Api.DocumentsAsync(ProjectId);CloseDetails();notice="Documento retirado del listado."; });
     private Task LinkAsync(ProjectDocumentListItem doc,bool link) => Execute(async () =>
-    { if(!CanWrite || eventId is null or <=0)throw new InvalidOperationException("Indique un ID de evento válido.");if(link)await Api.LinkEventAsync(ProjectId,doc.Id,eventId.Value);else await Api.UnlinkEventAsync(ProjectId,doc.Id,eventId.Value);notice=link?"Evidencia vinculada.":"Evidencia desvinculada."; });
+    { if(!CanWrite || eventId is null or <=0)throw new InvalidOperationException("Seleccione una actividad válida.");if(link)await Api.LinkEventAsync(ProjectId,doc.Id,eventId.Value);else await Api.UnlinkEventAsync(ProjectId,doc.Id,eventId.Value);documentLinks=await Api.DocumentLinksAsync(ProjectId);showLink=false;eventId=null;notice=link?"Evidencia vinculada.":"Evidencia desvinculada."; });
+    private Task UnlinkAsync(int documentId, int linkedEventId) => Execute(async () =>
+    {
+        if (!CanWrite) return;
+        await Api.UnlinkEventAsync(ProjectId, documentId, linkedEventId);
+        documentLinks = await Api.DocumentLinksAsync(ProjectId);
+        notice = "Evidencia desvinculada.";
+    });
 }

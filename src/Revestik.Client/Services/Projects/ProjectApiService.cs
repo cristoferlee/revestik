@@ -1,11 +1,19 @@
 using System.Net;
 using System.Net.Http.Json;
 using Revestik.Shared.Projects;
+using Revestik.Shared.Common;
 
 namespace Revestik.Client.Services.Projects;
 
 public sealed class ProjectApiService(HttpClient http)
 {
+    public async Task<PaginatedResponse<ProjectCustomerDirectoryItem>> CustomersWithProjectsAsync(
+        int page, int pageSize = 20, string? search = null, CancellationToken ct = default) =>
+        await http.GetFromJsonAsync<PaginatedResponse<ProjectCustomerDirectoryItem>>(
+            $"api/projects/customers-with-projects?page={page}&pageSize={pageSize}" +
+            (string.IsNullOrWhiteSpace(search) ? "" : $"&search={Uri.EscapeDataString(search.Trim())}"), ct)
+        ?? new PaginatedResponse<ProjectCustomerDirectoryItem>([], page, pageSize, 0);
+
     public async Task<IReadOnlyList<ProjectSummaryResponse>> ListAsync(int customerId, CancellationToken ct = default) =>
         await http.GetFromJsonAsync<List<ProjectSummaryResponse>>($"api/projects?customerId={customerId}", ct) ?? [];
 
@@ -25,6 +33,12 @@ public sealed class ProjectApiService(HttpClient http)
 
     public Task<ProjectResponse> ReassignAsync(int id, ProjectReassignRequest request, CancellationToken ct = default) =>
         SendAsync<ProjectResponse>(HttpMethod.Put, $"api/projects/{id}/responsible", request, ct);
+
+    public async Task DeleteAsync(int id, long version, CancellationToken ct = default)
+    {
+        using var response = await http.DeleteAsync($"api/projects/{id}?version={version}", ct);
+        await EnsureAsync(response, ct);
+    }
 
     public Task<ProjectLifecycleStatusResponse> TransitionAsync(int id, ProjectTransitionRequest request, CancellationToken ct = default) =>
         SendAsync<ProjectLifecycleStatusResponse>(HttpMethod.Put, $"api/projects/{id}/lifecycle/status", request, ct);

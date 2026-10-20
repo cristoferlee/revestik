@@ -55,6 +55,11 @@ public static class ProjectPaymentEndpoints
         group.MapPut("/agreed-amount", async (int projectId, ProjectAgreedAmountChangeRequest body, ClaimsPrincipal user, ProjectPaymentService service, CancellationToken ct) =>
             await Execute(user, async (actor, admin) => Results.Ok(await service.ChangeAgreedAmountAsync(projectId, body, actor, admin, ct))))
             .AddEndpointFilter<AntiforgeryValidationFilter>();
+        group.MapGet("/payments/{paymentId:int}/documents", async (int projectId, int paymentId, ProjectPaymentService service, CancellationToken ct) =>
+        {
+            var result = await service.DocumentsAsync(projectId, paymentId, ct);
+            return result is null ? Results.NotFound() : Results.Ok(result);
+        });
         group.MapPost("/payments/{paymentId:int}/documents/{documentId:int}", async (int projectId, int paymentId, int documentId, ClaimsPrincipal user, ProjectPaymentService service, CancellationToken ct) =>
             await Execute(user, async (actor, admin) =>
                 await service.LinkDocumentAsync(projectId, paymentId, documentId, actor, admin, ct) ? Results.NoContent() : Results.NotFound()))

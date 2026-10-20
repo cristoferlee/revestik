@@ -29,6 +29,7 @@ public sealed class ProjectPaymentHttpTests : IAsyncLifetime
     [InlineData("GET", "/api/projects/1/payments")]
     [InlineData("GET", "/api/projects/1/payments/summary")]
     [InlineData("GET", "/api/projects/1/payments/1/history")]
+    [InlineData("GET", "/api/projects/1/payments/1/documents")]
     [InlineData("POST", "/api/projects/1/payments")]
     [InlineData("PUT", "/api/projects/1/agreed-amount")]
     [InlineData("POST", "/api/projects/1/payments/1/void")]
@@ -41,6 +42,7 @@ public sealed class ProjectPaymentHttpTests : IAsyncLifetime
 
     [Theory]
     [InlineData("GET", "/api/projects/1/payments")]
+    [InlineData("GET", "/api/projects/1/payments/1/documents")]
     [InlineData("POST", "/api/projects/1/payments")]
     [InlineData("PUT", "/api/projects/1/agreed-amount")]
     public async Task WarehouseRole_IsForbidden(string method, string path)
