@@ -185,6 +185,100 @@ public sealed class SaleService(
             totalCount);
     }
 
+    public async Task<SalePeriodSummaryResponse> GetPeriodSummaryAsync(
+        int year, int month, CancellationToken cancellationToken)
+    {
+        if (year is < 2 or > 9998 || month is < 1 or > 12)
+            throw new ArgumentOutOfRangeException(nameof(month));
+
+        var localStart = new DateTime(year, month, 1);
+        var previousLocalStart = localStart.AddMonths(-1);
+        var nextLocalStart = localStart.AddMonths(1);
+        var zone = TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica");
+        var previousStartUtc = TimeZoneInfo.ConvertTimeToUtc(previousLocalStart, zone);
+        var startUtc = TimeZoneInfo.ConvertTimeToUtc(localStart, zone);
+        var endUtc = TimeZoneInfo.ConvertTimeToUtc(nextLocalStart, zone);
+
+        // Query only two months of issued sales; reuse SaleCalculator for all totals.
+        var sales = await dbContext.Sales.AsNoTracking()
+            .Where(sale => sale.Status == SaleStatus.Issued &&
+                sale.IssuedAtUtc >= previousStartUtc && sale.IssuedAtUtc < endUtc)
+            .Select(sale => new
+            {
+                sale.Currency,
+                sale.IssuedAtUtc,
+                sale.GeneralDiscountType,
+                sale.GeneralDiscountValue,
+                Lines = sale.Lines.Select(line => new SaleLineRequest
+                {
+                    ProductId = line.ProductId,
+                    CabysCode = line.CabysCode ?? string.Empty,
+                    Description = line.Description,
+                    Unit = line.Unit,
+                    Quantity = line.Quantity,
+                    UnitPrice = line.UnitPrice,
+                    DiscountType = line.DiscountType,
+                    DiscountValue = line.DiscountValue,
+                    TaxRate = line.TaxRate
+                }).ToList(),
+                Charges = sale.Charges.Select(charge => new SaleChargeRequest
+                {
+                    Type = charge.Type,
+                    Description = charge.Description,
+                    Amount = charge.Amount
+                }).ToList()
+            })
+            .ToListAsync(cancellationToken);
+
+        // Payment dates, not sale issue dates, define the collections period.
+        // Only active payments associated with currently issued sales count.
+        var payments = await dbContext.SalePayments.AsNoTracking()
+            .Where(payment => payment.Status == SalePaymentStatus.Active &&
+                payment.Sale.Status == SaleStatus.Issued &&
+                payment.PaidAtUtc >= startUtc && payment.PaidAtUtc < endUtc)
+            .GroupBy(payment => payment.Sale.Currency)
+            .Select(group => new { Currency = group.Key, Total = group.Sum(p => p.Amount) })
+            .ToListAsync(cancellationToken);
+
+        var calculated = sales.Select(sale => new
+        {
+            sale.Currency,
+            IsCurrent = sale.IssuedAtUtc >= startUtc,
+            Amount = SaleCalculator.Calculate(
+                sale.Lines, sale.Charges,
+                sale.GeneralDiscountType, sale.GeneralDiscountValue).Total
+        }).ToList();
+
+        var currencies = new[] { Currency.CRC, Currency.USD }
+            .Select(currency =>
+            {
+                var current = calculated.Where(x => x.Currency == currency && x.IsCurrent).ToList();
+                var previous = calculated.Where(x => x.Currency == currency && !x.IsCurrent).ToList();
+                var currentTotal = Round(current.Sum(x => x.Amount));
+                var previousTotal = Round(previous.Sum(x => x.Amount));
+                // An undefined growth baseline is not presented as an invented percentage.
+                decimal? change = previousTotal == 0m ? null :
+                    decimal.Round((currentTotal - previousTotal) * 100m / previousTotal, 2);
+                return new SalePeriodCurrencySummaryResponse
+                {
+                    Currency = currency,
+                    SalesTotal = currentTotal,
+                    SaleCount = current.Count,
+                    PreviousMonthSalesTotal = previousTotal,
+                    PreviousMonthSaleCount = previous.Count,
+                    CollectedTotal = Round(payments.FirstOrDefault(x => x.Currency == currency)?.Total ?? 0m),
+                    SalesChangePercent = change
+                };
+            }).ToList();
+
+        return new SalePeriodSummaryResponse
+        {
+            Year = year,
+            Month = month,
+            Currencies = currencies
+        };
+    }
+
     public async Task<SaleSummaryResponse> GetSummaryAsync(
         CancellationToken cancellationToken)
     {

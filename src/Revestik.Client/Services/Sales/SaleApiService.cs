@@ -45,6 +45,17 @@ public sealed class SaleApiService(
             cancellationToken);
     }
 
+    public async Task<SalePeriodSummaryResponse> GetPeriodSummaryAsync(
+        int year, int month, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.GetAsync(
+            $"api/sales/period-summary?year={year}&month={month}",
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await ReadRequiredAsync<SalePeriodSummaryResponse>(
+            response, "The API returned an empty period summary.", cancellationToken);
+    }
+
     public async Task<SaleResponse?> GetByIdAsync(
         int id,
         CancellationToken cancellationToken = default)

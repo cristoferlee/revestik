@@ -89,6 +89,32 @@ public sealed class ExpenseReportingServiceTests
             x.Currency == "USD" && x.Total == 25m);
     }
 
+    [Fact]
+    public async Task ConsolidatedSummary_MatchedVoucherIsNotAddedToAcceptedExpenses()
+    {
+        await using var db = CreateDb();
+        db.BankVouchers.AddRange(
+            CreateVoucher(BankVoucherStatus.Accepted, 125m, "CRC"),
+            CreateVoucher(BankVoucherStatus.Matched, 125m, "CRC"),
+            CreateVoucher(BankVoucherStatus.NeedsReview, 200m, "CRC"));
+        await db.SaveChangesAsync();
+
+        var result = await new ExpenseReportingService(db)
+            .GetConsolidatedSummaryAsync(
+                new ExpenseSummaryRequest
+                {
+                    DateFrom = new DateOnly(2026, 10, 1),
+                    DateTo = new DateOnly(2026, 10, 31)
+                }, CancellationToken.None);
+
+        var currency = Assert.Single(result.Totals);
+        Assert.Equal(125m, currency.AcceptedBankVouchers);
+        Assert.Equal(125m, currency.Total);
+        Assert.Equal(1, result.AcceptedVoucherCount);
+        Assert.Equal(1, result.MatchedVoucherCount);
+        Assert.Equal(1, result.NeedsReviewVoucherCount);
+    }
+
     private static RevestikDbContext CreateDb() =>
         new(new DbContextOptionsBuilder<RevestikDbContext>()
             .UseInMemoryDatabase(

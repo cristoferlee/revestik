@@ -17,7 +17,8 @@ public sealed class PurchaseQueryService(
         ArgumentNullException.ThrowIfNull(request);
 
         var today =
-            DateOnly.FromDateTime(DateTime.UtcNow);
+            DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica")));
 
         var query = BuildProjection();
 
@@ -118,12 +119,48 @@ public sealed class PurchaseQueryService(
             totalCount);
     }
 
+    public async Task<PurchasePeriodSummaryResponse> GetPeriodSummaryAsync(
+        int year, int month, CancellationToken cancellationToken)
+    {
+        if (year is < 1 or > 9999 || month is < 1 or > 12)
+            throw new ArgumentOutOfRangeException(nameof(month), "El período no es válido.");
+
+        var from = new DateOnly(year, month, 1);
+        var through = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
+        // Use the existing purchase total projection, not a paginated result.
+        // Payments are intentionally not used as purchase volume.
+        var items = await BuildProjection()
+            .Where(item => item.PurchaseDate >= from && item.PurchaseDate <= through)
+            .Select(item => new { item.Currency, item.PaymentType, item.Total })
+            .ToListAsync(cancellationToken);
+
+        var currencies = items.GroupBy(item => item.Currency)
+            .OrderBy(group => group.Key)
+            .Select(group =>
+            {
+                var cash = group.Where(x => x.PaymentType == PurchasePaymentType.Cash).ToList();
+                var credit = group.Where(x => x.PaymentType == PurchasePaymentType.Credit).ToList();
+                return new PurchasePeriodCurrencySummaryResponse(
+                    group.Key,
+                    group.Count(),
+                    Round(group.Sum(x => x.Total)),
+                    cash.Count,
+                    Round(cash.Sum(x => x.Total)),
+                    credit.Count,
+                    Round(credit.Sum(x => x.Total)));
+            })
+            .ToList();
+
+        return new PurchasePeriodSummaryResponse(year, month, currencies);
+    }
+
     public async Task<PurchaseApSummaryResponse>
         GetApSummaryAsync(
             CancellationToken cancellationToken)
     {
         var today =
-            DateOnly.FromDateTime(DateTime.UtcNow);
+            DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica")));
 
         var rawItems = await BuildProjection()
             .Where(item =>
@@ -173,7 +210,8 @@ public sealed class PurchaseQueryService(
         }
 
         var today =
-            DateOnly.FromDateTime(DateTime.UtcNow);
+            DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica")));
 
         var lastDate =
             today.AddDays(request.LongWindowDays);
@@ -257,7 +295,8 @@ public sealed class PurchaseQueryService(
         }
 
         var today =
-            DateOnly.FromDateTime(DateTime.UtcNow);
+            DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica")));
 
         var supplierPurchases = BuildProjection()
             .Where(item =>

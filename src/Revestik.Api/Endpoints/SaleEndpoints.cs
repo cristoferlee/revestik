@@ -56,6 +56,25 @@ public static class SaleEndpoints
             .WithName("GetSalesSummary");
 
         group.MapGet(
+            "/period-summary",
+            async (
+                int year,
+                int month,
+                ISaleService saleService,
+                CancellationToken cancellationToken) =>
+            {
+                if (year is < 2 or > 9998 || month is < 1 or > 12)
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["period"] = ["El año o mes solicitado no es válido."]
+                    });
+
+                return Results.Ok(await saleService.GetPeriodSummaryAsync(
+                    year, month, cancellationToken));
+            })
+            .WithName("GetSalesPeriodSummary");
+
+        group.MapGet(
             "/{id:int}",
             async (
                 int id,

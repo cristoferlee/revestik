@@ -2,9 +2,20 @@
 @using System.Net
 @using System.Net.Http.Json
 @using Microsoft.AspNetCore.Components.Authorization
+@using Revestik.Client.Services.Sales
+@using Revestik.Client.Services.Purchases
 @using Revestik.Shared.Projects
+@using Revestik.Shared.Sales
+@using Revestik.Shared.Purchases
+@using Revestik.Shared.Expenses
+@using Revestik.Shared.Inventory
+@using Revestik.Shared.ElectronicDocuments
+@using Revestik.Client.Services.Inventory
 @inject HttpClient Http
 @inject AuthenticationStateProvider AuthenticationState
+@inject ISaleApiService SaleApiService
+@inject IPurchaseApiService PurchaseApiService
+@inject IInventoryApiService InventoryApiService
 
 <PageTitle>Dashboard | Revestik</PageTitle>
 
@@ -16,39 +27,598 @@
         </div>
     </header>
 
+    <p class="dashboard-period-note"><strong>Resultados del mes</strong> · Estimaciones basadas en ventas y documentos registrados; no equivalen a utilidad fiscal definitiva.</p>
+
+    <section class="dashboard-period" aria-labelledby="dashboard-profit-title">
+        <div class="dashboard-section-heading">
+            <div>
+                <h2 id="dashboard-profit-title">Resultado comercial estimado del mes</h2>
+                <p>Ventas del mes sin IVA, compras directas documentadas y costo de materiales utilizados desde inventario.</p>
+            </div>
+            <button type="button" class="dashboard-refresh" @onclick="LoadResultsAsync" disabled="@(isLoadingGrossMargin || isLoadingOperatingResult)">Actualizar resultados</button>
+        </div>
+        @if (isLoadingGrossMargin)
+        {
+            <p role="status">Calculando resultado comercial...</p>
+        }
+        else if (grossMarginError is not null)
+        {
+            <p role="alert">@grossMarginError</p>
+        }
+        else if (grossMarginSummary is not null)
+        {
+            <div class="dashboard-kpi-grid">
+                @foreach (var item in grossMarginSummary.Currencies)
+                {
+                    <article class="kpi-card">
+                        <h3>Resultado comercial · @item.Currency</h3>
+                        <div class="dashboard-currency-line"><span>Ventas del mes sin IVA (líneas)</span><strong>@FormatAmount(item.AllSalesLineRevenue)</strong></div>
+                        <div class="dashboard-currency-line"><span>Compras directas documentadas sin IVA</span><strong>@FormatAmount(item.DirectPurchaseBase)</strong></div>
+                        <div class="dashboard-currency-line"><span>Costo conocido de salidas de inventario</span><strong>@FormatAmount(item.VerifiedFifoCost)</strong></div>
+                        <div class="dashboard-currency-line"><span>Resultado comercial estimado</span><strong>@FormatAmount(item.EstimatedCommercialResult)</strong></div>
+                        <p>Ganancia bruta de inventario con costo conocido: @FormatAmount(item.VerifiedGrossMargin).</p>
+                        @if (item.ManualLineRevenue != 0)
+                        {
+                            <p role="status">Ventas de líneas manuales (material directo o servicio, sin distinción automática): @FormatAmount(item.ManualLineRevenue).</p>
+                        }
+                        @if (item.UnverifiedProductGroups > 0)
+                        {
+                            <p role="status">Costos de inventario por verificar: @item.UnverifiedProductGroups grupo(s); ingresos asociados: @FormatAmount(item.UnverifiedProductRevenue).</p>
+                        }
+                        @if (item.DocumentsRequiringReview > 0)
+                        {
+                            <p role="status">Documentos pendientes de clasificación, con notas vinculadas o importes por revisar: @item.DocumentsRequiringReview.</p>
+                        }
+                        @if (item.AdditionalCharges != 0)
+                        {
+                            <p>Cargos adicionales fuera del resultado: @FormatAmount(item.AdditionalCharges).</p>
+                        }
+                        @if (item.RequiresReview)
+                        {
+                            <p role="status">Resultado parcial: revise cobertura de costos, documentos y períodos antes de interpretarlo como ganancia.</p>
+                        }
+                    </article>
+                }
+            </div>
+            <p class="dashboard-period-note">Estimación por fecha de venta y fecha del XML; una compra directa puede corresponder a otra fecha. Las notas fiscales vinculadas se señalan para revisión, sin descontarlas automáticamente. No incluye gastos operativos ni impuestos sobre utilidades. El valor actual del inventario aparece aparte.</p>
+        }
+    </section>
+
+    <section class="dashboard-period" aria-labelledby="operating-result-title">
+        <div class="dashboard-section-heading">
+            <div>
+                <h2 id="operating-result-title">Resultado operativo estimado del mes</h2>
+                <p>Resultado comercial menos gastos documentados elegibles. Los pagos y gastos no conciliados se muestran aparte.</p>
+            </div>
+        </div>
+        @if (isLoadingOperatingResult)
+        {
+            <p role="status">Calculando resultado operativo...</p>
+        }
+        else if (operatingResultError is not null)
+        {
+            <p role="alert">@operatingResultError</p>
+        }
+        else if (operatingResult is not null)
+        {
+            <div class="dashboard-kpi-grid">
+                @foreach (var item in operatingResult.Currencies)
+                {
+                    <article class="kpi-card">
+                        <h3>Resultado operativo · @item.Currency</h3>
+                        <div class="dashboard-currency-line"><span>Resultado comercial estimado</span><strong>@FormatAmount(item.CommercialResult)</strong></div>
+                        <div class="dashboard-currency-line"><span>Gastos documentados elegibles (base)</span><strong>@FormatAmount(item.EligibleDocumentExpenses)</strong></div>
+                        <div class="dashboard-currency-line"><span>Resultado operativo estimado</span><strong>@FormatAmount(item.EstimatedOperatingResult)</strong></div>
+                        <p>Fuera del cálculo: gastos manuales sin conciliación @FormatAmount(item.ExcludedManualExpenses); comprobantes bancarios aceptados @FormatAmount(item.ExcludedAcceptedVouchers).</p>
+                        @if (item.DocumentsRequiringReview > 0)
+                        {
+                            <p role="status">Documentos de gastos pendientes o con ajustes para revisar: @item.DocumentsRequiringReview.</p>
+                        }
+                        @if (item.RequiresReview)
+                        {
+                            <p role="status">Estimación parcial: no es utilidad neta ni una deducción fiscal definitiva. Verifique clasificación, impuestos, ajustes y duplicaciones.</p>
+                        }
+                    </article>
+                }
+            </div>
+            <p class="dashboard-period-note">Gastos documentales según base de XML; el IVA no recuperable y los ajustes pendientes podrían modificar el costo. No se descuentan pagos bancarios por su aceptación ni gastos manuales sin conciliación.</p>
+        }
+    </section>
+
+    <p class="dashboard-period-note"><strong>Ventas y cobros</strong> · Acumulados vigentes y actividad del mes se presentan por separado.</p>
+
     <section aria-labelledby="business-summary-title">
         <h2 id="business-summary-title">Resumen general</h2>
 
         <div class="kpi-grid">
             <article class="kpi-card">
-                <h3>Ventas del mes</h3>
-                <strong>—</strong>
-                <span>Sin información registrada</span>
+                <h3>Ventas vigentes</h3>
+                <div class="dashboard-kpi-data">
+                    <AuthorizeView Roles="Administrator,Accountant,Sales">
+                        <Authorized>
+                            @if (isLoadingSales)
+                            {
+                                <p role="status">Cargando ventas...</p>
+                            }
+                            else if (salesError is not null)
+                            {
+                                <p role="alert">@salesError</p>
+                            }
+                            else
+                            {
+                                @foreach (var currency in SalesCurrencies)
+                                {
+                                    <div class="dashboard-currency-line"><span>@currency.Currency</span><strong>@FormatAmount(currency.SoldTotal)</strong></div>
+                                }
+                            }
+                        </Authorized>
+                        <NotAuthorized><p>Sin acceso a ventas.</p></NotAuthorized>
+                    </AuthorizeView>
+                </div>
+                <span>Acumulado de ventas emitidas vigentes</span>
             </article>
 
             <article class="kpi-card">
-                <h3>Gastos del mes</h3>
-                <strong>—</strong>
-                <span>Sin información registrada</span>
+                <h3>Total cobrado</h3>
+                <div class="dashboard-kpi-data">
+                    <AuthorizeView Roles="Administrator,Accountant,Sales">
+                        <Authorized>
+                            @if (isLoadingSales)
+                            {
+                                <p role="status">Cargando cobros...</p>
+                            }
+                            else if (salesError is not null)
+                            {
+                                <p role="alert">No disponible.</p>
+                            }
+                            else
+                            {
+                                @foreach (var currency in SalesCurrencies)
+                                {
+                                    <div class="dashboard-currency-line"><span>@currency.Currency</span><strong>@FormatAmount(currency.CollectedTotal)</strong></div>
+                                }
+                            }
+                        </Authorized>
+                        <NotAuthorized><p>Sin acceso a cobros.</p></NotAuthorized>
+                    </AuthorizeView>
+                </div>
+                <span>Cobros activos de ventas vigentes</span>
             </article>
 
             <article class="kpi-card">
                 <h3>Cuentas por cobrar</h3>
-                <strong>—</strong>
-                <span>Sin información registrada</span>
+                <div class="dashboard-kpi-data">
+                    <AuthorizeView Roles="Administrator,Accountant,Sales">
+                        <Authorized>
+                            @if (isLoadingSales)
+                            {
+                                <p role="status">Cargando saldos...</p>
+                            }
+                            else if (salesError is not null)
+                            {
+                                <p role="alert">No disponible.</p>
+                            }
+                            else
+                            {
+                                @foreach (var currency in SalesCurrencies)
+                                {
+                                    <div class="dashboard-currency-line"><span>@currency.Currency</span><strong>@FormatAmount(currency.OutstandingTotal)</strong></div>
+                                }
+                            }
+                        </Authorized>
+                        <NotAuthorized><p>Sin acceso a saldos.</p></NotAuthorized>
+                    </AuthorizeView>
+                </div>
+                <span>Saldo pendiente de ventas vigentes</span>
             </article>
 
             <article class="kpi-card">
-                <h3>Inventario bajo</h3>
-                <strong>—</strong>
-                <span>Sin información registrada</span>
+                <h3>Ventas emitidas</h3>
+                <div class="dashboard-kpi-data">
+                    <AuthorizeView Roles="Administrator,Accountant,Sales">
+                        <Authorized>
+                            @if (isLoadingSales)
+                            {
+                                <p role="status">Cargando cantidad...</p>
+                            }
+                            else if (salesError is not null)
+                            {
+                                <p role="alert">No disponible.</p>
+                            }
+                            else
+                            {
+                                @foreach (var currency in SalesCurrencies)
+                                {
+                                    <div class="dashboard-currency-line"><span>@currency.Currency</span><strong>@currency.SaleCount</strong></div>
+                                }
+                            }
+                        </Authorized>
+                        <NotAuthorized><p>Sin acceso a ventas.</p></NotAuthorized>
+                    </AuthorizeView>
+                </div>
+                <span>Cantidad vigente por moneda</span>
             </article>
         </div>
+        <AuthorizeView Roles="Administrator,Accountant,Sales">
+            <Authorized>
+                <div class="dashboard-summary-actions">
+                    @if (salesError is not null)
+                    {
+                        <button type="button" class="dashboard-refresh" @onclick="LoadSalesAsync">Reintentar ventas</button>
+                    }
+                    <a href="/sales/history">Ver historial de ventas</a>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+    </section>
+
+    <AuthorizeView Roles="Administrator,Accountant,Sales">
+        <Authorized>
+            <section class="dashboard-period" aria-labelledby="monthly-sales-title">
+                <div class="dashboard-period-heading">
+                    <div>
+                        <h2 id="monthly-sales-title">Actividad comercial del mes</h2>
+                        <p>@periodTitle · horarios de Costa Rica</p>
+                    </div>
+                    @if (periodError is not null)
+                    {
+                        <button type="button" class="dashboard-refresh" @onclick="LoadPeriodAsync">Reintentar</button>
+                    }
+                </div>
+                @if (isLoadingPeriod)
+                {
+                    <p role="status">Cargando actividad comercial...</p>
+                }
+                else if (periodError is not null)
+                {
+                    <p role="alert">@periodError</p>
+                }
+                else
+                {
+                    <div class="dashboard-period-grid">
+                        @foreach (var item in PeriodCurrencies)
+                        {
+                            <article class="dashboard-period-card">
+                                <h3>@item.Currency</h3>
+                                <dl>
+                                    <div><dt>Ventas del mes</dt><dd>@FormatAmount(item.SalesTotal)</dd></div>
+                                    <div><dt>Ventas emitidas</dt><dd>@item.SaleCount</dd></div>
+                                    <div><dt>Cobros del mes</dt><dd>@FormatAmount(item.CollectedTotal)</dd></div>
+                                    <div><dt>Mes anterior</dt><dd>@FormatAmount(item.PreviousMonthSalesTotal)</dd></div>
+                                    <div><dt>Variación mensual</dt><dd>@(item.SalesChangePercent.HasValue ? $"{item.SalesChangePercent.Value:N2} %" : "Sin base comparable")</dd></div>
+                                </dl>
+                            </article>
+                        }
+                    </div>
+                }
+                <p class="dashboard-period-note">Las ventas se agrupan por fecha de emisión y los cobros por fecha de pago. Solo se consideran ventas vigentes y abonos activos.</p>
+            </section>
+        </Authorized>
+    </AuthorizeView>
+
+    <p class="dashboard-period-note"><strong>Compras y gastos</strong> · Fuentes operativas y documentales; sus totales no deben sumarse sin conciliación.</p>
+
+    <section class="dashboard-period" aria-labelledby="monthly-purchases-title">
+        <div class="dashboard-period-heading">
+            <div>
+                <h2 id="monthly-purchases-title">Compras registradas internamente</h2>
+                <p>@purchasePeriodTitle · registros operativos de Purchases, según fecha de compra</p>
+            </div>
+            @if (purchasesPeriodError is not null)
+            {
+                <button type="button" class="dashboard-refresh" @onclick="LoadPurchasePeriodAsync">Reintentar</button>
+            }
+        </div>
+        @if (isLoadingPurchasePeriod)
+        {
+            <p role="status">Cargando compras del mes...</p>
+        }
+        else if (purchasesPeriodError is not null)
+        {
+            <p role="alert">@purchasesPeriodError</p>
+        }
+        else
+        {
+            <div class="dashboard-period-grid">
+                @foreach (var item in PurchasePeriodCurrencies)
+                {
+                    <article class="dashboard-period-card">
+                        <h3>@item.Currency</h3>
+                        <dl>
+                            <div><dt>Total registrado</dt><dd>@FormatAmount(item.PurchasedTotal)</dd></div>
+                            <div><dt>Compras registradas</dt><dd>@item.PurchaseCount</dd></div>
+                            <div><dt>Contado (@item.CashPurchaseCount)</dt><dd>@FormatAmount(item.CashPurchasedTotal)</dd></div>
+                            <div><dt>Crédito (@item.CreditPurchaseCount)</dt><dd>@FormatAmount(item.CreditPurchasedTotal)</dd></div>
+                        </dl>
+                    </article>
+                }
+            </div>
+        }
+        <p class="dashboard-period-note">Fuente: Compras y cuentas por pagar (Purchases). Estos registros sirven de control operativo y pueden representar compras respaldadas por documentos recibidos. No sumar este total al de compras documentadas ni considerarlo gasto adicional.</p>
+        <div class="dashboard-summary-actions"><a href="/purchases/history">Ver historial de compras</a></div>
+    </section>
+
+    <section class="dashboard-expenses" aria-labelledby="monthly-expenses-title">
+        <div class="dashboard-period-heading">
+            <div>
+                <h2 id="monthly-expenses-title">Gastos del mes</h2>
+                <p>Gastos clasificados y comprobantes registrados durante el mes actual en Costa Rica</p>
+            </div>
+            @if (expensesError is not null)
+            {
+                <button type="button" class="dashboard-refresh" @onclick="LoadExpensesAsync">Reintentar</button>
+            }
+        </div>
+        @if (isLoadingExpenses)
+        {
+            <p role="status">Cargando gastos del mes...</p>
+        }
+        else if (expensesError is not null)
+        {
+            <p role="alert">@expensesError</p>
+        }
+        else
+        {
+            <div class="dashboard-period-grid">
+                @foreach (var item in ExpenseCurrencies)
+                {
+                    <article class="dashboard-period-card">
+                        <h3>@item.Currency</h3>
+                        <dl>
+                            <div><dt>Gastos manuales</dt><dd>@FormatAmount(item.ManualExpenses)</dd></div>
+                            <div><dt>Documentos recibidos</dt><dd>@FormatAmount(item.ElectronicDocumentExpenses)</dd></div>
+                            <div><dt>Comprobantes aceptados</dt><dd>@FormatAmount(item.AcceptedBankVouchers)</dd></div>
+                        </dl>
+                    </article>
+                }
+            </div>
+            <div class="dashboard-expense-review" role="status">
+                <strong>@(expenseSummary?.NeedsReviewVoucherCount ?? 0)</strong>
+                <span>comprobante(s) bancario(s) pendiente(s) de revisión este mes</span>
+            </div>
+            <p class="dashboard-period-note">Los comprobantes vinculados a documentos recibidos no se suman nuevamente como comprobantes aceptados. Las cifras se muestran por fuente y no representan un gasto neto contable definitivo.</p>
+        }
+    </section>
+
+    <section class="dashboard-expenses" aria-labelledby="dashboard-documents-title">
+        <div class="dashboard-period-heading">
+            <div>
+                <h2 id="dashboard-documents-title">Documentos recibidos</h2>
+                <p>Compras clasificadas del mes y pendientes de atención documental. Fuente: Purchases → Documentos recibidos.</p>
+            </div>
+        </div>
+        <div class="dashboard-period-heading">
+            <div>
+                <h3>Compras documentadas del mes</h3>
+                <p>@documentedPurchaseTitle · Análisis contable → Compras</p>
+            </div>
+            @if (documentedPurchasesError is not null)
+            {
+                <button type="button" class="dashboard-refresh" @onclick="LoadDocumentedPurchasesAsync">Reintentar compras documentadas</button>
+            }
+        </div>
+        @if (isLoadingDocumentedPurchases)
+        {
+            <p role="status">Cargando compras documentadas...</p>
+        }
+        else if (documentedPurchasesError is not null)
+        {
+            <p role="alert">@documentedPurchasesError</p>
+        }
+        else if (documentedPurchasesSummary is not null)
+        {
+            <div class="dashboard-period-grid">
+                @foreach (var currency in new[] { "CRC", "USD" })
+                {
+                    var purchasesTotal = documentedPurchasesSummary.Currencies
+                        .FirstOrDefault(x => string.Equals(x.CurrencyCode, currency, StringComparison.OrdinalIgnoreCase))?.PurchasesTotal ?? 0m;
+                    <article class="dashboard-period-card">
+                        <h3>@currency</h3>
+                        <dl><div><dt>Compras clasificadas</dt><dd>@FormatAmount(purchasesTotal)</dd></div></dl>
+                    </article>
+                }
+            </div>
+        }
+        <p class="dashboard-period-note">Compras clasificadas desde documentos electrónicos recibidos y procesados, según el resumen contable existente. No se suman a Purchases ni representan un neto fiscal ajustado por todas las NC/ND. Los documentos sin clasificar no se incluyen.</p>
+        <div class="dashboard-period-heading">
+            <div>
+                <h3>Pendientes documentales</h3>
+                <p>Conteos acumulados de clasificación y conciliación fiscal.</p>
+            </div>
+            @if (documentsError is not null)
+            {
+                <button type="button" class="dashboard-refresh" @onclick="LoadDocumentsAsync">Reintentar pendientes</button>
+            }
+        </div>
+        @if (isLoadingDocuments)
+        {
+            <p role="status">Cargando pendientes documentales...</p>
+        }
+        else if (documentsError is not null)
+        {
+            <p role="alert">@documentsError</p>
+        }
+        else if (documentsSummary is not null)
+        {
+            <div class="dashboard-period-grid">
+                <article class="dashboard-period-card">
+                    <h3>Clasificación</h3>
+                    <dl>
+                        <div><dt>Documentos por clasificar</dt><dd>@documentsSummary.PendingClassificationCount</dd></div>
+                    </dl>
+                </article>
+                <article class="dashboard-period-card">
+                    <h3>Conciliación fiscal</h3>
+                    <dl>
+                        <div><dt>En revisión</dt><dd>@documentsSummary.PendingFiscalReconciliationCount</dd></div>
+                        <div><dt>Facturas candidatas de vinculación</dt><dd>@documentsSummary.PendingInvoiceLinkCount</dd></div>
+                        <div><dt>Notas pendientes de revisión</dt><dd>@documentsSummary.PendingNoteReviewCount</dd></div>
+                    </dl>
+                </article>
+            </div>
+            <p class="dashboard-period-note">Clasificación y conciliación son procesos distintos: sus conteos no deben sumarse entre sí ni a los importes de compras.</p>
+        }
+        <div class="dashboard-summary-actions"><a href="/purchases/received-documents">Ver documentos recibidos</a></div>
+    </section>
+
+    <p class="dashboard-period-note"><strong>Inventario actual</strong> · Saldo de existencias, independiente del resultado mensual.</p>
+
+    <section class="dashboard-inventory" aria-labelledby="dashboard-inventory-title">
+        <div class="dashboard-period-heading">
+            <div>
+                <h2 id="dashboard-inventory-title">Inventario</h2>
+                <p>Existencias y valor conocido según las capas de costo del inventario</p>
+            </div>
+            @if (inventoryError is not null)
+            {
+                <button type="button" class="dashboard-refresh" @onclick="LoadInventoryAsync">Reintentar</button>
+            }
+        </div>
+        @if (isLoadingInventory)
+        {
+            <p role="status">Cargando resumen de inventario...</p>
+        }
+        else if (inventoryError is not null)
+        {
+            <p role="alert">@inventoryError</p>
+        }
+        else if (inventorySummary is not null)
+        {
+            <div class="dashboard-inventory-grid">
+                <article class="dashboard-period-card">
+                    <h3>Valor conocido del inventario</h3>
+                    <strong class="dashboard-inventory-value">₡@FormatAmount(inventorySummary.TotalInventoryCostValue)</strong>
+                    <p class="dashboard-period-note">Valor al costo registrado, no al precio de venta.</p>
+                </article>
+                <article class="dashboard-period-card">
+                    <h3>Existencias</h3>
+                    <dl>
+                        <div><dt>Productos del catálogo</dt><dd>@inventorySummary.TotalProducts</dd></div>
+                        <div><dt>Stock suficiente</dt><dd>@inventorySummary.InStockCount</dd></div>
+                        <div><dt>Stock bajo</dt><dd>@inventorySummary.LowStockCount</dd></div>
+                        <div><dt>Agotados</dt><dd>@inventorySummary.OutOfStockCount</dd></div>
+                    </dl>
+                </article>
+            </div>
+            @if (inventorySummary.ProductsWithUnknownCost > 0)
+            {
+                <p class="dashboard-inventory-warning" role="status">
+                    @inventorySummary.ProductsWithUnknownCost producto(s) con costo desconocido
+                    (cantidad en capas sin costo: @FormatAmount(inventorySummary.UnknownCostQuantity)).
+                    El valor conocido no incluye esas existencias.
+                </p>
+            }
+            <div class="dashboard-summary-actions"><a href="/inventory">Ver inventario completo</a></div>
+        }
+    </section>
+
+    <p class="dashboard-period-note"><strong>Seguimiento operativo</strong> · Obligaciones, proyectos y alertas.</p>
+
+    <section class="dashboard-payables" aria-labelledby="payables-title">
+        <div class="dashboard-period-heading">
+            <div>
+                <h2 id="payables-title">Cuentas por pagar</h2>
+                <p>Obligaciones pendientes y vencidas con proveedores</p>
+            </div>
+            @if (payablesError is not null)
+            {
+                <button type="button" class="dashboard-refresh" @onclick="LoadPayablesAsync">Reintentar</button>
+            }
+        </div>
+        @if (isLoadingPayables)
+        {
+            <p role="status">Cargando cuentas por pagar...</p>
+        }
+        else if (payablesError is not null)
+        {
+            <p role="alert">@payablesError</p>
+        }
+        else
+        {
+            <div class="dashboard-period-grid">
+                @foreach (var item in PayableCurrencies)
+                {
+                    <article class="dashboard-period-card">
+                        <h3>@item.Currency</h3>
+                        <dl>
+                            <div><dt>Saldo pendiente</dt><dd>@FormatAmount(item.OutstandingTotal)</dd></div>
+                            <div><dt>Compras pendientes</dt><dd>@item.PurchaseCount</dd></div>
+                            <div><dt>Monto vencido</dt><dd>@FormatAmount(item.OverdueTotal)</dd></div>
+                            <div><dt>Compras vencidas</dt><dd>@item.OverdueCount</dd></div>
+                        </dl>
+                    </article>
+                }
+            </div>
+        }
+        <div class="dashboard-summary-actions"><a href="/purchases/history">Ver compras y cuentas por pagar</a></div>
+    </section>
+
+    <section class="dashboard-projects" aria-labelledby="dashboard-projects-title">
+        <div class="dashboard-period-heading">
+            <div>
+                <h2 id="dashboard-projects-title">Proyectos</h2>
+                <p>Estado general y seguimiento financiero operativo, separado de las ventas</p>
+            </div>
+            @if (projectsError is not null)
+            {
+                <button type="button" class="dashboard-refresh" @onclick="LoadProjectsAsync">Reintentar</button>
+            }
+        </div>
+        @if (isLoadingProjects)
+        {
+            <p role="status">Cargando resumen de proyectos...</p>
+        }
+        else if (projectsError is not null)
+        {
+            <p role="alert">@projectsError</p>
+        }
+        else if (projectsSummary is not null)
+        {
+            <div class="dashboard-projects-grid">
+                <article class="dashboard-period-card">
+                    <h3>Proyectos abiertos</h3>
+                    <strong class="dashboard-project-count">@projectsSummary.OpenCount</strong>
+                    <p class="dashboard-period-note">Planificación, aprobación, ejecución y pausa</p>
+                </article>
+                <article class="dashboard-period-card">
+                    <h3>Finalizados</h3>
+                    <strong class="dashboard-project-count">@projectsSummary.CompletedCount</strong>
+                    <p class="dashboard-period-note">@projectsSummary.CancelledCount cancelados · @projectsSummary.ArchivedCount archivados</p>
+                </article>
+            </div>
+            <div class="dashboard-projects-finances">
+                <h3>Resumen financiero de proyectos abiertos</h3>
+                <p class="dashboard-period-note">Abonos operativos: no se suman a los cobros de ventas.</p>
+                <div class="dashboard-projects-grid">
+                    @foreach (var currency in projectsSummary.OpenCurrencies)
+                    {
+                        <article class="dashboard-period-card">
+                            <h4>@currency.CurrencyCode</h4>
+                            <dl>
+                                <div><dt>Monto acordado</dt><dd>@FormatAmount(currency.AgreedAmount)</dd></div>
+                                <div><dt>Abonos activos</dt><dd>@FormatAmount(currency.PaidAmount)</dd></div>
+                                <div><dt>Saldo pendiente</dt><dd>@FormatAmount(currency.RemainingAmount)</dd></div>
+                            </dl>
+                        </article>
+                    }
+                </div>
+                @if (projectsSummary.OpenProjectsWithoutAmount > 0)
+                {
+                    <p class="dashboard-inventory-warning" role="status">@projectsSummary.OpenProjectsWithoutAmount proyecto(s) abierto(s) sin monto acordado; no se incluyen en los importes.</p>
+                }
+                @if (projectsSummary.CompletedProjectsWithBalance > 0)
+                {
+                    <p class="dashboard-inventory-warning" role="status">@projectsSummary.CompletedProjectsWithBalance proyecto(s) finalizado(s) mantienen saldo operativo pendiente. No se incluyen en los saldos de proyectos abiertos.</p>
+                }
+            </div>
+            <div class="dashboard-summary-actions"><a href="/projects">Ver proyectos</a></div>
+        }
     </section>
 
     <section class="dashboard-panels">
         <article class="dashboard-panel">
             <h2>Alertas</h2>
+            <h3 class="dashboard-alert-subheading">Proyectos</h3>
             <AuthorizeView Roles="Administrator,Accountant,Sales">
                 <Authorized>
                     @if (isLoadingAlerts)
@@ -90,6 +660,41 @@
                     <p>Las alertas de proyectos están disponibles para usuarios autorizados.</p>
                 </NotAuthorized>
             </AuthorizeView>
+            <h3 class="dashboard-alert-subheading">Proveedores</h3>
+            @if (isLoadingPurchaseAlerts)
+            {
+                <p role="status">Cargando alertas de proveedores...</p>
+            }
+            else if (purchaseAlertsError is not null)
+            {
+                <p role="alert">@purchaseAlertsError</p>
+                <button type="button" class="dashboard-refresh" @onclick="LoadPurchaseAlertsAsync">Reintentar</button>
+            }
+            else if (purchaseAlerts.Count == 0)
+            {
+                <p>No hay pagos a proveedores vencidos o próximos en los siguientes 7 días.</p>
+            }
+            else
+            {
+                <div class="project-alert-counts" aria-label="Resumen de alertas de proveedores">
+                    <span><strong>@purchaseAlerts.Count(x => x.DaysUntilDue < 0)</strong> vencidas</span>
+                    <span><strong>@purchaseAlerts.Count(x => x.DaysUntilDue == 0)</strong> vencen hoy</span>
+                    <span><strong>@purchaseAlerts.Count(x => x.DaysUntilDue > 0)</strong> próximas</span>
+                </div>
+                <ul class="project-alert-list">
+                    @foreach (var alert in purchaseAlerts)
+                    {
+                        <li class="project-alert-item @(alert.DaysUntilDue < 0 ? "is-overdue" : "")">
+                            <span class="project-alert-kind">Proveedor · @alert.Currency</span>
+                            <strong>@alert.SupplierName</strong>
+                            <span>Saldo: @FormatAmount(alert.OutstandingAmount) · Compra #@alert.PurchaseId</span>
+                            <time datetime="@alert.DueDate.ToString("yyyy-MM-dd")">
+                                @(alert.DaysUntilDue < 0 ? "Vencida" : alert.DaysUntilDue == 0 ? "Vence hoy" : "Vence") · @alert.DueDate.ToString("dd/MM/yyyy")
+                            </time>
+                        </li>
+                    }
+                </ul>
+            }
         </article>
 
         <article class="dashboard-panel">
@@ -100,18 +705,426 @@
 </section>
 @code {
     private IReadOnlyList<ProjectDashboardAlertResponse> alerts = [];
+    private IReadOnlyList<SaleCurrencySummaryResponse> salesCurrencies = [];
+    private static readonly Revestik.Shared.Sales.Currency[] SupportedCurrencies =
+        [Revestik.Shared.Sales.Currency.CRC, Revestik.Shared.Sales.Currency.USD];
+    private IEnumerable<SaleCurrencySummaryResponse> SalesCurrencies =>
+        SupportedCurrencies.Select(currency => salesCurrencies.FirstOrDefault(x => x.Currency == currency)
+            ?? new SaleCurrencySummaryResponse { Currency = currency });
+    private static string FormatAmount(decimal amount) =>
+        amount.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("es-CR"));
+
+    private SalePeriodSummaryResponse? periodSummary;
+    private string periodTitle = string.Empty;
+    private bool isLoadingPeriod;
+    private string? periodError;
+    private IEnumerable<SalePeriodCurrencySummaryResponse> PeriodCurrencies =>
+        SupportedCurrencies.Select(currency => periodSummary?.Currencies.FirstOrDefault(x => x.Currency == currency)
+            ?? new SalePeriodCurrencySummaryResponse { Currency = currency });
+
+    private IReadOnlyList<PurchaseCurrencyApSummaryResponse> payableCurrencies = [];
+    private IReadOnlyList<PurchaseDueAlertItemResponse> purchaseAlerts = [];
+    private bool isLoadingPayables;
+    private bool isLoadingPurchaseAlerts;
+    private string? payablesError;
+    private string? purchaseAlertsError;
+    private static readonly PurchaseCurrency[] SupportedPurchaseCurrencies =
+        [PurchaseCurrency.CRC, PurchaseCurrency.USD];
+    private IEnumerable<PurchaseCurrencyApSummaryResponse> PayableCurrencies =>
+        SupportedPurchaseCurrencies.Select(currency => payableCurrencies.FirstOrDefault(x => x.Currency == currency)
+            ?? new PurchaseCurrencyApSummaryResponse(currency, 0, 0m, 0, 0m));
+
+    private DashboardDocumentedPurchasesSummaryResponse? documentedPurchasesSummary;
+    private string documentedPurchaseTitle = string.Empty;
+    private bool isLoadingDocumentedPurchases;
+    private string? documentedPurchasesError;
+
+    private PurchasePeriodSummaryResponse? purchasePeriodSummary;
+    private string purchasePeriodTitle = string.Empty;
+    private bool isLoadingPurchasePeriod;
+    private string? purchasesPeriodError;
+    private IEnumerable<PurchasePeriodCurrencySummaryResponse> PurchasePeriodCurrencies =>
+        SupportedPurchaseCurrencies.Select(currency =>
+            purchasePeriodSummary?.Currencies.FirstOrDefault(x => x.Currency == currency)
+            ?? new PurchasePeriodCurrencySummaryResponse(currency, 0, 0m, 0, 0m, 0, 0m));
+
+    private ExpenseConsolidatedSummaryResponse? expenseSummary;
+    private bool isLoadingExpenses;
+    private string? expensesError;
+    private IEnumerable<ExpenseConsolidatedCurrencyTotalResponse> ExpenseCurrencies =>
+        new[] { "CRC", "USD" }
+            .Concat(expenseSummary?.Totals.Select(x => x.Currency) ?? [])
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(currency => expenseSummary?.Totals.FirstOrDefault(x =>
+                string.Equals(x.Currency, currency, StringComparison.OrdinalIgnoreCase))
+                ?? new ExpenseConsolidatedCurrencyTotalResponse(currency, 0m, 0m, 0m, 0m));
+
+    private InventorySummaryResponse? inventorySummary;
+    private bool isLoadingInventory;
+    private string? inventoryError;
+
+    private OperatingResultSummaryResponse? operatingResult;
+    private bool isLoadingOperatingResult;
+    private string? operatingResultError;
+
+    private GrossMarginSummaryResponse? grossMarginSummary;
+    private bool isLoadingGrossMargin;
+    private string? grossMarginError;
+
+    private DashboardDocumentAttentionSummaryResponse? documentsSummary;
+    private bool isLoadingDocuments;
+    private string? documentsError;
+
+    private ProjectDashboardSummaryResponse? projectsSummary;
+    private bool isLoadingProjects;
+    private string? projectsError;
+
     private DateOnly today;
     private bool isLoadingAlerts;
+    private bool isLoadingSales;
     private string? alertError;
+    private string? salesError;
 
     protected override async Task OnInitializedAsync()
     {
-        // Do not query a policy-protected endpoint for users outside ManageProjects.
+        // Sales and project alerts currently share the same authorized role set.
         var state = await AuthenticationState.GetAuthenticationStateAsync();
         var user = state.User;
-        if (user.Identity?.IsAuthenticated == true &&
-            (user.IsInRole("Administrator") || user.IsInRole("Accountant") || user.IsInRole("Sales")))
-            await LoadAlertsAsync();
+        if (user.Identity?.IsAuthenticated != true)
+            return;
+
+        var tasks = new List<Task> { LoadPayablesAsync(), LoadPurchaseAlertsAsync(), LoadExpensesAsync(), LoadPurchasePeriodAsync(), LoadInventoryAsync(), LoadProjectsAsync(), LoadDocumentsAsync(), LoadDocumentedPurchasesAsync(), LoadGrossMarginAsync(), LoadOperatingResultAsync() };
+        if (user.IsInRole("Administrator") || user.IsInRole("Accountant") || user.IsInRole("Sales"))
+            tasks.AddRange([LoadAlertsAsync(), LoadSalesAsync(), LoadPeriodAsync()]);
+        await Task.WhenAll(tasks);
+    }
+
+    private async Task LoadResultsAsync()
+    {
+        // Cada servicio conserva su resultado y error independiente.
+        await Task.WhenAll(LoadGrossMarginAsync(), LoadOperatingResultAsync());
+    }
+
+    private async Task LoadOperatingResultAsync()
+    {
+        isLoadingOperatingResult = true;
+        operatingResultError = null;
+        try
+        {
+            using var response = await Http.GetAsync("api/dashboard/operating-result-summary");
+            response.EnsureSuccessStatusCode();
+            operatingResult = await response.Content.ReadFromJsonAsync<OperatingResultSummaryResponse>()
+                ?? throw new InvalidOperationException("El resultado operativo está vacío.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or InvalidOperationException)
+        {
+            operatingResultError = "No fue posible consultar el resultado operativo.";
+        }
+        finally
+        {
+            isLoadingOperatingResult = false;
+        }
+    }
+
+    private async Task LoadGrossMarginAsync()
+    {
+        isLoadingGrossMargin = true;
+        grossMarginError = null;
+        try
+        {
+            using var response = await Http.GetAsync("api/dashboard/gross-margin-summary");
+            response.EnsureSuccessStatusCode();
+            grossMarginSummary = await response.Content.ReadFromJsonAsync<GrossMarginSummaryResponse>()
+                ?? throw new InvalidOperationException("El resumen de margen está vacío.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or InvalidOperationException)
+        {
+            grossMarginError = "No fue posible consultar el resultado comercial.";
+        }
+        finally
+        {
+            isLoadingGrossMargin = false;
+        }
+    }
+
+    private async Task LoadDocumentedPurchasesAsync()
+    {
+        isLoadingDocumentedPurchases = true;
+        documentedPurchasesError = null;
+        try
+        {
+            using var response = await Http.GetAsync("api/dashboard/documented-purchases-summary");
+            response.EnsureSuccessStatusCode();
+            documentedPurchasesSummary = await response.Content.ReadFromJsonAsync<DashboardDocumentedPurchasesSummaryResponse>()
+                ?? throw new InvalidOperationException("Empty documented purchase summary.");
+            var firstDay = new DateTime(documentedPurchasesSummary.Year, documentedPurchasesSummary.Month, 1);
+            documentedPurchaseTitle = firstDay.ToString("MMMM yyyy",
+                System.Globalization.CultureInfo.GetCultureInfo("es-CR"));
+        }
+        catch (HttpRequestException)
+        {
+            documentedPurchasesError = "No fue posible consultar las compras documentadas.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            documentedPurchasesError = "El resumen de compras documentadas tiene un formato inesperado.";
+        }
+        catch (InvalidOperationException)
+        {
+            documentedPurchasesError = "El resumen de compras documentadas no está disponible.";
+        }
+        finally
+        {
+            isLoadingDocumentedPurchases = false;
+        }
+    }
+
+    private async Task LoadDocumentsAsync()
+    {
+        isLoadingDocuments = true;
+        documentsError = null;
+        try
+        {
+            using var response = await Http.GetAsync("api/dashboard/document-attention-summary");
+            response.EnsureSuccessStatusCode();
+            documentsSummary = await response.Content.ReadFromJsonAsync<DashboardDocumentAttentionSummaryResponse>()
+                ?? throw new InvalidOperationException("Empty document attention response.");
+        }
+        catch (HttpRequestException)
+        {
+            documentsError = "No fue posible consultar los documentos recibidos.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            documentsError = "La respuesta de documentos recibidos no tiene el formato esperado.";
+        }
+        catch (InvalidOperationException)
+        {
+            documentsError = "El servicio devolvió un resumen documental inválido.";
+        }
+        finally
+        {
+            isLoadingDocuments = false;
+        }
+    }
+
+    private async Task LoadProjectsAsync()
+    {
+        isLoadingProjects = true;
+        projectsError = null;
+        try
+        {
+            using var response = await Http.GetAsync("api/dashboard/projects-summary");
+            response.EnsureSuccessStatusCode();
+            projectsSummary = await response.Content.ReadFromJsonAsync<ProjectDashboardSummaryResponse>()
+                ?? throw new InvalidOperationException("Empty project summary response.");
+        }
+        catch (HttpRequestException)
+        {
+            projectsError = "No fue posible consultar el resumen de proyectos.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            projectsError = "El resumen de proyectos no tiene el formato esperado.";
+        }
+        catch (InvalidOperationException)
+        {
+            projectsError = "El servicio devolvió un resumen de proyectos inválido.";
+        }
+        finally
+        {
+            isLoadingProjects = false;
+        }
+    }
+
+    private async Task LoadPurchasePeriodAsync()
+    {
+        isLoadingPurchasePeriod = true;
+        purchasesPeriodError = null;
+        try
+        {
+            var localNow = TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica"));
+            purchasePeriodTitle = localNow.ToString("MMMM yyyy",
+                System.Globalization.CultureInfo.GetCultureInfo("es-CR"));
+            purchasePeriodSummary = await PurchaseApiService.GetPeriodSummaryAsync(localNow.Year, localNow.Month);
+        }
+        catch (HttpRequestException)
+        {
+            purchasesPeriodError = "No fue posible consultar las compras del mes.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            purchasesPeriodError = "El resumen mensual de compras tiene un formato inesperado.";
+        }
+        catch (InvalidOperationException)
+        {
+            purchasesPeriodError = "La API no devolvió un resumen mensual de compras válido.";
+        }
+        finally
+        {
+            isLoadingPurchasePeriod = false;
+        }
+    }
+
+    private async Task LoadInventoryAsync()
+    {
+        isLoadingInventory = true;
+        inventoryError = null;
+        try
+        {
+            inventorySummary = await InventoryApiService.GetSummaryAsync();
+        }
+        catch (HttpRequestException)
+        {
+            inventoryError = "No fue posible consultar el resumen de inventario.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            inventoryError = "La respuesta de inventario no tiene el formato esperado.";
+        }
+        finally
+        {
+            isLoadingInventory = false;
+        }
+    }
+
+    private async Task LoadExpensesAsync()
+    {
+        isLoadingExpenses = true;
+        expensesError = null;
+        try
+        {
+            using var response = await Http.GetAsync("api/dashboard/expense-summary");
+            response.EnsureSuccessStatusCode();
+            expenseSummary = await response.Content.ReadFromJsonAsync<ExpenseConsolidatedSummaryResponse>();
+            if (expenseSummary is null)
+                expensesError = "La API no devolvió un resumen de gastos válido.";
+        }
+        catch (HttpRequestException)
+        {
+            expensesError = "No fue posible consultar los gastos del mes.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            expensesError = "La respuesta de gastos no tiene el formato esperado.";
+        }
+        finally
+        {
+            isLoadingExpenses = false;
+        }
+    }
+
+    private async Task LoadPayablesAsync()
+    {
+        isLoadingPayables = true;
+        payablesError = null;
+        try
+        {
+            var summary = await PurchaseApiService.GetApSummaryAsync();
+            payableCurrencies = summary.Currencies;
+        }
+        catch (HttpRequestException)
+        {
+            payablesError = "No fue posible consultar las cuentas por pagar.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            payablesError = "La respuesta de cuentas por pagar no tiene el formato esperado.";
+        }
+        catch (InvalidOperationException)
+        {
+            payablesError = "La API no devolvió un resumen de cuentas por pagar válido.";
+        }
+        finally
+        {
+            isLoadingPayables = false;
+        }
+    }
+
+    private async Task LoadPurchaseAlertsAsync()
+    {
+        isLoadingPurchaseAlerts = true;
+        purchaseAlertsError = null;
+        try
+        {
+            var response = await PurchaseApiService.GetDueAlertsAsync(
+                new PurchaseAlertRequest { ShortWindowDays = 3, LongWindowDays = 7 });
+            purchaseAlerts = response.Items;
+        }
+        catch (HttpRequestException)
+        {
+            purchaseAlertsError = "No fue posible consultar los vencimientos de proveedores.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            purchaseAlertsError = "Las alertas de proveedores tienen un formato inesperado.";
+        }
+        catch (InvalidOperationException)
+        {
+            purchaseAlertsError = "La API no devolvió alertas de proveedores válidas.";
+        }
+        finally
+        {
+            isLoadingPurchaseAlerts = false;
+        }
+    }
+
+    private async Task LoadSalesAsync()
+    {
+        isLoadingSales = true;
+        salesError = null;
+        try
+        {
+            var summary = await SaleApiService.GetSummaryAsync();
+            salesCurrencies = summary.Currencies;
+        }
+        catch (HttpRequestException)
+        {
+            salesError = "No fue posible consultar el resumen comercial.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            salesError = "El resumen comercial no tiene el formato esperado.";
+        }
+        catch (InvalidOperationException)
+        {
+            salesError = "La API no devolvió un resumen comercial válido.";
+        }
+        finally
+        {
+            isLoadingSales = false;
+        }
+    }
+
+    private async Task LoadPeriodAsync()
+    {
+        isLoadingPeriod = true;
+        periodError = null;
+        try
+        {
+            var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,
+                TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica"));
+            periodTitle = localNow.ToString("MMMM yyyy",
+                System.Globalization.CultureInfo.GetCultureInfo("es-CR"));
+            periodSummary = await SaleApiService.GetPeriodSummaryAsync(localNow.Year, localNow.Month);
+        }
+        catch (HttpRequestException)
+        {
+            periodError = "No fue posible consultar la actividad comercial mensual.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            periodError = "La respuesta del resumen mensual no tiene el formato esperado.";
+        }
+        catch (InvalidOperationException)
+        {
+            periodError = "La API no devolvió un resumen mensual válido.";
+        }
+        finally
+        {
+            isLoadingPeriod = false;
+        }
     }
 
     private async Task LoadAlertsAsync()

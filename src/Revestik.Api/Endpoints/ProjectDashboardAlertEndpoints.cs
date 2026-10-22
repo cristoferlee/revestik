@@ -9,6 +9,11 @@ public static class ProjectDashboardAlertEndpoints
             Results.Ok(await service.GetAlertsAsync(DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,
                 TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica"))), ct)))
             .WithTags("Dashboard").RequireAuthorization(PolicyNames.ManageProjects);
+        endpoints.MapGet("/api/dashboard/projects-summary", async (
+            ProjectDashboardSummaryService service, CancellationToken ct) =>
+            Results.Ok(await service.GetAsync(ct)))
+            .WithTags("Dashboard")
+            .RequireAuthorization();
         return endpoints;
     }
 }

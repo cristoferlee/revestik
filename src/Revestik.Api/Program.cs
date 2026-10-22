@@ -116,6 +116,9 @@ builder.Services.AddScoped<ProjectPaymentService>();
 builder.Services.AddScoped<ProjectTaskDeadlineService>();
 builder.Services.AddScoped<ProjectLifecycleService>();
 builder.Services.AddScoped<ProjectDeadlineQueryService>();
+builder.Services.AddScoped<ProjectDashboardSummaryService>();
+builder.Services.AddScoped<GrossMarginSummaryService>();
+builder.Services.AddScoped<OperatingResultSummaryService>();
 builder.Services.Configure<ProjectFileStorageOptions>(builder.Configuration.GetSection(ProjectFileStorageOptions.SectionName));
 builder.Services.PostConfigure<ProjectFileStorageOptions>(options =>
 {
@@ -177,9 +180,31 @@ app.MapCustomerEndpoints();
 app.MapSupplierEndpoints();
 app.MapPurchaseEndpoints();
 app.MapExpenseEndpoints();
+app.MapGet("/api/dashboard/expense-summary", async (
+    IExpenseReportingService reportingService,
+    CancellationToken cancellationToken) =>
+{
+    var costaRicaTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica");
+    var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, costaRicaTimeZone);
+    var firstDay = new DateOnly(localNow.Year, localNow.Month, 1);
+    var lastDay = firstDay.AddMonths(1).AddDays(-1);
+    var request = new Revestik.Shared.Expenses.ExpenseSummaryRequest
+    {
+        DateFrom = firstDay,
+        DateTo = lastDay
+    };
+    return Results.Ok(await reportingService.GetConsolidatedSummaryAsync(request, cancellationToken));
+})
+.WithName("GetDashboardMonthlyExpenseSummary")
+.WithTags("Dashboard")
+.RequireAuthorization();
+
 app.MapBankVoucherEndpoints();
 app.MapElectronicDocumentEndpoints();
 app.MapElectronicDocumentPeriodSummaryEndpoints();
+app.MapDashboardDocumentAttentionEndpoints();
+app.MapGrossMarginDashboardEndpoints();
+app.MapOperatingResultDashboardEndpoints();
 app.MapGmailIntegrationEndpoints();
 app.MapBankVoucherGmailIntegrationEndpoints();
 app.MapProductEndpoints();

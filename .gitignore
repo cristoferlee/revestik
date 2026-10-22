@@ -489,3 +489,4 @@ output/
 
 # Revestik secure received-document staging
 src/Revestik.Api/App_Data/
+/src/RevestikPrivateDocuments/

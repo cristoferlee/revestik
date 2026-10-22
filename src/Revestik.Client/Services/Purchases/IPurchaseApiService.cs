@@ -9,6 +9,9 @@ public interface IPurchaseApiService
         PurchaseListRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<PurchasePeriodSummaryResponse> GetPeriodSummaryAsync(
+        int year, int month, CancellationToken cancellationToken = default);
+
     Task<PurchaseApSummaryResponse> GetApSummaryAsync(
         CancellationToken cancellationToken = default);
 

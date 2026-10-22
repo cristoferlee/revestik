@@ -314,6 +314,68 @@ public sealed class SaleQueryTests
         Assert.Single(result.Items);
     }
 
+    [Fact]
+    public async Task GetPeriodSummaryAsync_SeparatesIssueAndPaymentDatesAndCurrencies()
+    {
+        await using var db = CreateDbContext();
+        var user = CreateUser();
+        var customer = CreateCustomer("3109999999", "Cliente Periodo");
+        db.Users.Add(user);
+        db.Customers.Add(customer);
+        await db.SaveChangesAsync();
+
+        var previous = CreateSale("VEN-800001", customer, user, Currency.CRC, 100m);
+        previous.IssuedAtUtc = new DateTime(2026, 9, 12, 15, 0, 0, DateTimeKind.Utc);
+        previous.Payments.Add(new SalePayment
+        {
+            Amount = 40m, Status = SalePaymentStatus.Active,
+            PaymentMethod = PaymentMethod.Cash,
+            PaidAtUtc = new DateTime(2026, 10, 5, 16, 0, 0, DateTimeKind.Utc),
+            CreatedAtUtc = DateTime.UtcNow, CreatedByUserId = user.Id
+        });
+        var current = CreateSale("VEN-800002", customer, user, Currency.CRC, 200m);
+        current.IssuedAtUtc = new DateTime(2026, 10, 1, 6, 0, 0, DateTimeKind.Utc);
+        var usd = CreateSale("VEN-800003", customer, user, Currency.USD, 50m);
+        usd.IssuedAtUtc = new DateTime(2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
+        var voided = CreateSale("VEN-800004", customer, user, Currency.CRC, 400m);
+        voided.Status = SaleStatus.Voided;
+        voided.IssuedAtUtc = current.IssuedAtUtc;
+        db.Sales.AddRange(previous, current, usd, voided);
+        await db.SaveChangesAsync();
+
+        var result = await CreateService(db).GetPeriodSummaryAsync(2026, 10, CancellationToken.None);
+        var crc = result.Currencies.Single(x => x.Currency == Currency.CRC);
+        Assert.Equal(200m, crc.SalesTotal);
+        Assert.Equal(1, crc.SaleCount);
+        Assert.Equal(100m, crc.PreviousMonthSalesTotal);
+        Assert.Equal(40m, crc.CollectedTotal);
+        Assert.Equal(100m, crc.SalesChangePercent);
+        var dollars = result.Currencies.Single(x => x.Currency == Currency.USD);
+        Assert.Equal(50m, dollars.SalesTotal);
+        Assert.Null(dollars.SalesChangePercent);
+    }
+
+    [Fact]
+    public async Task GetPeriodSummaryAsync_UsesCostaRicaMonthBoundaries()
+    {
+        await using var db = CreateDbContext();
+        var user = CreateUser();
+        var customer = CreateCustomer("3108888888", "Cliente Limite");
+        db.Users.Add(user);
+        db.Customers.Add(customer);
+        await db.SaveChangesAsync();
+        var september = CreateSale("VEN-900001", customer, user, Currency.CRC, 10m);
+        september.IssuedAtUtc = new DateTime(2026, 10, 1, 5, 59, 59, DateTimeKind.Utc);
+        var october = CreateSale("VEN-900002", customer, user, Currency.CRC, 20m);
+        october.IssuedAtUtc = new DateTime(2026, 10, 1, 6, 0, 0, DateTimeKind.Utc);
+        db.Sales.AddRange(september, october);
+        await db.SaveChangesAsync();
+        var result = await CreateService(db).GetPeriodSummaryAsync(2026, 10, CancellationToken.None);
+        var crc = result.Currencies.Single(x => x.Currency == Currency.CRC);
+        Assert.Equal(20m, crc.SalesTotal);
+        Assert.Equal(10m, crc.PreviousMonthSalesTotal);
+    }
+
     private static Sale CreateSale(
         string? number,
         Customer customer,

@@ -69,6 +69,62 @@ public sealed class PurchaseQueryHardeningTests
         Assert.Empty(alerts.Items);
     }
 
+    [Fact]
+    public async Task PeriodSummary_UsesPurchaseDateAndDoesNotCountPaymentsAsPurchases()
+    {
+        await using var db = CreateDb();
+        var fixture = await SeedAsync(db);
+        var original = await db.Purchases.SingleAsync(x => x.SupplierId == fixture.SupplierId);
+        original.PurchaseDate = new DateOnly(2026, 10, 12);
+        await db.SaveChangesAsync();
+
+        var summary = await new PurchaseQueryService(db).GetPeriodSummaryAsync(
+            2026, 10, CancellationToken.None);
+        var crc = Assert.Single(summary.Currencies);
+        Assert.Equal(PurchaseCurrency.CRC, crc.Currency);
+        Assert.Equal(1, crc.PurchaseCount);
+        Assert.Equal(10000m, crc.PurchasedTotal);
+        Assert.Equal(0, crc.CashPurchaseCount);
+        Assert.Equal(1, crc.CreditPurchaseCount);
+        Assert.Equal(10000m, crc.CreditPurchasedTotal);
+        Assert.Equal(0m, crc.CashPurchasedTotal);
+
+        var september = await new PurchaseQueryService(db).GetPeriodSummaryAsync(
+            2026, 9, CancellationToken.None);
+        Assert.Empty(september.Currencies);
+    }
+
+    [Fact]
+    public async Task PeriodSummary_SeparatesCurrenciesAndPaymentTypes()
+    {
+        await using var db = CreateDb();
+        var fixture = await SeedAsync(db);
+        var original = await db.Purchases.Include(x => x.Lines)
+            .SingleAsync(x => x.SupplierId == fixture.SupplierId);
+        original.PurchaseDate = new DateOnly(2026, 10, 1);
+        db.Purchases.Add(new Purchase
+        {
+            SupplierId = fixture.SupplierId,
+            PurchaseDate = new DateOnly(2026, 10, 31),
+            Currency = PurchaseCurrency.USD,
+            PaymentType = PurchasePaymentType.Cash,
+            CreatedByUserId = fixture.UserId,
+            CreatedAtUtc = DateTime.UtcNow,
+            Lines = [new PurchaseLine
+            {
+                ProductId = original.Lines.Single().ProductId,
+                Quantity = 2m,
+                UnitCost = 50m
+            }]
+        });
+        await db.SaveChangesAsync();
+        var result = await new PurchaseQueryService(db).GetPeriodSummaryAsync(
+            2026, 10, CancellationToken.None);
+        Assert.Equal(2, result.Currencies.Count);
+        Assert.Equal(10000m, result.Currencies.Single(x => x.Currency == PurchaseCurrency.CRC).CreditPurchasedTotal);
+        Assert.Equal(100m, result.Currencies.Single(x => x.Currency == PurchaseCurrency.USD).CashPurchasedTotal);
+    }
+
     private static RevestikDbContext CreateDb() =>
         new(new DbContextOptionsBuilder<RevestikDbContext>()
             .UseInMemoryDatabase(

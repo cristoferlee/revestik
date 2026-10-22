@@ -26,6 +26,17 @@ public sealed class PurchaseApiService(HttpClient httpClient)
             cancellationToken);
     }
 
+    public async Task<PurchasePeriodSummaryResponse> GetPeriodSummaryAsync(
+        int year, int month, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.GetAsync(
+            $"api/purchases/period-summary?year={year.ToString(CultureInfo.InvariantCulture)}&month={month.ToString(CultureInfo.InvariantCulture)}",
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await ReadRequiredAsync<PurchasePeriodSummaryResponse>(
+            response, "The API returned an empty purchase period summary.", cancellationToken);
+    }
+
     public async Task<PurchaseApSummaryResponse> GetApSummaryAsync(
         CancellationToken cancellationToken = default)
     {

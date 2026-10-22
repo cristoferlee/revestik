@@ -12,6 +12,9 @@ public interface ISaleApiService
     Task<SaleSummaryResponse> GetSummaryAsync(
         CancellationToken cancellationToken = default);
 
+    Task<SalePeriodSummaryResponse> GetPeriodSummaryAsync(
+        int year, int month, CancellationToken cancellationToken = default);
+
     Task<SaleResponse?> GetByIdAsync(
         int id,
         CancellationToken cancellationToken = default);

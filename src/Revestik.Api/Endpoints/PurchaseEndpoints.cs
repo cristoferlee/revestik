@@ -49,6 +49,24 @@ public static class PurchaseEndpoints
             .WithName("GetPurchases");
 
         group.MapGet(
+                "/period-summary",
+                async (
+                    int year,
+                    int month,
+                    IPurchaseQueryService purchaseQueryService,
+                    CancellationToken cancellationToken) =>
+                {
+                    if (year is < 1 or > 9999 || month is < 1 or > 12)
+                        return Results.ValidationProblem(new Dictionary<string, string[]>
+                        {
+                            ["period"] = ["El año o mes no es válido."]
+                        });
+                    return Results.Ok(await purchaseQueryService.GetPeriodSummaryAsync(
+                        year, month, cancellationToken));
+                })
+            .WithName("GetPurchasePeriodSummary");
+
+        group.MapGet(
                 "/ap-summary",
                 async (
                     IPurchaseQueryService purchaseQueryService,
