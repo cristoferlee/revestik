@@ -1,0 +1,11 @@
+.revestik-chart svg { width: 100%; height: auto; display: block; }
+.revestik-chart-legend { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; font-size: .82rem; font-weight: 600; }
+.revestik-line-sales { color: #d97706; }
+.revestik-line-collections { color: #2563eb; }
+.revestik-line-purchases { color: #0d9488; }
+.revestik-chart details { margin-top: 10px; }
+.revestik-chart summary { cursor: pointer; color: var(--color-text); font-weight: 500; }
+.revestik-chart-table-wrap { max-height: 300px; overflow: auto; margin-top: 12px; }
+.revestik-chart table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.revestik-chart th, .revestik-chart td { padding: 9px 12px; border-bottom: 1px solid var(--color-border); text-align: right; white-space: nowrap; }
+.revestik-chart th:first-child { text-align: left; }

@@ -4,6 +4,8 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using Revestik.Client.Services.Sales
 @using Revestik.Client.Services.Purchases
+@using Revestik.Client.Components.Dashboard
+@using Revestik.Shared.Dashboard
 @using Revestik.Shared.Projects
 @using Revestik.Shared.Sales
 @using Revestik.Shared.Purchases
@@ -20,13 +22,444 @@
 <PageTitle>Dashboard | Revestik</PageTitle>
 
 <section class="dashboard-page">
-    <header class="page-header">
+    <header class="page-header dashboard-hero">
         <div>
+            <span class="dashboard-eyebrow">PANEL DE CONTROL</span>
             <h1>Dashboard</h1>
-            <p>Resumen general de la operación</p>
+            <p>Resumen general de la operación de Revestik</p>
+        </div>
+        <div class="dashboard-toolbar">
+            <label for="dashboard-currency">Moneda de indicadores</label>
+            <select id="dashboard-currency" @bind="selectedDashboardCurrency" aria-label="Moneda de los indicadores principales">
+                <option value="CRC">CRC · Colones</option>
+                <option value="USD">USD · Dólares</option>
+            </select>
+            <button type="button" class="dashboard-refresh dashboard-update" @onclick="LoadResultsAsync" disabled="@(isLoadingGrossMargin || isLoadingOperatingResult)">Actualizar resultados</button>
         </div>
     </header>
 
+    <section class="dashboard-overview" aria-labelledby="overview-title">
+        <div class="dashboard-overview-heading">
+            <div>
+                <h2 id="overview-title">Indicadores principales</h2>
+                <p>Importes separados por moneda. Los resultados del mes son estimaciones y pueden requerir revisión.</p>
+            </div>
+            <span class="dashboard-currency-tag">@selectedDashboardCurrency</span>
+        </div>
+        <div class="dashboard-overview-main">
+        <div class="dashboard-overview-grid">
+            <article class="dashboard-overview-card dashboard-selectable @DashboardFinancialState(!isLoadingGrossMargin && grossMarginError is null ? grossMarginSummary?.Currencies.FirstOrDefault(x => x.Currency.ToString() == selectedDashboardCurrency)?.EstimatedCommercialResult : null, grossMarginSummary?.Currencies.FirstOrDefault(x => x.Currency.ToString() == selectedDashboardCurrency)?.RequiresReview == true) dashboard-overview-result">
+                <button type="button" class="dashboard-card-action" aria-label="Abrir detalle de commercial" aria-controls="dashboard-detail" aria-expanded='@(selectedDashboardDetail == "commercial")' @onclick='() => SelectDashboardDetail("commercial")'></button>
+                <span class="dashboard-overview-icon" aria-hidden="true">▥</span>
+                <h3>Resultado comercial estimado</h3>
+                @if (isLoadingGrossMargin) { <span role="status">Cargando...</span> }
+                else if (grossMarginError is not null) { <span role="alert">No disponible</span> }
+                else if (grossMarginSummary?.Currencies.FirstOrDefault(x => x.Currency.ToString() == selectedDashboardCurrency) is { } commercial)
+                { <strong>@FormatAmount(commercial.EstimatedCommercialResult)</strong> }
+                else { <strong>—</strong> }
+                <small>Mes actual · sin IVA · @selectedDashboardCurrency</small>
+            </article>
+            <article class="dashboard-overview-card dashboard-selectable @DashboardFinancialState(!isLoadingOperatingResult && operatingResultError is null ? operatingResult?.Currencies.FirstOrDefault(x => x.Currency.ToString() == selectedDashboardCurrency)?.EstimatedOperatingResult : null, operatingResult?.Currencies.FirstOrDefault(x => x.Currency.ToString() == selectedDashboardCurrency)?.RequiresReview == true) dashboard-overview-result">
+                <button type="button" class="dashboard-card-action" aria-label="Abrir detalle de operating" aria-controls="dashboard-detail" aria-expanded='@(selectedDashboardDetail == "operating")' @onclick='() => SelectDashboardDetail("operating")'></button>
+                <span class="dashboard-overview-icon" aria-hidden="true">▤</span>
+                <h3>Resultado operativo estimado</h3>
+                @if (isLoadingOperatingResult) { <span role="status">Cargando...</span> }
+                else if (operatingResultError is not null) { <span role="alert">No disponible</span> }
+                else if (operatingResult?.Currencies.FirstOrDefault(x => x.Currency.ToString() == selectedDashboardCurrency) is { } operating)
+                { <strong>@FormatAmount(operating.EstimatedOperatingResult)</strong> }
+                else { <strong>—</strong> }
+                <small>Mes actual · @selectedDashboardCurrency</small>
+            </article>
+            <AuthorizeView Roles="Administrator,Accountant,Sales">
+                <Authorized>
+                    <article class="dashboard-overview-card dashboard-selectable @DashboardSalesState()">
+                <button type="button" class="dashboard-card-action" aria-label="Abrir detalle de sales" aria-controls="dashboard-detail" aria-expanded='@(selectedDashboardDetail == "sales")' @onclick='() => SelectDashboardDetail("sales")'></button>
+                        <span class="dashboard-overview-icon" aria-hidden="true">↗</span>
+                        <h3>Ventas vigentes</h3>
+                        @if (isLoadingSales) { <span role="status">Cargando...</span> }
+                        else if (salesError is not null) { <span role="alert">No disponible</span> }
+                        else { <strong>@FormatAmount(SalesCurrencies.First(x => x.Currency.ToString() == selectedDashboardCurrency).SoldTotal)</strong> }
+                        <small>Ver historial de ventas · abrir detalle</small>
+                    </article>
+                    <article class="dashboard-overview-card dashboard-selectable">
+                <button type="button" class="dashboard-card-action" aria-label="Abrir detalle de receivables" aria-controls="dashboard-detail" aria-expanded='@(selectedDashboardDetail == "receivables")' @onclick='() => SelectDashboardDetail("receivables")'></button>
+                        <span class="dashboard-overview-icon" aria-hidden="true">₡</span>
+                        <h3>Cuentas por cobrar</h3>
+                        @if (isLoadingSales) { <span role="status">Cargando...</span> }
+                        else if (salesError is not null) { <span role="alert">No disponible</span> }
+                        else { <strong>@FormatAmount(SalesCurrencies.First(x => x.Currency.ToString() == selectedDashboardCurrency).OutstandingTotal)</strong> }
+                        <small>Ver saldos · abrir detalle</small>
+                    </article>
+                </Authorized>
+            </AuthorizeView>
+            <article class="dashboard-overview-card dashboard-selectable @DashboardPayablesState()">
+                <button type="button" class="dashboard-card-action" aria-label="Abrir detalle de payables" aria-controls="dashboard-detail" aria-expanded='@(selectedDashboardDetail == "payables")' @onclick='() => SelectDashboardDetail("payables")'></button>
+                <span class="dashboard-overview-icon" aria-hidden="true">⇣</span>
+                <h3>Cuentas por pagar</h3>
+                @if (isLoadingPayables) { <span role="status">Cargando...</span> }
+                else if (payablesError is not null) { <span role="alert">No disponible</span> }
+                else { <strong>@FormatAmount(PayableCurrencies.First(x => x.Currency.ToString() == selectedDashboardCurrency).OutstandingTotal)</strong> }
+                <small>Ver obligaciones · abrir detalle</small>
+            </article>
+            <article class="dashboard-overview-card dashboard-selectable @DashboardInventoryState()">
+                <button type="button" class="dashboard-card-action" aria-label="Abrir detalle de inventory" aria-controls="dashboard-detail" aria-expanded='@(selectedDashboardDetail == "inventory")' @onclick='() => SelectDashboardDetail("inventory")'></button>
+                <span class="dashboard-overview-icon" aria-hidden="true">◇</span>
+                <h3>Inventario actual</h3>
+                @if (isLoadingInventory) { <span role="status">Cargando...</span> }
+                else if (inventoryError is not null) { <span role="alert">No disponible</span> }
+                else if (selectedDashboardCurrency == "CRC" && inventorySummary is not null)
+                { <strong>@FormatAmount(inventorySummary.TotalInventoryCostValue)</strong> }
+                else { <strong>—</strong> }
+                <small>@(selectedDashboardCurrency == "CRC" ? "Valor conocido al costo" : "Valor del inventario disponible en CRC") · abrir detalle</small>
+            </article>
+            <AuthorizeView Roles="Administrator,Accountant,Sales">
+                <Authorized>
+                    <article class="dashboard-overview-card dashboard-selectable @DashboardProjectsState()">
+                <button type="button" class="dashboard-card-action" aria-label="Abrir detalle de projects" aria-controls="dashboard-detail" aria-expanded='@(selectedDashboardDetail == "projects")' @onclick='() => SelectDashboardDetail("projects")'></button>
+                        <span class="dashboard-overview-icon" aria-hidden="true">▣</span>
+                        <h3>Proyectos abiertos</h3>
+                        @if (isLoadingProjects) { <span role="status">Cargando...</span> }
+                        else if (projectsError is not null) { <span role="alert">No disponible</span> }
+                        else { <strong>@(projectsSummary?.OpenCount.ToString() ?? "—")</strong> }
+                        <small>Ver proyectos · abrir detalle</small>
+                    </article>
+                </Authorized>
+            </AuthorizeView>
+            <article class="dashboard-overview-card dashboard-selectable">
+                <button type="button" class="dashboard-card-action" aria-label="Abrir calculadora de divisas" aria-controls="dashboard-detail" aria-expanded='@(selectedDashboardDetail == "fx")' @onclick='() => SelectDashboardDetail("fx")'></button>
+                <span class="dashboard-overview-icon" aria-hidden="true">⇄</span>
+                <h3>Cambio de divisas</h3>
+                @if (fxLoading) { <span role="status">Consultando BCCR...</span> }
+                else if (fxRates is null) { <strong>Sin cotización</strong> }
+                else { <strong>₡@fxRates.PurchaseRate.ToString("N2", RecentCulture) / ₡@fxRates.SaleRate.ToString("N2", RecentCulture)</strong> }
+                <small>Compra / venta BCCR · abrir calculadora</small>
+            </article>
+        </div>
+
+    <aside class="dashboard-overview-side" aria-label="Seguimiento inmediato">
+        <article class="dashboard-panel">
+            <h2>Alertas</h2>
+            <h3 class="dashboard-alert-subheading">Proyectos</h3>
+            <AuthorizeView Roles="Administrator,Accountant,Sales">
+                <Authorized>
+                    @if (isLoadingAlerts)
+                    {
+                        <p role="status">Cargando alertas de proyectos...</p>
+                    }
+                    else if (alertError is not null)
+                    {
+                        <p role="alert">@alertError</p>
+                        <button type="button" class="dashboard-refresh" @onclick="LoadAlertsAsync">Reintentar</button>
+                    }
+                    else if (alerts.Count == 0)
+                    {
+                        <p>No hay vencimientos pendientes o próximos en los siguientes 7 días.</p>
+                    }
+                    else
+                    {
+                        <div class="project-alert-counts" aria-label="Resumen de vencimientos">
+                            <span><strong>@alerts.Count(x => x.IsOverdue)</strong> vencidas</span>
+                            <span><strong>@alerts.Count(x => x.DueOn == today)</strong> vencen hoy</span>
+                            <span><strong>@alerts.Count(x => x.DueOn > today)</strong> próximas</span>
+                        </div>
+                        <ul class="project-alert-list">
+                            @foreach (var alert in alerts)
+                            {
+                                <li class="project-alert-item @(alert.IsOverdue ? "is-overdue" : "is-upcoming")">
+                                    <span class="project-alert-kind"><span class="dashboard-alert-state-icon" aria-hidden="true">●</span> @(alert.Kind == "Task" ? "Tarea" : "Evento / compromiso")</span>
+                                    <strong>@alert.Title</strong>
+                                    <span>@alert.ProjectName</span>
+                                    <time datetime="@alert.DueOn.ToString("yyyy-MM-dd")">
+                                        @(alert.IsOverdue ? "Vencida" : alert.DueOn == today ? "Vence hoy" : "Vence") · @alert.DueOn.ToString("dd/MM/yyyy")
+                                    </time>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </Authorized>
+                <NotAuthorized>
+                    <p>Las alertas de proyectos están disponibles para usuarios autorizados.</p>
+                </NotAuthorized>
+            </AuthorizeView>
+            <h3 class="dashboard-alert-subheading">Proveedores</h3>
+            @if (isLoadingPurchaseAlerts)
+            {
+                <p role="status">Cargando alertas de proveedores...</p>
+            }
+            else if (purchaseAlertsError is not null)
+            {
+                <p role="alert">@purchaseAlertsError</p>
+                <button type="button" class="dashboard-refresh" @onclick="LoadPurchaseAlertsAsync">Reintentar</button>
+            }
+            else if (purchaseAlerts.Count == 0)
+            {
+                <p>No hay pagos a proveedores vencidos o próximos en los siguientes 7 días.</p>
+            }
+            else
+            {
+                <div class="project-alert-counts" aria-label="Resumen de alertas de proveedores">
+                    <span><strong>@purchaseAlerts.Count(x => x.DaysUntilDue < 0)</strong> vencidas</span>
+                    <span><strong>@purchaseAlerts.Count(x => x.DaysUntilDue == 0)</strong> vencen hoy</span>
+                    <span><strong>@purchaseAlerts.Count(x => x.DaysUntilDue > 0)</strong> próximas</span>
+                </div>
+                <ul class="project-alert-list">
+                    @foreach (var alert in purchaseAlerts)
+                    {
+                        <li class="project-alert-item @(alert.DaysUntilDue < 0 ? "is-overdue" : "is-upcoming")">
+                            <span class="project-alert-kind"><span class="dashboard-alert-state-icon" aria-hidden="true">●</span> Proveedor · @alert.Currency</span>
+                            <strong>@alert.SupplierName</strong>
+                            <span>Saldo: @FormatAmount(alert.OutstandingAmount) · Compra #@alert.PurchaseId</span>
+                            <time datetime="@alert.DueDate.ToString("yyyy-MM-dd")">
+                                @(alert.DaysUntilDue < 0 ? "Vencida" : alert.DaysUntilDue == 0 ? "Vence hoy" : "Vence") · @alert.DueDate.ToString("dd/MM/yyyy")
+                            </time>
+                        </li>
+                    }
+                </ul>
+            }
+        </article>
+
+        <article class="dashboard-panel dashboard-recent-panel" aria-labelledby="recent-activity-title">
+            <div class="dashboard-recent-heading">
+                <h2 id="recent-activity-title">Actividad reciente</h2>
+                <button type="button" class="dashboard-refresh" disabled="@isLoadingRecent" @onclick="LoadRecentActivityAsync" aria-label="Actualizar actividad reciente">Actualizar</button>
+            </div>
+            @if (isLoadingRecent)
+            {
+                <p role="status">Cargando actividad reciente...</p>
+            }
+            else if (recentActivityError is not null)
+            {
+                <p role="alert">@recentActivityError</p>
+                <button type="button" class="dashboard-refresh" @onclick="LoadRecentActivityAsync">Reintentar</button>
+            }
+            else if (recentActivities.Count == 0)
+            {
+                <p>No hay actividad reciente disponible para tu perfil.</p>
+            }
+            else
+            {
+                <ol class="dashboard-recent-list" aria-label="Últimos movimientos">
+                    @foreach (var activity in recentActivities)
+                    {
+                        <li class="dashboard-recent-item">
+                            <span class="dashboard-recent-symbol" aria-hidden="true">@GetActivitySymbol(activity.Kind)</span>
+                            <div class="dashboard-recent-content">
+                                <strong>@activity.Title</strong>
+                                <span>@activity.Description</span>
+                                <time datetime="@activity.OccurredAtUtc.ToString("O")">@FormatRecentDate(activity.OccurredAtUtc)</time>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(activity.Path))
+                            {
+                                <a href="@activity.Path" aria-label="Ver @activity.Title" class="dashboard-recent-link">Ver <span aria-hidden="true">→</span></a>
+                            }
+                        </li>
+                    }
+                </ol>
+            }
+        </article>
+    </aside>
+
+        </div>
+    </section>
+
+
+    <section class="dashboard-analysis-grid" aria-label="Análisis del negocio">
+    <section class="dashboard-trend-panel dashboard-analysis-card" aria-labelledby="dashboard-trend-title">
+        <div class="dashboard-trend-head">
+            <div>
+                <h2 id="dashboard-trend-title">Actividad comercial diaria</h2>
+                <p>Ventas, cobros y compras internas por día. Las compras desde XML se informan por separado.</p>
+            </div>
+            <div class="dashboard-trend-controls">
+                <label for="trend-month">Mes</label>
+                <select id="trend-month" @bind="trendMonth" @bind:after="LoadTrendAsync">
+                    @foreach (var m in Enumerable.Range(1, 12))
+                    {
+                        <option value="@m">@System.Globalization.CultureInfo.GetCultureInfo("es-CR").DateTimeFormat.GetMonthName(m)</option>
+                    }
+                </select>
+                <label for="trend-year">Año</label>
+                <select id="trend-year" @bind="trendYear" @bind:after="LoadTrendAsync">
+                    @foreach (var year in Enumerable.Range(DateTime.UtcNow.Year - 4, 5).Reverse())
+                    {
+                        <option value="@year">@year</option>
+                    }
+                </select>
+                <label for="trend-currency">Moneda</label>
+                <select id="trend-currency" @bind="trendCurrency"><option value="CRC">CRC</option><option value="USD">USD</option></select>
+            </div>
+        </div>
+        <AuthorizeView Roles="Administrator,Accountant,Sales">
+            <Authorized>
+                @if (isLoadingTrend) { <p role="status">Cargando actividad diaria...</p> }
+                else if (trendError is not null)
+                {
+                    <p role="alert">@trendError</p>
+                    <button class="dashboard-refresh" type="button" @onclick="LoadTrendAsync">Reintentar</button>
+                }
+                else if (trendResponse is not null)
+                {
+                    <DashboardActivityChart Days="@(trendResponse.Currencies.FirstOrDefault(x => x.Currency == trendCurrency)?.Days ?? [])" />
+                }
+            </Authorized>
+            <NotAuthorized><p>Información comercial disponible para usuarios autorizados.</p></NotAuthorized>
+        </AuthorizeView>
+        <p class="dashboard-period-note">Ventas emitidas vigentes, pagos activos por fecha de cobro y compras registradas internamente. Son importes por fuente, no un resultado contable consolidado.</p>
+    </section>
+
+
+    <section class="dashboard-analysis-card" aria-labelledby="dashboard-analysis-commercial-title">
+        <div class="dashboard-analysis-heading">
+            <h2 id="dashboard-analysis-commercial-title">Resultado comercial estimado</h2>
+            <p>Ventas sin IVA menos compras directas documentadas y costo conocido de inventario.</p>
+        </div>
+        @if (isLoadingGrossMargin)
+        {
+            <p role="status">Cargando resultado...</p>
+        }
+        else if (grossMarginError is not null)
+        {
+            <p role="alert">@grossMarginError</p>
+        }
+        else if (grossMarginSummary?.Currencies.FirstOrDefault(x => x.Currency.ToString() == selectedDashboardCurrency) is { } resultChart)
+        {
+            var maxComponent = new[] { Math.Abs(resultChart.AllSalesLineRevenue), Math.Abs(resultChart.DirectPurchaseBase), Math.Abs(resultChart.VerifiedFifoCost) }.Max();
+            <div class="dashboard-analysis-sum" aria-label="Resultado comercial estimado, @selectedDashboardCurrency">
+                <strong>@FormatAmount(resultChart.EstimatedCommercialResult)</strong>
+                <span>@selectedDashboardCurrency · Mes actual</span>
+            </div>
+            <div class="dashboard-analysis-bars" role="img" aria-label="Comparación de ingresos y costos comerciales del mes">
+                @foreach (var bar in new[] {
+                    (Label: "Ventas sin IVA", Amount: resultChart.AllSalesLineRevenue, Style: "income"),
+                    (Label: "Compras directas XML", Amount: resultChart.DirectPurchaseBase, Style: "purchase"),
+                    (Label: "Costo de inventario vendido", Amount: resultChart.VerifiedFifoCost, Style: "inventory") })
+                {
+                    <div class="dashboard-analysis-bar-row">
+                        <div class="dashboard-analysis-bar-label"><span>@bar.Label</span><strong>@FormatAmount(bar.Amount)</strong></div>
+                        <div class="dashboard-analysis-bar-track"><div class="dashboard-analysis-bar-fill @bar.Style" style="width:@BarPercent(bar.Amount, maxComponent)"></div></div>
+                    </div>
+                }
+            </div>
+            @if (resultChart.RequiresReview)
+            {
+                <p class="dashboard-analysis-caution" role="status">Estimación parcial: hay datos o documentos por revisar.</p>
+            }
+            <button type="button" class="dashboard-analysis-open" @onclick='() => SelectDashboardDetail("commercial")'>Ver cálculo y advertencias →</button>
+        }
+        <p class="dashboard-period-note">No representa utilidad contable ni fiscal definitiva. No suma compras internas a los XML.</p>
+    </section>
+
+    <section class="dashboard-analysis-card" aria-labelledby="dashboard-analysis-projects-title">
+        <div class="dashboard-analysis-heading">
+            <h2 id="dashboard-analysis-projects-title">Proyectos por estado</h2>
+            <p>Distribución real de expedientes registrados.</p>
+        </div>
+        @if (isLoadingProjects)
+        {
+            <p role="status">Cargando proyectos...</p>
+        }
+        else if (projectsError is not null)
+        {
+            <p role="alert">@projectsError</p>
+        }
+        else if (projectsSummary is not null)
+        {
+            <div class="dashboard-analysis-sum"><strong>@projectsSummary.TotalCount</strong><span>Proyectos registrados</span></div>
+            <div class="dashboard-analysis-bars" role="img" aria-label="Cantidad de proyectos por estado">
+                @foreach (var status in new[] {
+                    (Label: "Planificación", Count: projectsSummary.PlanningCount, Style: "planning"),
+                    (Label: "Pendiente de aprobación", Count: projectsSummary.PendingApprovalCount, Style: "approval"),
+                    (Label: "En ejecución", Count: projectsSummary.ActiveCount, Style: "active"),
+                    (Label: "Pausados", Count: projectsSummary.PausedCount, Style: "paused"),
+                    (Label: "Finalizados", Count: projectsSummary.CompletedCount, Style: "completed"),
+                    (Label: "Cancelados", Count: projectsSummary.CancelledCount, Style: "cancelled"),
+                    (Label: "Archivados", Count: projectsSummary.ArchivedCount, Style: "archived") })
+                {
+                    <div class="dashboard-analysis-bar-row">
+                        <div class="dashboard-analysis-bar-label"><span>@status.Label</span><strong>@status.Count</strong></div>
+                        <div class="dashboard-analysis-bar-track"><div class="dashboard-analysis-bar-fill @status.Style" style="width:@BarPercent(status.Count, projectsSummary.TotalCount)"></div></div>
+                    </div>
+                }
+            </div>
+            <button type="button" class="dashboard-analysis-open" @onclick='() => SelectDashboardDetail("projects")'>Ver detalle de proyectos →</button>
+        }
+    </section>
+    </section>
+
+    @if (selectedDashboardDetail is not null)
+    {
+        <div class="dashboard-modal-overlay">
+            <button type="button" class="dashboard-modal-backdrop"
+                    aria-label="Cerrar el detalle" @onclick="CloseDashboardDetail"></button>
+            <section id="dashboard-detail" class="dashboard-active-detail dashboard-modal-dialog"
+                     role="dialog" aria-modal="true" aria-labelledby="dashboard-modal-title"
+                     tabindex="-1" @onkeydown="HandleDashboardModalKeyDown">
+            <header class="dashboard-detail-toolbar">
+                <div>
+                    <span class="dashboard-eyebrow">DETALLE DEL INDICADOR</span>
+                    <h2 id="dashboard-modal-title">@SelectedDashboardDetailTitle</h2>
+                </div>
+                <div class="dashboard-detail-actions">
+                    @if (selectedDashboardDetail != "fx")
+                    {
+                        <a class="dashboard-detail-link" href="@SelectedDashboardDetailUrl">@SelectedDashboardDetailAction →</a>
+                    }
+                    <button type="button" class="dashboard-refresh" @onclick="CloseDashboardDetail">Cerrar detalle</button>
+                </div>
+            </header>
+            @if (selectedDashboardDetail == "fx")
+            {
+                <div class="fx-calculator">
+                    <p class="dashboard-period-note">Referencia informativa del Banco Central de Costa Rica. Las cotizaciones bancarias reales y comisiones pueden variar.</p>
+                    @if (fxLoading) { <p role="status">Consultando tipos de cambio...</p> }
+                    else if (fxError is not null || fxRates is null)
+                    {
+                        <p role="alert">@fxError</p>
+                        <button type="button" class="dashboard-refresh" @onclick="LoadFxAsync">Reintentar</button>
+                    }
+                    else
+                    {
+                        <div class="fx-rates">
+                            <div><span>Compra BCCR</span><strong>₡@fxRates.PurchaseRate.ToString("N2", RecentCulture)</strong></div>
+                            <div><span>Venta BCCR</span><strong>₡@fxRates.SaleRate.ToString("N2", RecentCulture)</strong></div>
+                        </div>
+                        <p class="dashboard-period-note">Vigencia: @fxRates.EffectiveDate.ToString("dd/MM/yyyy") · @(fxRates.IsStale ? "Cotización de fecha anterior; confirmar antes de operar." : "Cotización del día.") @(fxRates.IsCached ? "Dato conservado en caché." : "")</p>
+                        <label for="fx-operation">Operación comercial</label>
+                        <select id="fx-operation" @bind="fxOperation">
+                            <option value="ReceiveUsd">Venta en CRC, cliente paga en USD</option>
+                            <option value="ReceiveCrc">Venta en USD, cliente paga en CRC</option>
+                            <option value="ExchangeUsd">Convertir USD propios a CRC (estimación)</option>
+                            <option value="BuyUsd">Comprar USD con CRC (presupuesto)</option>
+                        </select>
+                        <label for="fx-amount">Importe (@FxInputCurrency)</label>
+                        <input id="fx-amount" type="number" min="0" max="100000000000" step="0.01" @bind="fxAmount" />
+                        <label for="fx-protection">Ajuste comercial de protección</label>
+                        <select id="fx-protection" @bind="fxProtection">
+                            <option value="5">₡5 por USD</option>
+                            <option value="7">₡7 por USD</option>
+                        </select>
+                        @if (!FxValid)
+                        {
+                            <p role="alert">Ingresá un importe entre 0 y 100.000.000.000.</p>
+                        }
+                        else
+                        {
+                            <div class="fx-result" aria-live="polite">
+                                <span>Conversión BCCR sin ajuste</span>
+                                <strong>@FxFormat(FxOfficialResult)</strong>
+                                <span>Tasa comercial orientativa: ₡@FxAdjustedRate.ToString("N2", RecentCulture) por USD</span>
+                                <span>Importe comercial recomendado</span>
+                                <strong>@FxFormat(FxProtectedResult)</strong>
+                            </div>
+                            <p class="dashboard-period-note">@FxRecommendation</p>
+                        }
+                        <p class="dashboard-period-note">El ajuste de ₡@fxProtection es una reserva orientativa por dólar, no una tasa oficial ni una garantía de cubrir comisiones. No modifica facturas, ventas ni contabilidad.</p>
+                        <button type="button" class="dashboard-refresh" @onclick="LoadFxAsync" disabled="@fxLoading">Actualizar tipo de cambio</button>
+                    }
+                </div>
+            }
+            else if (selectedDashboardDetail == "commercial")
+            {
     <p class="dashboard-period-note"><strong>Resultados del mes</strong> · Estimaciones basadas en ventas y documentos registrados; no equivalen a utilidad fiscal definitiva.</p>
 
     <section class="dashboard-period" aria-labelledby="dashboard-profit-title">
@@ -84,6 +517,10 @@
         }
     </section>
 
+
+            }
+            @if (selectedDashboardDetail == "operating")
+            {
     <section class="dashboard-period" aria-labelledby="operating-result-title">
         <div class="dashboard-section-heading">
             <div>
@@ -125,6 +562,10 @@
         }
     </section>
 
+
+            }
+            @if (selectedDashboardDetail == "sales" || selectedDashboardDetail == "receivables")
+            {
     <p class="dashboard-period-note"><strong>Ventas y cobros</strong> · Acumulados vigentes y actividad del mes se presentan por separado.</p>
 
     <section aria-labelledby="business-summary-title">
@@ -296,6 +737,10 @@
         </Authorized>
     </AuthorizeView>
 
+
+            }
+            @if (selectedDashboardDetail == "payables")
+            {
     <p class="dashboard-period-note"><strong>Compras y gastos</strong> · Fuentes operativas y documentales; sus totales no deben sumarse sin conciliación.</p>
 
     <section class="dashboard-period" aria-labelledby="monthly-purchases-title">
@@ -461,6 +906,10 @@
         <div class="dashboard-summary-actions"><a href="/purchases/received-documents">Ver documentos recibidos</a></div>
     </section>
 
+
+            }
+            @if (selectedDashboardDetail == "inventory")
+            {
     <p class="dashboard-period-note"><strong>Inventario actual</strong> · Saldo de existencias, independiente del resultado mensual.</p>
 
     <section class="dashboard-inventory" aria-labelledby="dashboard-inventory-title">
@@ -512,6 +961,10 @@
         }
     </section>
 
+
+            }
+            @if (selectedDashboardDetail == "payables")
+            {
     <p class="dashboard-period-note"><strong>Seguimiento operativo</strong> · Obligaciones, proyectos y alertas.</p>
 
     <section class="dashboard-payables" aria-labelledby="payables-title">
@@ -553,6 +1006,10 @@
         <div class="dashboard-summary-actions"><a href="/purchases/history">Ver compras y cuentas por pagar</a></div>
     </section>
 
+
+            }
+            @if (selectedDashboardDetail == "projects")
+            {
     <section class="dashboard-projects" aria-labelledby="dashboard-projects-title">
         <div class="dashboard-period-heading">
             <div>
@@ -615,95 +1072,139 @@
         }
     </section>
 
-    <section class="dashboard-panels">
-        <article class="dashboard-panel">
-            <h2>Alertas</h2>
-            <h3 class="dashboard-alert-subheading">Proyectos</h3>
-            <AuthorizeView Roles="Administrator,Accountant,Sales">
-                <Authorized>
-                    @if (isLoadingAlerts)
-                    {
-                        <p role="status">Cargando alertas de proyectos...</p>
-                    }
-                    else if (alertError is not null)
-                    {
-                        <p role="alert">@alertError</p>
-                        <button type="button" class="dashboard-refresh" @onclick="LoadAlertsAsync">Reintentar</button>
-                    }
-                    else if (alerts.Count == 0)
-                    {
-                        <p>No hay vencimientos pendientes o próximos en los siguientes 7 días.</p>
-                    }
-                    else
-                    {
-                        <div class="project-alert-counts" aria-label="Resumen de vencimientos">
-                            <span><strong>@alerts.Count(x => x.IsOverdue)</strong> vencidas</span>
-                            <span><strong>@alerts.Count(x => x.DueOn == today)</strong> vencen hoy</span>
-                            <span><strong>@alerts.Count(x => x.DueOn > today)</strong> próximas</span>
-                        </div>
-                        <ul class="project-alert-list">
-                            @foreach (var alert in alerts)
-                            {
-                                <li class="project-alert-item @(alert.IsOverdue ? "is-overdue" : "")">
-                                    <span class="project-alert-kind">@(alert.Kind == "Task" ? "Tarea" : "Evento / compromiso")</span>
-                                    <strong>@alert.Title</strong>
-                                    <span>@alert.ProjectName</span>
-                                    <time datetime="@alert.DueOn.ToString("yyyy-MM-dd")">
-                                        @(alert.IsOverdue ? "Vencida" : alert.DueOn == today ? "Vence hoy" : "Vence") · @alert.DueOn.ToString("dd/MM/yyyy")
-                                    </time>
-                                </li>
-                            }
-                        </ul>
-                    }
-                </Authorized>
-                <NotAuthorized>
-                    <p>Las alertas de proyectos están disponibles para usuarios autorizados.</p>
-                </NotAuthorized>
-            </AuthorizeView>
-            <h3 class="dashboard-alert-subheading">Proveedores</h3>
-            @if (isLoadingPurchaseAlerts)
-            {
-                <p role="status">Cargando alertas de proveedores...</p>
-            }
-            else if (purchaseAlertsError is not null)
-            {
-                <p role="alert">@purchaseAlertsError</p>
-                <button type="button" class="dashboard-refresh" @onclick="LoadPurchaseAlertsAsync">Reintentar</button>
-            }
-            else if (purchaseAlerts.Count == 0)
-            {
-                <p>No hay pagos a proveedores vencidos o próximos en los siguientes 7 días.</p>
-            }
-            else
-            {
-                <div class="project-alert-counts" aria-label="Resumen de alertas de proveedores">
-                    <span><strong>@purchaseAlerts.Count(x => x.DaysUntilDue < 0)</strong> vencidas</span>
-                    <span><strong>@purchaseAlerts.Count(x => x.DaysUntilDue == 0)</strong> vencen hoy</span>
-                    <span><strong>@purchaseAlerts.Count(x => x.DaysUntilDue > 0)</strong> próximas</span>
-                </div>
-                <ul class="project-alert-list">
-                    @foreach (var alert in purchaseAlerts)
-                    {
-                        <li class="project-alert-item @(alert.DaysUntilDue < 0 ? "is-overdue" : "")">
-                            <span class="project-alert-kind">Proveedor · @alert.Currency</span>
-                            <strong>@alert.SupplierName</strong>
-                            <span>Saldo: @FormatAmount(alert.OutstandingAmount) · Compra #@alert.PurchaseId</span>
-                            <time datetime="@alert.DueDate.ToString("yyyy-MM-dd")">
-                                @(alert.DaysUntilDue < 0 ? "Vencida" : alert.DaysUntilDue == 0 ? "Vence hoy" : "Vence") · @alert.DueDate.ToString("dd/MM/yyyy")
-                            </time>
-                        </li>
-                    }
-                </ul>
-            }
-        </article>
 
-        <article class="dashboard-panel">
-            <h2>Actividad reciente</h2>
-            <p>No hay actividad registrada.</p>
-        </article>
-    </section>
+            }
+            </section>
+        </div>
+    }
+
 </section>
 @code {
+    // UX-DASH-02: solo clasificar cuando hay datos verificables; no inferir riesgo de un saldo bajo.
+    private static string DashboardFinancialState(decimal? amount, bool requiresReview) =>
+        amount is null ? string.Empty :
+        amount < 0m ? "dashboard-state-danger" :
+        amount == 0m || requiresReview ? "dashboard-state-warning" : "dashboard-state-normal";
+
+    private string DashboardSalesState()
+    {
+        if (isLoadingPeriod || periodError is not null || periodSummary is null) return string.Empty;
+        var current = PeriodCurrencies.FirstOrDefault(x => x.Currency.ToString() == selectedDashboardCurrency);
+        return current is null ? string.Empty : current.SaleCount == 0 ? "dashboard-state-warning" : "dashboard-state-normal";
+    }
+
+    private string DashboardPayablesState()
+    {
+        if (isLoadingPayables || payablesError is not null) return string.Empty;
+        var current = PayableCurrencies.FirstOrDefault(x => x.Currency.ToString() == selectedDashboardCurrency);
+        return current is null ? string.Empty :
+            current.OverdueCount > 0 ? "dashboard-state-danger" :
+            current.PurchaseCount > 0 ? "dashboard-state-warning" : "dashboard-state-normal";
+    }
+
+    private string DashboardInventoryState()
+    {
+        if (isLoadingInventory || inventoryError is not null || inventorySummary is null || selectedDashboardCurrency != "CRC")
+            return string.Empty;
+        return inventorySummary.OutOfStockCount > 0 ? "dashboard-state-danger" :
+            inventorySummary.LowStockCount > 0 ? "dashboard-state-warning" : "dashboard-state-normal";
+    }
+
+    private string DashboardProjectsState()
+    {
+        if (isLoadingProjects || projectsError is not null || projectsSummary is null || isLoadingAlerts || alertError is not null)
+            return string.Empty;
+        return alerts.Any(x => x.IsOverdue) ? "dashboard-state-danger" :
+            alerts.Count > 0 ? "dashboard-state-warning" : "dashboard-state-normal";
+    }
+
+    private ExchangeRateResponse? fxRates;
+    private bool fxLoading;
+    private string? fxError;
+    private string fxOperation = "ReceiveUsd";
+    private decimal fxAmount = 100000m;
+    private int fxProtection = 5;
+    private bool FxValid => fxAmount >= 0 && fxAmount <= 100000000000m;
+    private bool FxUsdInput => fxOperation is "ReceiveCrc" or "ExchangeUsd";
+    private string FxInputCurrency => FxUsdInput ? "USD" : "CRC";
+    private decimal FxOfficialRate => fxRates is null ? 0 :
+        fxOperation is "ReceiveUsd" or "ExchangeUsd" ? fxRates.PurchaseRate : fxRates.SaleRate;
+    private decimal FxAdjustedRate => fxOperation is "ReceiveUsd" or "ExchangeUsd"
+        ? Math.Max(0.01m, FxOfficialRate - fxProtection)
+        : FxOfficialRate + fxProtection;
+    private decimal FxOfficialResult => fxRates is null ? 0 :
+        FxUsdInput ? fxAmount * FxOfficialRate : fxAmount / FxOfficialRate;
+    private decimal FxProtectedResult => fxRates is null ? 0 :
+        FxUsdInput ? fxAmount * FxAdjustedRate : fxAmount / FxAdjustedRate;
+    private string FxFormat(decimal value) =>
+        (FxUsdInput ? "₡" : "$") + decimal.Round(value, 2, MidpointRounding.AwayFromZero).ToString("N2", RecentCulture);
+    private string FxRecommendation => fxOperation switch
+    {
+        "ReceiveUsd" => "Si la venta está en colones y recibís dólares, usar una tasa de compra ligeramente menor ayuda a pedir suficientes USD para cubrir el precio original.",
+        "ReceiveCrc" => "Si la venta está en dólares y recibís colones, usar una tasa de venta ligeramente mayor proporciona un margen para adquirir los USD equivalentes.",
+        "ExchangeUsd" => "Si ya tenés dólares, este importe es una estimación conservadora de cuántos colones podrías obtener; el banco determina el monto real.",
+        _ => "Si necesitás comprar dólares, presupuestar una tasa de venta ligeramente mayor ayuda a contemplar variaciones de mercado."
+    };
+    private async Task LoadFxAsync()
+    {
+        fxLoading = true;
+        fxError = null;
+        try
+        {
+            using var response = await Http.GetAsync("api/dashboard/exchange-rate");
+            response.EnsureSuccessStatusCode();
+            fxRates = await response.Content.ReadFromJsonAsync<ExchangeRateResponse>()
+                ?? throw new InvalidOperationException("Respuesta vacía.");
+            if (fxRates.PurchaseRate <= 0 || fxRates.SaleRate < fxRates.PurchaseRate)
+                throw new InvalidOperationException("Cotizaciones inválidas.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or InvalidOperationException)
+        {
+            fxRates = null;
+            fxError = "No fue posible obtener la cotización BCCR. Revisá la configuración del servicio o intentá más tarde.";
+        }
+        finally { fxLoading = false; }
+    }
+
+    private string? selectedDashboardDetail;
+    private void SelectDashboardDetail(string? detail) => selectedDashboardDetail = detail;
+    private void CloseDashboardDetail() => selectedDashboardDetail = null;
+    private void HandleDashboardModalKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") CloseDashboardDetail();
+    }
+    private string SelectedDashboardDetailTitle => selectedDashboardDetail switch
+    {
+        "commercial" => "Resultado comercial estimado",
+        "operating" => "Resultado operativo estimado",
+        "sales" => "Ventas vigentes",
+        "receivables" => "Cuentas por cobrar",
+        "payables" => "Cuentas por pagar, compras y gastos",
+        "inventory" => "Inventario",
+        "projects" => "Proyectos",
+        "fx" => "Calculadora de divisas BCCR",
+        _ => "Resumen"
+    };
+    private string SelectedDashboardDetailUrl => selectedDashboardDetail switch
+    {
+        "commercial" or "operating" => "/sales/history",
+        "sales" or "receivables" => "/sales/history",
+        "payables" => "/purchases/history",
+        "inventory" => "/inventory",
+        "projects" => "/projects",
+        _ => "/"
+    };
+    private string SelectedDashboardDetailAction => selectedDashboardDetail switch
+    {
+        "commercial" or "operating" => "Ver historial de ventas (no hay módulo exclusivo de resultados)",
+        "sales" => "Ver historial de ventas",
+        "receivables" => "Ver saldos de ventas",
+        "payables" => "Ver compras y cuentas por pagar",
+        "inventory" => "Ir a inventario",
+        "projects" => "Ir a proyectos",
+        _ => "Ver módulo"
+    };
+    private string selectedDashboardCurrency = "CRC";
     private IReadOnlyList<ProjectDashboardAlertResponse> alerts = [];
     private IReadOnlyList<SaleCurrencySummaryResponse> salesCurrencies = [];
     private static readonly Revestik.Shared.Sales.Currency[] SupportedCurrencies =
@@ -711,6 +1212,12 @@
     private IEnumerable<SaleCurrencySummaryResponse> SalesCurrencies =>
         SupportedCurrencies.Select(currency => salesCurrencies.FirstOrDefault(x => x.Currency == currency)
             ?? new SaleCurrencySummaryResponse { Currency = currency });
+    private static string BarPercent(decimal amount, decimal total)
+    {
+        var percent = total <= 0m ? 0m : Math.Clamp(Math.Abs(amount) * 100m / total, 0m, 100m);
+        return percent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+    }
+
     private static string FormatAmount(decimal amount) =>
         amount.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("es-CR"));
 
@@ -785,6 +1292,67 @@
     private string? alertError;
     private string? salesError;
 
+    private DashboardActivityTrendResponse? trendResponse;
+    private bool isLoadingTrend;
+    private string? trendError;
+    private int trendYear;
+    private int trendMonth;
+    private string trendCurrency = "CRC";
+    private async Task LoadTrendAsync()
+    {
+        isLoadingTrend = true;
+        trendError = null;
+        try
+        {
+            using var response = await Http.GetAsync($"api/dashboard/activity-trend?year={trendYear}&month={trendMonth}");
+            response.EnsureSuccessStatusCode();
+            trendResponse = await response.Content.ReadFromJsonAsync<DashboardActivityTrendResponse>()
+                ?? throw new InvalidOperationException("Respuesta vacía.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or InvalidOperationException)
+        {
+            trendError = "No fue posible consultar la actividad comercial diaria.";
+        }
+        finally { isLoadingTrend = false; }
+    }
+
+    private IReadOnlyList<DashboardRecentActivityItemResponse> recentActivities = [];
+    private bool isLoadingRecent;
+    private string? recentActivityError;
+    private static readonly System.Globalization.CultureInfo RecentCulture = System.Globalization.CultureInfo.GetCultureInfo("es-CR");
+
+    private static string GetActivitySymbol(string kind) => kind switch
+    {
+        "SaleIssued" => "↗", "SalePayment" => "₡", "PurchaseCreated" => "↓",
+        "CustomerCreated" => "◎", "ProductCreated" => "◇", "ProjectCreated" => "▣",
+        "ProjectStatusChanged" => "↻", "DocumentImported" => "▤", _ => "•"
+    };
+
+    private static string FormatRecentDate(DateTime utc)
+    {
+        var cr = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc),
+            TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica"));
+        return cr.ToString("dd/MM/yyyy HH:mm", RecentCulture);
+    }
+
+    private async Task LoadRecentActivityAsync()
+    {
+        isLoadingRecent = true;
+        recentActivityError = null;
+        try
+        {
+            using var response = await Http.GetAsync("api/dashboard/recent-activity?limit=5");
+            response.EnsureSuccessStatusCode();
+            var data = await response.Content.ReadFromJsonAsync<DashboardRecentActivityResponse>();
+            recentActivities = data?.Items ?? throw new InvalidOperationException("Respuesta de actividad vacía.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException or InvalidOperationException)
+        {
+            recentActivityError = "No fue posible cargar la actividad reciente.";
+        }
+        finally { isLoadingRecent = false; }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         // Sales and project alerts currently share the same authorized role set.
@@ -793,9 +1361,12 @@
         if (user.Identity?.IsAuthenticated != true)
             return;
 
-        var tasks = new List<Task> { LoadPayablesAsync(), LoadPurchaseAlertsAsync(), LoadExpensesAsync(), LoadPurchasePeriodAsync(), LoadInventoryAsync(), LoadProjectsAsync(), LoadDocumentsAsync(), LoadDocumentedPurchasesAsync(), LoadGrossMarginAsync(), LoadOperatingResultAsync() };
+        var nowCr = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica"));
+        trendYear = nowCr.Year;
+        trendMonth = nowCr.Month;
+        var tasks = new List<Task> { LoadPayablesAsync(), LoadPurchaseAlertsAsync(), LoadExpensesAsync(), LoadPurchasePeriodAsync(), LoadInventoryAsync(), LoadProjectsAsync(), LoadDocumentsAsync(), LoadDocumentedPurchasesAsync(), LoadGrossMarginAsync(), LoadOperatingResultAsync(), LoadRecentActivityAsync(), LoadFxAsync() };
         if (user.IsInRole("Administrator") || user.IsInRole("Accountant") || user.IsInRole("Sales"))
-            tasks.AddRange([LoadAlertsAsync(), LoadSalesAsync(), LoadPeriodAsync()]);
+            tasks.AddRange([LoadAlertsAsync(), LoadSalesAsync(), LoadPeriodAsync(), LoadTrendAsync()]);
         await Task.WhenAll(tasks);
     }
 

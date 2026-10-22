@@ -1,0 +1,63 @@
+@using Revestik.Shared.Dashboard
+<section class="revestik-chart" aria-label="Gráfico diario de ventas, cobros y compras internas">
+    @if (Days.Count == 0)
+    {
+        <p>No hay información para este período.</p>
+    }
+    else
+    {
+        <div class="revestik-chart-legend" aria-hidden="true">
+            <span class="revestik-line-sales">● Ventas</span>
+            <span class="revestik-line-collections">● Cobros</span>
+            <span class="revestik-line-purchases">● Compras internas</span>
+        </div>
+        <svg viewBox="0 0 800 270" role="img" aria-label="Tendencias diarias del período seleccionado; la tabla inferior contiene los valores exactos">
+            @foreach (var tick in Enumerable.Range(0, 5))
+            {
+                var y = 224 - tick * 48;
+                <line x1="48" y1="@y" x2="780" y2="@y" stroke="#e5e7eb" />
+                @SvgAxisText(4, y + 4, Compact(Maximum * tick / 4))
+            }
+            <polyline fill="none" stroke="#d97706" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="@Points(d => d.Sales)" />
+            <polyline fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="@Points(d => d.Collections)" />
+            <polyline fill="none" stroke="#0d9488" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="@Points(d => d.InternalPurchases)" />
+            @foreach (var day in Days.Where(d => d.Day == 1 || d.Day % 5 == 0 || d.Day == Days.Count))
+            {
+                @SvgAxisText(X(day.Day), 250, day.Day.ToString(), "middle")
+            }
+        </svg>
+        <details>
+            <summary>Consultar importes por día</summary>
+            <div class="revestik-chart-table-wrap">
+                <table>
+                    <thead><tr><th>Día</th><th>Ventas</th><th>Cobros</th><th>Compras internas</th></tr></thead>
+                    <tbody>
+                        @foreach (var day in Days)
+                        {
+                            <tr><th scope="row">@day.Day</th><td>@Money(day.Sales)</td><td>@Money(day.Collections)</td><td>@Money(day.InternalPurchases)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    }
+</section>
+@code {
+    [Parameter] public IReadOnlyList<DashboardActivityDayResponse> Days { get; set; } = [];
+    // Razor reserves the <text> element; render SVG text using trusted numeric axis labels.
+    private static Microsoft.AspNetCore.Components.MarkupString SvgAxisText(
+        double x, double y, string value, string anchor = "start")
+    {
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        var safeValue = System.Net.WebUtility.HtmlEncode(value);
+        return new Microsoft.AspNetCore.Components.MarkupString(
+            $"<text x=\"{x.ToString(culture)}\" y=\"{y.ToString(culture)}\" text-anchor=\"{anchor}\" font-size=\"12\" fill=\"#6b7280\">{safeValue}</text>");
+    }
+    private decimal Maximum => Math.Max(1m, Days.SelectMany(d => new[] { d.Sales, d.Collections, d.InternalPurchases }).DefaultIfEmpty().Max());
+    private double X(int day) => 48d + (day - 1d) * 732d / Math.Max(1, Days.Count - 1);
+    private double Y(decimal amount) => 224d - (double)(amount / Maximum) * 192d;
+    private string Points(Func<DashboardActivityDayResponse, decimal> selector) =>
+        string.Join(" ", Days.Select(d => $"{X(d.Day).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)},{Y(selector(d)).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}"));
+    private static string Compact(decimal amount) => amount >= 1000000m ? $"{amount / 1000000m:0.#}M" : amount >= 1000m ? $"{amount / 1000m:0.#}k" : $"{amount:0}";
+    private static string Money(decimal amount) => amount.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("es-CR"));
+}

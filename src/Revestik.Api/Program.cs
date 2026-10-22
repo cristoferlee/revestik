@@ -1,3 +1,4 @@
+using Revestik.Api.Integrations.Bccr;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http.Features;
 using QuestPDF.Infrastructure;
@@ -99,6 +100,7 @@ builder.Services.AddScoped<IQuotationService, QuotationService>();
 builder.Services.AddScoped<IQuotationNumberGenerator, SqlQuotationNumberGenerator>();
 builder.Services.AddSingleton<IQuotationPdfService, QuotationPdfService>();
 builder.Services.AddScoped<ISaleService, SaleService>();
+builder.Services.AddScoped<DashboardActivityTrendService>();
 builder.Services.AddScoped<ISaleNumberGenerator, SqlSaleNumberGenerator>();
 builder.Services.AddSingleton<ISalePdfService, SalePdfService>();
 builder.Services.AddScoped<FiscalAnalyticsService>();
@@ -117,6 +119,7 @@ builder.Services.AddScoped<ProjectTaskDeadlineService>();
 builder.Services.AddScoped<ProjectLifecycleService>();
 builder.Services.AddScoped<ProjectDeadlineQueryService>();
 builder.Services.AddScoped<ProjectDashboardSummaryService>();
+builder.Services.AddScoped<Revestik.Api.Services.Dashboard.DashboardRecentActivityService>();
 builder.Services.AddScoped<GrossMarginSummaryService>();
 builder.Services.AddScoped<OperatingResultSummaryService>();
 builder.Services.Configure<ProjectFileStorageOptions>(builder.Configuration.GetSection(ProjectFileStorageOptions.SectionName));
@@ -138,6 +141,11 @@ builder.Services.AddHttpClient<IHaciendaTaxpayerClient, HaciendaTaxpayerClient>(
 var locationCatalogBaseUrl = builder.Configuration["LocationCatalog:BaseUrl"]
     ?? throw new InvalidOperationException("Location catalog base URL was not configured.");
 builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<BccrExchangeRateService>(httpClient =>
+{
+    httpClient.BaseAddress = new Uri("https://apim.bccr.fi.cr/SDDE/api/Bccr.Ge.SDDE.Publico.Indicadores.API/");
+    httpClient.Timeout = TimeSpan.FromSeconds(12);
+});
 builder.Services.AddHttpClient<ILocationCatalogClient, LocationCatalogClient>(httpClient =>
 {
     httpClient.BaseAddress = new Uri(locationCatalogBaseUrl);
@@ -204,6 +212,9 @@ app.MapElectronicDocumentEndpoints();
 app.MapElectronicDocumentPeriodSummaryEndpoints();
 app.MapDashboardDocumentAttentionEndpoints();
 app.MapGrossMarginDashboardEndpoints();
+app.MapDashboardActivityTrendEndpoints();
+app.MapDashboardRecentActivityEndpoints();
+app.MapBccrExchangeRateEndpoints();
 app.MapOperatingResultDashboardEndpoints();
 app.MapGmailIntegrationEndpoints();
 app.MapBankVoucherGmailIntegrationEndpoints();
