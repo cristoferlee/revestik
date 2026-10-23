@@ -6,11 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Revestik.Api.Tests.Hosting;
 
-public sealed class ProductionHostingTests
-    : IAsyncLifetime
+public sealed class ProductionHostingTests(ProductionHttpHostFixture hostFixture)
+    : IAsyncLifetime, IClassFixture<ProductionHttpHostFixture>
 {
-    private readonly RevestikWebApplicationFactory factory =
-        new("Production");
+    private RevestikWebApplicationFactory factory => hostFixture.Factory;
 
     private HttpClient client = null!;
 
@@ -26,10 +25,10 @@ public sealed class ProductionHostingTests
         return Task.CompletedTask;
     }
 
-    public async Task DisposeAsync()
+    public Task DisposeAsync()
     {
         client.Dispose();
-        await factory.DisposeAsync();
+        return Task.CompletedTask;
     }
 
     [Theory]

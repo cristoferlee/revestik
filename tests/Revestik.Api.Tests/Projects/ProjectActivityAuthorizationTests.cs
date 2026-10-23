@@ -7,9 +7,10 @@ using Revestik.Shared.Projects;
 
 namespace Revestik.Api.Tests.Projects;
 
-public sealed class ProjectActivityAuthorizationTests : IAsyncLifetime
+public sealed class ProjectActivityAuthorizationTests(DevelopmentHttpHostFixture hostFixture)
+    : IAsyncLifetime, IClassFixture<DevelopmentHttpHostFixture>
 {
-    private readonly RevestikWebApplicationFactory factory = new("Development");
+    private RevestikWebApplicationFactory factory => hostFixture.Factory;
     private HttpClient client = null!;
 
     public Task InitializeAsync()
@@ -23,10 +24,10 @@ public sealed class ProjectActivityAuthorizationTests : IAsyncLifetime
         return Task.CompletedTask;
     }
 
-    public async Task DisposeAsync()
+    public Task DisposeAsync()
     {
         client.Dispose();
-        await factory.DisposeAsync();
+        return Task.CompletedTask;
     }
 
     [Theory]

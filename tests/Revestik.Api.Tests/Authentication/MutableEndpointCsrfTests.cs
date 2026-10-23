@@ -13,11 +13,10 @@ using Revestik.Shared.Sales;
 
 namespace Revestik.Api.Tests.Authentication;
 
-public sealed class MutableEndpointCsrfTests
-    : IAsyncLifetime
+public sealed class MutableEndpointCsrfTests(DevelopmentHttpHostFixture hostFixture)
+    : IAsyncLifetime, IClassFixture<DevelopmentHttpHostFixture>
 {
-    private readonly RevestikWebApplicationFactory factory =
-        new("Development");
+    private RevestikWebApplicationFactory factory => hostFixture.Factory;
 
     private HttpClient client = null!;
 
@@ -38,10 +37,10 @@ public sealed class MutableEndpointCsrfTests
         return Task.CompletedTask;
     }
 
-    public async Task DisposeAsync()
+    public Task DisposeAsync()
     {
         client.Dispose();
-        await factory.DisposeAsync();
+        return Task.CompletedTask;
     }
 
     [Theory]

@@ -12,7 +12,7 @@ using Revestik.Shared.Customers;
 namespace Revestik.Api.Tests.Projects;
 
 public sealed class ProjectDocumentHttpTests(SqlServerIntegrationTestFixture fixture)
-    : IClassFixture<SqlServerIntegrationTestFixture>
+    : IClassFixture<SqlServerIntegrationTestFixture>, IAsyncLifetime
 {
     private const string Owner = "b04-http-owner";
     private const string Other = "b04-http-other";
@@ -44,13 +44,25 @@ public sealed class ProjectDocumentHttpTests(SqlServerIntegrationTestFixture fix
         return project.Id;
     }
 
-    private HttpClient CreateClient() =>
-        new RevestikWebApplicationFactory("Development", fixture.ConnectionString, directory)
-            .CreateClient(new WebApplicationFactoryClientOptions
+    private RevestikWebApplicationFactory? documentFactory;
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
+    {
+        if (documentFactory is not null)
+            await documentFactory.DisposeAsync();
+    }
+
+    private HttpClient CreateClient()
+    {
+        documentFactory ??= new RevestikWebApplicationFactory("Development", fixture.ConnectionString, directory);
+        return documentFactory.CreateClient(new WebApplicationFactoryClientOptions
             {
                 AllowAutoRedirect = false, BaseAddress = new Uri("https://localhost"),
                 HandleCookies = true
             });
+    }
 
     private static void Login(HttpRequestMessage request, string actor = Owner, string role = "Sales")
     {
