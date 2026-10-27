@@ -1,3 +1,4 @@
+using Revestik.Api.Services.Company;
 using Revestik.Api.Integrations.Bccr;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http.Features;
@@ -26,6 +27,7 @@ using Revestik.Api.Services.Suppliers;
 using Revestik.Api.Services.Projects;
 using Revestik.Api.Services.Projects.Documents;
 using Revestik.Api.Services.Projects.Pdf;
+using Revestik.Api.Services.Users;
 
 const string ClientCorsPolicy = "ClientCorsPolicy";
 QuestPDF.Settings.License = LicenseType.Community;
@@ -70,6 +72,7 @@ var connectionString = builder.Configuration.GetConnectionString("RevestikDataba
     ?? throw new InvalidOperationException("Connection string 'RevestikDatabase' was not found.");
 builder.Services.AddDbContext<RevestikDbContext>(options => options.UseSqlServer(connectionString));
 builder.Services.AddRevestikAuthentication(builder.Configuration);
+builder.Services.AddScoped<UserAdministrationService>();
 builder.Services.AddBankVoucherGmailIntegration(builder.Configuration);
 
 builder.Services.AddScoped<ICabysCatalogService, CabysCatalogService>();
@@ -129,6 +132,8 @@ builder.Services.PostConfigure<ProjectFileStorageOptions>(options =>
         options.RootPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "RevestikPrivateDocuments"));
 });
 builder.Services.AddSingleton<IProjectFileStorage, LocalProjectFileStorage>();
+builder.Services.AddSingleton<CompanyLogoStorage>();
+builder.Services.AddScoped<CompanyPdfBrandingProvider>();
 
 var haciendaBaseUrl = builder.Configuration["Hacienda:BaseUrl"]
     ?? throw new InvalidOperationException("Hacienda base URL was not configured.");
@@ -226,7 +231,12 @@ app.MapQuotationEndpoints();
 app.MapSaleEndpoints();
 app.MapTaxpayerEndpoints();
 app.MapLocationEndpoints();
+app.MapCompanyProfileEndpoints();
+app.MapCompanyLogoEndpoints();
+app.MapCompanyDocumentPdfPreferencesEndpoints();
 app.MapAuthenticationEndpoints();
+app.MapUserAdministrationEndpoints();
+app.MapSecurityAuditEndpoints();
 app.MapFiscalReconciliationEndpoints();
 app.MapProjectEndpoints();
 app.MapProjectActivityEndpoints();

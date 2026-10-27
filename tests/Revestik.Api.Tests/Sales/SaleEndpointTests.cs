@@ -1,3 +1,5 @@
+using Revestik.Api.Services.Company;
+using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -60,6 +62,26 @@ public sealed class SaleEndpointTests(
             existingUser.IsActive = true;
             existingUser.DisplayName =
                 "Sale Endpoint Test User";
+        }
+
+        // Document issuance requires an existing valid company identity.
+        // Seed once in the existing class-scoped SQL fixture: no extra host/database.
+        if (!await dbContext.CompanyProfiles.AnyAsync(profile => profile.Id == 1))
+        {
+            dbContext.CompanyProfiles.Add(new CompanyProfile
+            {
+                Id = 1,
+                LegalName = "Revestik Integration Test",
+                IdentificationNumber = "3101999999",
+                TaxIdentificationType = "02",
+                TaxIdentificationNumber = "3101999999",
+                CommercialName = "Revestik Test",
+                PhoneNumber = "22222222",
+                Email = "company@example.com",
+                Website = "https://example.com",
+                Address = "Heredia, Costa Rica",
+                UpdatedAtUtc = DateTime.UtcNow
+            });
         }
 
         await dbContext.SaveChangesAsync();
@@ -143,6 +165,37 @@ public sealed class SaleEndpointTests(
         Assert.Equal(SaleStatus.Issued, issued.Status);
         Assert.StartsWith("VEN-", issued.SaleNumber);
         Assert.NotNull(issued.IssuedAtUtc);
+        await using var verifyDb = sqlServerFixture.CreateDbContext();
+        var persisted = await verifyDb.Sales.AsNoTracking()
+            .SingleAsync(item => item.Id == issued.Id);
+        Assert.False(string.IsNullOrWhiteSpace(persisted.CompanyIdentitySnapshotJson));
+        Assert.Contains("Revestik Integration Test", persisted.CompanyIdentitySnapshotJson!);
+        // The issued document must preserve its identity after editing My Company.
+        var historicalIdentityJson = persisted.CompanyIdentitySnapshotJson;
+        var currentProfile = await verifyDb.CompanyProfiles.SingleAsync(p => p.Id == 1);
+        var originalCommercialName = currentProfile.CommercialName;
+        var changedCommercialName = "Empresa modificada después de emitir";
+        try
+        {
+            currentProfile.CommercialName = changedCommercialName;
+            await verifyDb.SaveChangesAsync();
+
+            await using var historicalDb = sqlServerFixture.CreateDbContext();
+            var historicalJson = await historicalDb.Sales
+                .AsNoTracking()
+                .Where(document => document.Id == issued.Id)
+                .Select(document => document.CompanyIdentitySnapshotJson)
+                .SingleAsync();
+
+            Assert.Equal(historicalIdentityJson, historicalJson);
+            Assert.DoesNotContain(changedCommercialName, historicalJson!);
+        }
+        finally
+        {
+            currentProfile.CommercialName = originalCommercialName;
+            await verifyDb.SaveChangesAsync();
+        }
+
     }
 
     [Fact]
@@ -304,6 +357,88 @@ public sealed class SaleEndpointTests(
         Assert.Equal(
             HttpStatusCode.Forbidden,
             response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DownloadSalePdf_LegacyDocumentWithoutSnapshot_ReturnsPdf()
+    {
+        var customerId = await SeedCustomerAsync();
+        using var createdResponse = await SendWithCsrfAsync(HttpMethod.Post, "/api/sales", CreateValidSaleRequest(customerId));
+        Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode);
+        var created = await createdResponse.Content.ReadFromJsonAsync<SaleResponse>();
+        Assert.NotNull(created);
+        using var issueResponse = await SendWithCsrfAsync(HttpMethod.Post, $"/api/sales/{created.Id}/issue", CreateValidSaleRequest(customerId));
+        Assert.Equal(HttpStatusCode.OK, issueResponse.StatusCode);
+        await using (var db = sqlServerFixture.CreateDbContext())
+        {
+            var sale = await db.Sales.SingleAsync(x => x.Id == created.Id);
+            sale.CompanyIdentitySnapshotJson = null;
+            await db.SaveChangesAsync();
+        }
+        using var pdfResponse = await client.GetAsync($"/api/sales/{created.Id}/pdf");
+        Assert.Equal(HttpStatusCode.OK, pdfResponse.StatusCode);
+        Assert.Equal("application/pdf", pdfResponse.Content.Headers.ContentType?.MediaType);
+        var pdf = await pdfResponse.Content.ReadAsByteArrayAsync();
+        Assert.True(pdf.Length > 4);
+        Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(pdf, 0, 4));
+    }
+
+    [Fact]
+    public async Task DownloadSalePdf_WithMissingHistoricalLogo_ReturnsConflict()
+    {
+        var customerId = await SeedCustomerAsync();
+        using var createdResponse = await SendWithCsrfAsync(HttpMethod.Post, "/api/sales", CreateValidSaleRequest(customerId));
+        Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode);
+        var created = await createdResponse.Content.ReadFromJsonAsync<SaleResponse>();
+        Assert.NotNull(created);
+        using var issueResponse = await SendWithCsrfAsync(HttpMethod.Post, $"/api/sales/{created.Id}/issue", CreateValidSaleRequest(customerId));
+        Assert.Equal(HttpStatusCode.OK, issueResponse.StatusCode);
+        await using (var db = sqlServerFixture.CreateDbContext())
+        {
+            var sale = await db.Sales.SingleAsync(x => x.Id == created.Id);
+            var identity = CompanyDocumentIdentitySnapshotSerializer.Deserialize(sale.CompanyIdentitySnapshotJson);
+            Assert.NotNull(identity);
+            sale.CompanyIdentitySnapshotJson = CompanyDocumentIdentitySnapshotSerializer.Serialize(
+                identity with { LogoStorageKey = Guid.NewGuid().ToString("N"), LogoContentType = "image/png" });
+            await db.SaveChangesAsync();
+        }
+        using var pdfResponse = await client.GetAsync($"/api/sales/{created.Id}/pdf");
+        Assert.Equal(HttpStatusCode.Conflict, pdfResponse.StatusCode);
+        var body = await pdfResponse.Content.ReadAsStringAsync();
+        Assert.Contains("logotipo", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DownloadSalePdf_WithHistoricalCustomPng_ReturnsPdf()
+    {
+        var customerId = await SeedCustomerAsync();
+        using var createdResponse = await SendWithCsrfAsync(HttpMethod.Post, "/api/sales", CreateValidSaleRequest(customerId));
+        Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode);
+        var created = await createdResponse.Content.ReadFromJsonAsync<SaleResponse>();
+        Assert.NotNull(created);
+        using var issueResponse = await SendWithCsrfAsync(HttpMethod.Post, $"/api/sales/{created.Id}/issue", CreateValidSaleRequest(customerId));
+        Assert.Equal(HttpStatusCode.OK, issueResponse.StatusCode);
+        string key;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var storage = scope.ServiceProvider.GetRequiredService<CompanyLogoStorage>();
+            var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOod1ECAAIrAOZn3BBXAAAAAElFTkSuQmCC");
+            key = await storage.StoreAsync(png, CancellationToken.None);
+        }
+        await using (var db = sqlServerFixture.CreateDbContext())
+        {
+            var sale = await db.Sales.SingleAsync(x => x.Id == created.Id);
+            var identity = CompanyDocumentIdentitySnapshotSerializer.Deserialize(sale.CompanyIdentitySnapshotJson);
+            Assert.NotNull(identity);
+            sale.CompanyIdentitySnapshotJson = CompanyDocumentIdentitySnapshotSerializer.Serialize(
+                identity with { LogoStorageKey = key, LogoContentType = "image/png" });
+            await db.SaveChangesAsync();
+        }
+        using var pdfResponse = await client.GetAsync($"/api/sales/{created.Id}/pdf");
+        Assert.Equal(HttpStatusCode.OK, pdfResponse.StatusCode);
+        var pdf = await pdfResponse.Content.ReadAsByteArrayAsync();
+        Assert.True(pdf.Length > 4);
+        Assert.Equal("%PDF", System.Text.Encoding.ASCII.GetString(pdf, 0, 4));
     }
 
     private async Task<HttpResponseMessage> SendWithCsrfAsync<T>(

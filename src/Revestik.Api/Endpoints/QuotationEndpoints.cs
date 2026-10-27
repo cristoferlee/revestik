@@ -1,3 +1,5 @@
+using Revestik.Api.Data;
+using Revestik.Api.Services.Company;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -68,6 +70,8 @@ public static class QuotationEndpoints
                 int id,
                 IQuotationService quotationService,
                 IQuotationPdfService quotationPdfService,
+                CompanyPdfBrandingProvider brandingProvider,
+                RevestikDbContext db,
                 CancellationToken cancellationToken) =>
             {
                 var quotation =
@@ -80,9 +84,38 @@ public static class QuotationEndpoints
                     return Results.NotFound();
                 }
 
-                var pdf =
-                    quotationPdfService.Generate(
-                        quotation);
+                CompanyPdfBranding branding;
+                try
+                {
+                    branding = await brandingProvider.ForQuotationAsync(id, cancellationToken)
+                        ?? throw new InvalidOperationException("Quotation branding missing.");
+                }
+                catch (CompanyPdfSnapshotException)
+                {
+                    return Results.Problem(
+                        title: "No se puede generar el PDF.",
+                        detail: "Los datos históricos de identidad empresarial del documento son inválidos.",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                catch (InvalidDataException)
+                {
+                    return Results.Problem(
+                        title: "No se puede generar el PDF.",
+                        detail: "Falta o está dañado el logotipo empresarial histórico.",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+
+                CompanyDocumentPdfPreferences preferences;
+                try
+                {
+                    preferences = await CompanyDocumentPdfPreferencesStore.ForQuotationAsync(db, id, cancellationToken);
+                }
+                catch (InvalidDataException)
+                {
+                    return Results.Problem(title: "No se puede generar el PDF.",
+                        detail: "El snapshot histórico de preferencias es inválido.", statusCode: 409);
+                }
+                var pdf = quotationPdfService.Generate(quotation, branding, preferences);
 
                 var fileName =
                     $"{quotation.QuotationNumber}.pdf";

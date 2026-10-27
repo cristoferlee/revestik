@@ -16,6 +16,7 @@ using Revestik.Client.Services.Quotations;
 using Revestik.Client.Services.Sales;
 using Revestik.Client.Services.Suppliers;
 using Revestik.Client.Services.Taxpayers;
+using Revestik.Client.Services.Users;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -78,6 +79,7 @@ builder.Services.AddScoped<AuthenticationStateProvider>(
         serviceProvider.GetRequiredService<CookieAuthenticationStateProvider>());
 
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
+builder.Services.AddScoped<UserAdministrationApiService>();
 builder.Services.AddScoped<ICabysApiService, CabysApiService>();
 builder.Services.AddScoped<ICustomerApiService, CustomerApiService>();
 builder.Services.AddScoped<ISupplierApiService, SupplierApiService>();

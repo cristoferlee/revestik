@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Revestik.Api.Services.Company;
 using Revestik.Api.Data;
 using Revestik.Api.Models;
 using Revestik.Shared.Common;
@@ -424,6 +425,13 @@ public sealed class QuotationService(
             quotation,
             request,
             cancellationToken);
+
+        // Capture before issuing; the snapshot and issued state share SaveChangesAsync.
+        quotation.CompanyIdentitySnapshotJson =
+            await CompanyDocumentIdentityCaptureService.CaptureSnapshotJsonAsync(
+                dbContext, cancellationToken);
+        quotation.CompanyPdfPreferencesSnapshotJson =
+            await CompanyDocumentPdfPreferencesStore.CaptureSnapshotAsync(dbContext, cancellationToken);
 
         quotation.CustomerNameSnapshot =
             customer.Name;

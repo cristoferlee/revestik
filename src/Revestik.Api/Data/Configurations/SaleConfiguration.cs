@@ -18,6 +18,10 @@ public sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
         builder.Property(sale => sale.CustomerIdentificationNumberSnapshot).HasMaxLength(12).IsRequired();
         builder.Property(sale => sale.CustomerEmailSnapshot).HasMaxLength(254).IsRequired();
         builder.Property(sale => sale.CustomerPhoneNumberSnapshot).HasMaxLength(20).IsRequired();
+        builder.Property(sale => sale.CompanyIdentitySnapshotJson)
+            .HasColumnType("nvarchar(max)")
+            .IsRequired(false);
+
         builder.Property(sale => sale.CreatedByUserId).HasMaxLength(450).IsRequired();
         builder.Property(sale => sale.IssuedByUserId).HasMaxLength(450);
         builder.Property(sale => sale.VoidedByUserId).HasMaxLength(450);

@@ -16,7 +16,8 @@ namespace Revestik.Api.Tests.Hosting;
 public sealed class RevestikWebApplicationFactory(
     string environmentName,
     string? databaseConnectionString = null,
-    string? projectFileStorageRoot = null)
+    string? projectFileStorageRoot = null,
+    Action<IServiceCollection>? customizeTestServices = null)
     : WebApplicationFactory<Program>
 {
     private readonly string inMemoryDatabaseName = $"RevestikHostingTests-{Guid.NewGuid()}";
@@ -63,6 +64,7 @@ public sealed class RevestikWebApplicationFactory(
                 options.DefaultChallengeScheme = TestAuthenticationHandler.SchemeName;
             }).AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(
                 TestAuthenticationHandler.SchemeName, _ => { });
+            customizeTestServices?.Invoke(services);
         });
     }
 

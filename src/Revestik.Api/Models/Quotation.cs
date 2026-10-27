@@ -21,6 +21,12 @@ public sealed class Quotation
 
     public string CustomerPhoneNumberSnapshot { get; set; } = string.Empty;
 
+    // Null identifies documents created before company identity snapshots.
+    public string? CompanyIdentitySnapshotJson { get; set; }
+
+    // Null means emitted before CONFIG-04.
+    public string? CompanyPdfPreferencesSnapshotJson { get; set; }
+
     public string CreatedByUserId { get; set; } = string.Empty;
 
     public ApplicationUser CreatedByUser { get; set; } = null!;

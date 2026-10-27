@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Revestik.Api.Services.Company;
 using Revestik.Api.Data;
 using Revestik.Api.Models;
 using Revestik.Shared.Common;
@@ -769,6 +770,14 @@ public sealed class SaleService(
             sale,
             request,
             cancellationToken);
+
+        // Capture before allocating the sale number; no number is consumed
+        // when company identity is absent or invalid.
+        sale.CompanyIdentitySnapshotJson =
+            await CompanyDocumentIdentityCaptureService.CaptureSnapshotJsonAsync(
+                dbContext, cancellationToken);
+        sale.CompanyPdfPreferencesSnapshotJson =
+            await CompanyDocumentPdfPreferencesStore.CaptureSnapshotAsync(dbContext, cancellationToken);
 
         sale.CustomerNameSnapshot = customer.Name;
         sale.CustomerIdentificationNumberSnapshot =

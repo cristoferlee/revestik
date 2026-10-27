@@ -1,3 +1,4 @@
+using Revestik.Api.Services.Company;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
@@ -97,6 +98,8 @@ public static class SaleEndpoints
                 int id,
                 ISaleService saleService,
                 ISalePdfService salePdfService,
+                CompanyPdfBrandingProvider brandingProvider,
+                RevestikDbContext db,
                 CancellationToken cancellationToken) =>
             {
                 var sale = await saleService.GetByIdAsync(
@@ -120,8 +123,38 @@ public static class SaleEndpoints
                             StatusCodes.Status400BadRequest);
                 }
 
-                var pdf =
-                    salePdfService.Generate(sale);
+                CompanyPdfBranding branding;
+                try
+                {
+                    branding = await brandingProvider.ForSaleAsync(id, cancellationToken)
+                        ?? throw new InvalidOperationException("Sale branding missing.");
+                }
+                catch (CompanyPdfSnapshotException)
+                {
+                    return Results.Problem(
+                        title: "No se puede generar el PDF.",
+                        detail: "Los datos históricos de identidad empresarial del documento son inválidos.",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                catch (InvalidDataException)
+                {
+                    return Results.Problem(
+                        title: "No se puede generar el PDF.",
+                        detail: "Falta o está dañado el logotipo empresarial histórico.",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+
+                CompanyDocumentPdfPreferences preferences;
+                try
+                {
+                    preferences = await CompanyDocumentPdfPreferencesStore.ForSaleAsync(db, id, cancellationToken);
+                }
+                catch (InvalidDataException)
+                {
+                    return Results.Problem(title: "No se puede generar el PDF.",
+                        detail: "El snapshot histórico de preferencias es inválido.", statusCode: 409);
+                }
+                var pdf = salePdfService.Generate(sale, branding, preferences);
 
                 var fileName =
                     $"{sale.SaleNumber}.pdf";

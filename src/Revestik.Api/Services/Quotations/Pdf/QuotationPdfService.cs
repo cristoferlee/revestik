@@ -3,6 +3,7 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using Revestik.Api.Configuration;
+using Revestik.Api.Services.Company;
 using Revestik.Shared.Quotations;
 
 namespace Revestik.Api.Services.Quotations.Pdf;
@@ -15,9 +16,17 @@ public sealed class QuotationPdfService(
     private readonly string logoPath =
         Path.Combine(AppContext.BaseDirectory, "Assets", "revestik.svg");
 
-    public byte[] Generate(QuotationResponse quotation)
+    public byte[] Generate(QuotationResponse quotation) =>
+        Generate(quotation, new CompanyPdfBranding(
+            CompanyDocumentIdentityResolver.FromLegacyOptions(company),
+            File.Exists(logoPath) ? File.ReadAllText(logoPath) : null, null));
+
+    public byte[] Generate(QuotationResponse quotation, CompanyPdfBranding branding) => Generate(quotation, branding, new CompanyDocumentPdfPreferences());
+
+    public byte[] Generate(QuotationResponse quotation, CompanyPdfBranding branding, CompanyDocumentPdfPreferences preferences)
     {
         ArgumentNullException.ThrowIfNull(quotation);
+        ArgumentNullException.ThrowIfNull(branding);
 
         return Document.Create(document =>
         {
@@ -30,18 +39,21 @@ public sealed class QuotationPdfService(
                     .FontSize(9)
                     .FontColor(Colors.Grey.Darken3));
 
-                page.Header().Element(container => ComposeHeader(container, quotation));
-                page.Content().PaddingVertical(14).Element(container => ComposeContent(container, quotation));
+                page.Header().Element(container => ComposeHeader(container, quotation, branding));
+                page.Content().PaddingVertical(14).Element(container => ComposeContent(container, quotation, preferences));
                 page.Footer().AlignCenter().Text(text =>
                 {
-                    text.Span(company.Website.ToUpperInvariant()).SemiBold();
+                    if (preferences.ShowWebsite && !string.IsNullOrWhiteSpace(branding.Identity.Website))
+                        text.Span(branding.Identity.Website.ToUpperInvariant()).SemiBold();
                     text.Span("  •  Documento generado desde Revestik");
+                    if (!string.IsNullOrWhiteSpace(preferences.FooterMessage))
+                        text.Span("  •  " + preferences.FooterMessage);
                 });
             });
         }).GeneratePdf();
     }
 
-    private void ComposeHeader(IContainer container, QuotationResponse quotation)
+    private void ComposeHeader(IContainer container, QuotationResponse quotation, CompanyPdfBranding branding)
     {
         container.Column(column =>
         {
@@ -52,12 +64,12 @@ public sealed class QuotationPdfService(
                     left.Item()
                         .Width(145)
                         .Height(50)
-                        .Element(ComposeLogo);
+                        .Element(container => ComposeLogo(container, branding));
 
-                    left.Item().PaddingTop(4).Text(company.LegalName).SemiBold();
-                    left.Item().Text($"Cédula jurídica: {company.IdentificationNumber}");
-                    left.Item().Text($"Tel: {company.PhoneNumber}");
-                    left.Item().Text(company.Email);
+                    left.Item().PaddingTop(4).Text(branding.Identity.LegalName).SemiBold();
+                    left.Item().Text($"Cédula jurídica: {branding.Identity.IdentificationNumber}");
+                    left.Item().Text($"Tel: {branding.Identity.PhoneNumber}");
+                    left.Item().Text(branding.Identity.Email);
                 });
 
                 row.ConstantItem(175).AlignRight().Column(right =>
@@ -75,32 +87,34 @@ public sealed class QuotationPdfService(
                 });
             });
 
-            column.Item().PaddingTop(8).Text(company.Address);
+            column.Item().PaddingTop(8).Text(branding.Identity.Address);
             column.Item().PaddingTop(8).LineHorizontal(1).LineColor(Colors.Orange.Darken1);
         });
     }
 
-    private void ComposeLogo(IContainer container)
+    private static void ComposeLogo(IContainer container, CompanyPdfBranding branding)
     {
-        if (!File.Exists(logoPath))
+        if (branding.RasterLogo is not null)
         {
-            container.AlignMiddle().Text("REVESTIK")
-                .FontSize(22)
-                .Bold()
-                .FontColor(Colors.Grey.Darken4);
+            container.Image(branding.RasterLogo).FitArea();
             return;
         }
-
-        var svg = File.ReadAllText(logoPath);
-        container.Svg(svg).FitArea();
+        if (branding.DefaultSvg is not null)
+        {
+            container.Svg(branding.DefaultSvg).FitArea();
+            return;
+        }
+        // Retain the pre-existing text fallback for direct legacy Generate(...) callers.
+        container.AlignMiddle().Text("REVESTIK")
+            .FontSize(22).Bold().FontColor(Colors.Grey.Darken4);
     }
 
-    private static void ComposeContent(IContainer container, QuotationResponse quotation)
+    private static void ComposeContent(IContainer container, QuotationResponse quotation, CompanyDocumentPdfPreferences preferences)
     {
         container.Column(column =>
         {
             column.Spacing(12);
-            column.Item().Element(c => ComposeCustomerAndTerms(c, quotation));
+            column.Item().Element(c => ComposeCustomerAndTerms(c, quotation, preferences));
             column.Item().Element(c => ComposeLines(c, quotation));
 
             if (quotation.Charges.Count > 0)
@@ -113,7 +127,7 @@ public sealed class QuotationPdfService(
         });
     }
 
-    private static void ComposeCustomerAndTerms(IContainer container, QuotationResponse quotation)
+    private static void ComposeCustomerAndTerms(IContainer container, QuotationResponse quotation, CompanyDocumentPdfPreferences preferences)
     {
         container.Row(row =>
         {
@@ -141,7 +155,10 @@ public sealed class QuotationPdfService(
                     column.Item().PaddingTop(5).Text($"Fecha: {FormatDate(GetDocumentDate(quotation))}");
                     column.Item().Text($"Válida hasta: {FormatDate(quotation.ValidUntilUtc)}");
                     column.Item().Text($"Moneda: {quotation.Currency}");
-                    column.Item().Text($"Vendedor: {quotation.CreatedByDisplayName}");
+                    if (preferences.ShowQuotationSeller)
+                        column.Item().Text($"Vendedor: {quotation.CreatedByDisplayName}");
+                    if (!string.IsNullOrWhiteSpace(preferences.QuotationDefaultTerms))
+                        column.Item().Text(preferences.QuotationDefaultTerms);
                 });
             });
         });

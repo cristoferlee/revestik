@@ -3,6 +3,7 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using Revestik.Api.Configuration;
+using Revestik.Api.Services.Company;
 using Revestik.Shared.Sales;
 
 namespace Revestik.Api.Services.Sales.Pdf;
@@ -15,9 +16,17 @@ public sealed class SalePdfService(
     private readonly string logoPath =
         Path.Combine(AppContext.BaseDirectory, "Assets", "revestik.svg");
 
-    public byte[] Generate(SaleResponse sale)
+    public byte[] Generate(SaleResponse sale) =>
+        Generate(sale, new CompanyPdfBranding(
+            CompanyDocumentIdentityResolver.FromLegacyOptions(company),
+            File.Exists(logoPath) ? File.ReadAllText(logoPath) : null, null));
+
+    public byte[] Generate(SaleResponse sale, CompanyPdfBranding branding) => Generate(sale, branding, new CompanyDocumentPdfPreferences());
+
+    public byte[] Generate(SaleResponse sale, CompanyPdfBranding branding, CompanyDocumentPdfPreferences preferences)
     {
         ArgumentNullException.ThrowIfNull(sale);
+        ArgumentNullException.ThrowIfNull(branding);
 
         return Document.Create(document =>
         {
@@ -33,7 +42,7 @@ public sealed class SalePdfService(
 
                 page.Header()
                     .Element(container =>
-                        ComposeHeader(container, sale));
+                        ComposeHeader(container, sale, branding));
 
                 page.Content()
                     .PaddingVertical(14)
@@ -44,12 +53,13 @@ public sealed class SalePdfService(
                     .AlignCenter()
                     .Text(text =>
                     {
-                        text.Span(
-                                company.Website.ToUpperInvariant())
-                            .SemiBold();
+                        if (preferences.ShowWebsite && !string.IsNullOrWhiteSpace(branding.Identity.Website))
+                            text.Span(branding.Identity.Website.ToUpperInvariant()).SemiBold();
 
                         text.Span(
                             "  •  Documento interno generado desde Revestik");
+                        if (!string.IsNullOrWhiteSpace(preferences.FooterMessage))
+                            text.Span("  •  " + preferences.FooterMessage);
                     });
             });
         }).GeneratePdf();
@@ -57,7 +67,8 @@ public sealed class SalePdfService(
 
     private void ComposeHeader(
         IContainer container,
-        SaleResponse sale)
+        SaleResponse sale,
+        CompanyPdfBranding branding)
     {
         container.Column(column =>
         {
@@ -68,20 +79,20 @@ public sealed class SalePdfService(
                     left.Item()
                         .Width(145)
                         .Height(50)
-                        .Element(ComposeLogo);
+                        .Element(container => ComposeLogo(container, branding));
 
                     left.Item()
                         .PaddingTop(4)
-                        .Text(company.LegalName)
+                        .Text(branding.Identity.LegalName)
                         .SemiBold();
 
                     left.Item().Text(
-                        $"Cédula jurídica: {company.IdentificationNumber}");
+                        $"Cédula jurídica: {branding.Identity.IdentificationNumber}");
 
                     left.Item().Text(
-                        $"Tel: {company.PhoneNumber}");
+                        $"Tel: {branding.Identity.PhoneNumber}");
 
-                    left.Item().Text(company.Email);
+                    left.Item().Text(branding.Identity.Email);
                 });
 
                 row.ConstantItem(180)
@@ -126,7 +137,7 @@ public sealed class SalePdfService(
 
             column.Item()
                 .PaddingTop(8)
-                .Text(company.Address);
+                .Text(branding.Identity.Address);
 
             column.Item()
                 .PaddingTop(8)
@@ -136,24 +147,21 @@ public sealed class SalePdfService(
         });
     }
 
-    private void ComposeLogo(IContainer container)
+    private static void ComposeLogo(IContainer container, CompanyPdfBranding branding)
     {
-        if (!File.Exists(logoPath))
+        if (branding.RasterLogo is not null)
         {
-            container
-                .AlignMiddle()
-                .Text("REVESTIK")
-                .FontSize(22)
-                .Bold()
-                .FontColor(
-                    Colors.Grey.Darken4);
-
+            container.Image(branding.RasterLogo).FitArea();
             return;
         }
-
-        var svg = File.ReadAllText(logoPath);
-
-        container.Svg(svg).FitArea();
+        if (branding.DefaultSvg is not null)
+        {
+            container.Svg(branding.DefaultSvg).FitArea();
+            return;
+        }
+        // Retain the pre-existing text fallback for direct legacy Generate(...) callers.
+        container.AlignMiddle().Text("REVESTIK")
+            .FontSize(22).Bold().FontColor(Colors.Grey.Darken4);
     }
 
     private static void ComposeContent(

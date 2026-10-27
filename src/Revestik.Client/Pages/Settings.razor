@@ -11,7 +11,7 @@
     <header class="settings-header">
         <div>
             <h1>Configuración</h1>
-            <p>Administra catálogos y datos operativos utilizados por Revestik.</p>
+            <p>Administrá los datos, accesos y parámetros operativos de Revestik.</p>
         </div>
     </header>
 
@@ -29,40 +29,74 @@
         </div>
     }
 
-    <section class="settings-card">
-        <div class="settings-section-heading">
+    <section class="settings-group" aria-labelledby="settings-company-title">
+        <div class="settings-group-title">
             <div>
-                <h2>Proveedores</h2>
-                <p>Administra los proveedores disponibles para registrar compras.</p>
+                <h2 id="settings-company-title">Empresa y administración</h2>
+                <p>Datos comerciales, documentos y control de acceso.</p>
             </div>
-
-            <a class="primary-button"
-               href="/settings/suppliers">
-                Administrar proveedores
+        </div>
+        <div class="settings-shortcut-grid">
+            <a class="settings-shortcut" href="/settings/company">
+                <span class="settings-shortcut-icon" aria-hidden="true">🏢</span>
+                <span class="settings-shortcut-body"><strong>Mi empresa</strong><span>Información comercial, dirección y logotipo.</span></span>
+                <span class="settings-shortcut-arrow" aria-hidden="true">&#8599;</span>
+            </a>
+            <a class="settings-shortcut" href="/settings/document-pdf">
+                <span class="settings-shortcut-icon" aria-hidden="true">📄</span>
+                <span class="settings-shortcut-body"><strong>Documentos y PDF</strong><span>Presentación de cotizaciones y ventas.</span></span>
+                <span class="settings-shortcut-arrow" aria-hidden="true">&#8599;</span>
+            </a>
+            <a class="settings-shortcut" href="/settings/users">
+                <span class="settings-shortcut-icon" aria-hidden="true">👥</span>
+                <span class="settings-shortcut-body"><strong>Usuarios y permisos</strong><span>Colaboradores, roles y accesos.</span></span>
+                <span class="settings-shortcut-arrow" aria-hidden="true">&#8599;</span>
+            </a>
+            <a class="settings-shortcut" href="/settings/audit">
+                <span class="settings-shortcut-icon" aria-hidden="true">🛡️</span>
+                <span class="settings-shortcut-body"><strong>Seguridad y auditoría</strong><span>Historial de accesos y cambios administrativos.</span></span>
+                <span class="settings-shortcut-arrow" aria-hidden="true">&#8599;</span>
             </a>
         </div>
     </section>
 
-    <section class="settings-card">
-        <div class="settings-section-heading">
+    <section class="settings-group" aria-labelledby="settings-operations-title">
+        <div class="settings-group-title">
             <div>
-                <h2>Precio por unidad</h2>
-                <p>Define si el precio de venta corresponde a la unidad física o al contenido del producto.</p>
+                <h2 id="settings-operations-title">Operaciones y catálogos</h2>
+                <p>Herramientas para administrar productos, compras y ventas.</p>
             </div>
-
-            <a class="primary-button" href="/settings/product-pricing">
-                Configurar precios
+        </div>
+        <div class="settings-shortcut-grid">
+            <a class="settings-shortcut" href="/settings/suppliers">
+                <span class="settings-shortcut-icon" aria-hidden="true">🚚</span>
+                <span class="settings-shortcut-body"><strong>Proveedores</strong><span>Datos de proveedores para registrar compras.</span></span>
+                <span class="settings-shortcut-arrow" aria-hidden="true">&#8599;</span>
+            </a>
+            <a class="settings-shortcut" href="/settings/product-pricing">
+                <span class="settings-shortcut-icon" aria-hidden="true">🏷️</span>
+                <span class="settings-shortcut-body"><strong>Precio por unidad</strong><span>Cómo se aplica el precio de cada producto.</span></span>
+                <span class="settings-shortcut-arrow" aria-hidden="true">&#8599;</span>
             </a>
         </div>
     </section>
 
-    <section class="settings-card">
-        <div class="settings-section-heading">
+    <section class="settings-group settings-catalog-group" aria-labelledby="settings-catalog-title">
+        <div class="settings-group-title">
+            <div>
+                <h2 id="settings-catalog-title">Catálogos de inventario</h2>
+                <p>Configurá categorías y unidades que se utilizan en el inventario.</p>
+            </div>
+        </div>
+    <details class="settings-card settings-disclosure">
+        <summary class="settings-section-heading">
             <div>
                 <h2>Categorías de producto</h2>
                 <p>Estas categorías aparecen al crear o editar productos en Inventario.</p>
             </div>
-
+            <span class="settings-disclosure-arrow" aria-hidden="true">⌄</span>
+        </summary>
+        <div class="settings-catalog-toolbar">
             <button type="button"
                     class="primary-button"
                     disabled="@isBusy"
@@ -119,17 +153,19 @@
                 }
             </div>
         }
-    </section>
+    </details>
 
-    <section class="settings-card">
-        <div class="settings-section-heading">
+    <details class="settings-card settings-disclosure">
+        <summary class="settings-section-heading">
             <div>
                 <h2>Unidades de medida</h2>
                 <p>
                     Define cómo se cuenta físicamente un producto y si la unidad admite fracciones.
                 </p>
             </div>
-
+            <span class="settings-disclosure-arrow" aria-hidden="true">⌄</span>
+        </summary>
+        <div class="settings-catalog-toolbar">
             <button type="button"
                     class="primary-button"
                     disabled="@isBusy"
@@ -192,6 +228,8 @@
                 }
             </div>
         }
+    </details>
+
     </section>
 
     @if (isCategoryFormOpen)

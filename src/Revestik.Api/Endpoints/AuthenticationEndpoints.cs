@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
 using Revestik.Api.Authorization;
+using Revestik.Api.Data;
+using Revestik.Api.Services.Audit;
 using Revestik.Api.Models.Identity;
 using Revestik.Shared.Authentication;
 
@@ -142,7 +144,8 @@ public static class AuthenticationEndpoints
                 "/logout",
                 async (
                     LogoutRequest request,
-                    SignInManager<ApplicationUser> signInManager) =>
+                    SignInManager<ApplicationUser> signInManager,
+                    RevestikDbContext db, ClaimsPrincipal principal, CancellationToken ct) =>
                 {
                     if (!request.Confirm)
                     {
@@ -150,6 +153,9 @@ public static class AuthenticationEndpoints
                     }
 
                     await signInManager.SignOutAsync();
+                    SecurityAudit.Record(db, "Logout", "Session", null,
+                        principal.FindFirstValue(ClaimTypes.NameIdentifier));
+                    await db.SaveChangesAsync(ct);
 
                     return Results.NoContent();
                 })
@@ -166,7 +172,8 @@ public static class AuthenticationEndpoints
         UserManager<ApplicationUser> userManager,
         IConfiguration configuration,
         IHostEnvironment hostEnvironment,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        RevestikDbContext db, CancellationToken ct)
     {
         var clientBaseUrl = GetClientBaseUrl(
             configuration,
@@ -206,6 +213,12 @@ public static class AuthenticationEndpoints
         }
 
         email = email.Trim();
+
+        if (!GoogleEmailVerification.IsVerified(externalLogin.Principal))
+        {
+            logger.LogWarning("Google sign-in rejected: email not verified.");
+            return RedirectWithError(clientBaseUrl, "email_not_verified");
+        }
 
         var user = await userManager.FindByLoginAsync(
             externalLogin.LoginProvider,
@@ -285,6 +298,8 @@ public static class AuthenticationEndpoints
         {
             logger.LogWarning(
                 "A disabled user attempted to sign in.");
+            SecurityAudit.Record(db, "LoginRejectedDisabled", "User", user.Id, user.Id);
+            await db.SaveChangesAsync(ct);
 
             return RedirectWithError(
                 clientBaseUrl,
@@ -343,6 +358,9 @@ public static class AuthenticationEndpoints
             user,
             isPersistent: false,
             externalLogin.LoginProvider);
+
+        SecurityAudit.Record(db, "LoginSucceeded", "User", user.Id, user.Id);
+        await db.SaveChangesAsync(ct);
 
         return Results.Redirect(
             $"{clientBaseUrl}{safeReturnPath}");
@@ -413,4 +431,14 @@ public static class AuthenticationEndpoints
                 ",",
                 identityErrors.Select(error => error.Code)));
     }
+}
+
+// Google maps this provider-specific claim in AuthenticationExtensions.
+// An absent or non-true value must fail closed before email-based account linking.
+public static class GoogleEmailVerification
+{
+    public static bool IsVerified(ClaimsPrincipal principal) =>
+        string.Equals(
+            principal.FindFirstValue("urn:google:email_verified"),
+            "true", StringComparison.OrdinalIgnoreCase);
 }

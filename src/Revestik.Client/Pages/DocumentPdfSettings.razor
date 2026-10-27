@@ -1,0 +1,127 @@
+@page "/settings/document-pdf"
+@using System.Net
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Administrator")]
+@inject HttpClient Http
+
+<PageTitle>Documentos y PDF | Revestik</PageTitle>
+<section class="pdf-settings">
+    <a href="/settings">← Configuración</a>
+    <header><h1>Documentos y PDF</h1><p>Personalizá la presentación de nuevas cotizaciones y ventas sin modificar documentos emitidos.</p></header>
+    @if (busy) { <p role="status">Cargando...</p> }
+    @if (error is not null) { <p class="pdf-alert" role="alert">@error</p> }
+    @if (success is not null) { <p class="pdf-success" role="status">@success</p> }
+    @if (form is not null)
+    {
+        <div class="pdf-card">
+            <h2>Contenido comercial</h2>
+            <label for="footer">Mensaje al pie del documento</label>
+            <textarea id="footer" rows="3" maxlength="500" @bind="form.FooterMessage" disabled="@saving"></textarea>
+            <p class="pdf-hint">Aparece en los nuevos PDF de cotizaciones y ventas.</p>
+            <label for="terms">Condiciones predeterminadas de cotización</label>
+            <textarea id="terms" rows="4" maxlength="1000" @bind="form.QuotationDefaultTerms" disabled="@saving"></textarea>
+            <p class="pdf-hint">Se conservarán en la cotización al emitirla.</p>
+        </div>
+        <div class="pdf-card">
+            <h2>Elementos visibles</h2>
+            <label class="pdf-check"><input type="checkbox" @bind="form.ShowWebsite" disabled="@saving" /> Mostrar sitio web en el pie</label>
+            <label class="pdf-check"><input type="checkbox" @bind="form.ShowQuotationSeller" disabled="@saving" /> Mostrar vendedor en cotizaciones</label>
+        </div>
+        <div class="pdf-actions">
+            <button type="button" disabled="@(saving || previewing)" @onclick="PreviewAsync">
+                @(previewing ? "Generando vista previa..." : "Vista previa PDF")
+            </button>
+            <button type="button" disabled="@(saving || previewing)" @onclick="SaveAsync">
+                @(saving ? "Guardando..." : "Guardar preferencias")
+            </button>
+        </div>
+        @if (previewUrl is not null)
+        {
+            <div class="pdf-card">
+                <h2>Vista previa de cotización</h2>
+                <p class="pdf-hint">Ejemplo no emitido. Muestra los valores del formulario, incluso sin guardarlos.</p>
+                <iframe class="pdf-preview-frame" title="Vista previa PDF de cotización" src="@previewUrl"></iframe>
+            </div>
+        }
+    }
+</section>
+@code {
+    private sealed class Preferences
+    {
+        public string FooterMessage { get; set; } = "";
+        public string QuotationDefaultTerms { get; set; } = "";
+        public bool ShowWebsite { get; set; } = true;
+        public bool ShowQuotationSeller { get; set; } = true;
+        public string? Version { get; set; }
+    }
+    private Preferences? form;
+    private bool busy = true;
+    private bool saving;
+    private bool previewing;
+    private string? previewUrl;
+    private string? error;
+    private string? success;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private async Task LoadAsync()
+    {
+        busy = true;
+        error = null;
+        try { form = await Http.GetFromJsonAsync<Preferences>("api/settings/document-pdf"); }
+        catch (HttpRequestException) { error = "No fue posible cargar las preferencias."; }
+        finally { busy = false; }
+    }
+    private async Task PreviewAsync()
+    {
+        if (form is null) return;
+        previewing = true;
+        error = null;
+        previewUrl = null;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/settings/document-pdf/preview", form);
+            if (!response.IsSuccessStatusCode)
+            {
+                error = "No se pudo generar la vista previa. Revisá las preferencias y el logotipo.";
+                return;
+            }
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            previewUrl = $"data:application/pdf;base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch (HttpRequestException)
+        {
+            error = "No se pudo conectar con el servidor para generar la vista previa.";
+        }
+        finally
+        {
+            previewing = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (form is null) return;
+        saving = true;
+        error = null;
+        success = null;
+        try
+        {
+            using var response = await Http.PutAsJsonAsync("api/settings/document-pdf", form);
+            if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                error = "Otro usuario modificó esta configuración. Recargá la página antes de guardar.";
+                return;
+            }
+            if (!response.IsSuccessStatusCode)
+            {
+                error = "No se pudieron guardar las preferencias. Revisá los textos e intentá otra vez.";
+                return;
+            }
+            form = await response.Content.ReadFromJsonAsync<Preferences>();
+            success = "Preferencias guardadas.";
+        }
+        catch (HttpRequestException) { error = "No se pudo conectar con el servidor."; }
+        finally { saving = false; }
+    }
+}

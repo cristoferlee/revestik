@@ -1,3 +1,4 @@
+using Revestik.Api.Services.Company;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -61,6 +62,26 @@ public sealed class QuotationEndpointTests(
                 existingUser.IsActive = true;
                 existingUser.DisplayName =
                     "Quotation Endpoint Test User";
+            }
+
+            // Document issuance requires an existing valid company identity.
+            // Seed once in the existing class-scoped SQL fixture: no extra host/database.
+            if (!await dbContext.CompanyProfiles.AnyAsync(profile => profile.Id == 1))
+            {
+                dbContext.CompanyProfiles.Add(new CompanyProfile
+                {
+                    Id = 1,
+                    LegalName = "Revestik Integration Test",
+                    IdentificationNumber = "3101999999",
+                    TaxIdentificationType = "02",
+                    TaxIdentificationNumber = "3101999999",
+                    CommercialName = "Revestik Test",
+                    PhoneNumber = "22222222",
+                    Email = "company@example.com",
+                    Website = "https://example.com",
+                    Address = "Heredia, Costa Rica",
+                    UpdatedAtUtc = DateTime.UtcNow
+                });
             }
 
             await dbContext.SaveChangesAsync();
@@ -480,6 +501,34 @@ public sealed class QuotationEndpointTests(
         Assert.NotNull(persistedQuotation.IssuedAtUtc);
         Assert.Equal("COT-900003", persistedQuotation.QuotationNumber);
         Assert.Equal(TestUserId, persistedQuotation.CreatedByUserId);
+        Assert.False(string.IsNullOrWhiteSpace(persistedQuotation.CompanyIdentitySnapshotJson));
+        Assert.Contains("Revestik Integration Test", persistedQuotation.CompanyIdentitySnapshotJson!);
+        // The issued document must preserve its identity after editing My Company.
+        var historicalIdentityJson = persistedQuotation.CompanyIdentitySnapshotJson;
+        var currentProfile = await dbContext.CompanyProfiles.SingleAsync(p => p.Id == 1);
+        var originalCommercialName = currentProfile.CommercialName;
+        var changedCommercialName = "Empresa modificada después de emitir";
+        try
+        {
+            currentProfile.CommercialName = changedCommercialName;
+            await dbContext.SaveChangesAsync();
+
+            await using var historicalDb = sqlServerFixture.CreateDbContext();
+            var historicalJson = await historicalDb.Quotations
+                .AsNoTracking()
+                .Where(document => document.Id == quotationId)
+                .Select(document => document.CompanyIdentitySnapshotJson)
+                .SingleAsync();
+
+            Assert.Equal(historicalIdentityJson, historicalJson);
+            Assert.DoesNotContain(changedCommercialName, historicalJson!);
+        }
+        finally
+        {
+            currentProfile.CommercialName = originalCommercialName;
+            await dbContext.SaveChangesAsync();
+        }
+
     }
 
     [Fact]
@@ -523,6 +572,7 @@ public sealed class QuotationEndpointTests(
         Assert.Null(persistedQuotation.IssuedAtUtc);
         Assert.Equal("COT-900004", persistedQuotation.QuotationNumber);
         Assert.Equal(TestUserId, persistedQuotation.CreatedByUserId);
+        Assert.Null(persistedQuotation.CompanyIdentitySnapshotJson);
     }
 
     [Fact]
@@ -551,6 +601,29 @@ public sealed class QuotationEndpointTests(
 
         Assert.Equal(QuotationStatus.Draft, persistedQuotation.Status);
         Assert.Null(persistedQuotation.IssuedAtUtc);
+    }
+
+    [Fact]
+    public async Task DownloadQuotationPdf_WithMissingHistoricalLogo_ReturnsConflict()
+    {
+        var customerId = await SeedCustomerAsync();
+        var quotationId = await SeedQuotationAsync(customerId, "COT-900099");
+        using var issueResponse = await SendWithCsrfAsync(
+            HttpMethod.Post, $"/api/quotations/{quotationId}/issue", CreateValidQuotationRequest(customerId));
+        Assert.Equal(HttpStatusCode.OK, issueResponse.StatusCode);
+        await using (var db = sqlServerFixture.CreateDbContext())
+        {
+            var quotation = await db.Quotations.SingleAsync(x => x.Id == quotationId);
+            var identity = CompanyDocumentIdentitySnapshotSerializer.Deserialize(quotation.CompanyIdentitySnapshotJson);
+            Assert.NotNull(identity);
+            quotation.CompanyIdentitySnapshotJson = CompanyDocumentIdentitySnapshotSerializer.Serialize(
+                identity with { LogoStorageKey = Guid.NewGuid().ToString("N"), LogoContentType = "image/png" });
+            await db.SaveChangesAsync();
+        }
+        using var pdfResponse = await client.GetAsync($"/api/quotations/{quotationId}/pdf");
+        Assert.Equal(HttpStatusCode.Conflict, pdfResponse.StatusCode);
+        var body = await pdfResponse.Content.ReadAsStringAsync();
+        Assert.Contains("logotipo", body, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<HttpResponseMessage> SendWithCsrfAsync(

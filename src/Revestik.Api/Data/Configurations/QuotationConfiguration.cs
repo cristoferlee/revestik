@@ -35,6 +35,10 @@ public sealed class QuotationConfiguration : IEntityTypeConfiguration<Quotation>
             .HasMaxLength(20)
             .IsRequired();
 
+        builder.Property(quotation => quotation.CompanyIdentitySnapshotJson)
+            .HasColumnType("nvarchar(max)")
+            .IsRequired(false);
+
         builder.Property(quotation => quotation.Currency)
             .HasConversion<string>()
             .HasMaxLength(3)

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Revestik.Api.Authorization;
@@ -26,6 +27,10 @@ public static class AuthenticationExtensions
             })
             .AddEntityFrameworkStores<RevestikDbContext>()
             .AddDefaultTokenProviders();
+
+        // Refresh identity claims and reject revoked security stamps within one minute.
+        services.Configure<SecurityStampValidatorOptions>(options =>
+            options.ValidationInterval = TimeSpan.FromMinutes(1));
 
         services.ConfigureApplicationCookie(options =>
         {
@@ -73,6 +78,8 @@ public static class AuthenticationExtensions
                         options.ClientSecret = googleClientSecret;
                         options.CallbackPath = "/signin-google";
                         options.SaveTokens = false;
+                        options.ClaimActions.MapJsonKey(
+                            "urn:google:email_verified", "email_verified");
                     });
         }
 

@@ -73,6 +73,25 @@ public sealed class SaleInventoryReversalEndpointTests(
                 "Sale Inventory Reversal User";
         }
 
+        // Reuse this class-scoped SQL database: issued sales must have a company identity.
+        if (!await db.CompanyProfiles.AnyAsync(profile => profile.Id == 1))
+        {
+            db.CompanyProfiles.Add(new CompanyProfile
+            {
+                Id = 1,
+                LegalName = "Revestik Integration Test",
+                IdentificationNumber = "3101999999",
+                TaxIdentificationType = "02",
+                TaxIdentificationNumber = "3101999999",
+                CommercialName = "Revestik Test",
+                PhoneNumber = "22222222",
+                Email = "company@example.com",
+                Website = "https://example.com",
+                Address = "Heredia, Costa Rica",
+                UpdatedAtUtc = DateTime.UtcNow
+            });
+        }
+
         await db.SaveChangesAsync();
 
         factory = new RevestikWebApplicationFactory(
@@ -381,6 +400,14 @@ public sealed class SaleInventoryReversalEndpointTests(
 
         Assert.NotNull(issued);
         Assert.Equal(SaleStatus.Issued, issued.Status);
+
+        await using (var db = sqlServerFixture.CreateDbContext())
+        {
+            var persistedSale = await db.Sales.AsNoTracking()
+                .SingleAsync(sale => sale.Id == issued.Id);
+            Assert.False(string.IsNullOrWhiteSpace(persistedSale.CompanyIdentitySnapshotJson));
+            Assert.Contains("Revestik Integration Test", persistedSale.CompanyIdentitySnapshotJson!);
+        }
 
         return (product.Id, issued.Id);
     }

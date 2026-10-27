@@ -9,6 +9,9 @@ namespace Revestik.Api.Data;
 public sealed class RevestikDbContext(DbContextOptions<RevestikDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole, string>(options)
 {
+    public DbSet<CompanyProfile> CompanyProfiles => Set<CompanyProfile>();
+    public DbSet<CompanyDocumentPdfSetting> CompanyDocumentPdfSettings => Set<CompanyDocumentPdfSetting>();
+    public DbSet<SecurityAuditEntry> SecurityAuditEntries => Set<SecurityAuditEntry>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<Purchase> Purchases => Set<Purchase>();

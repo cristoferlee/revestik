@@ -1,0 +1,319 @@
+@page "/settings/audit"
+@using System.Globalization
+@using System.Net.Http.Json
+@using System.Text.Json
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Administrator")]
+@inject HttpClient Http
+
+<PageTitle>Seguridad y auditoría</PageTitle>
+
+<div class="audit-page">
+    <header class="audit-header">
+        <div>
+            <a href="/settings" class="settings-back-link">← Configuración</a>
+            <h1>Seguridad y auditoría</h1>
+            <p>Consultá quién accedió a Revestik y quién realizó cambios administrativos.</p>
+        </div>
+    </header>
+
+<section class="audit-filters" aria-label="Buscar actividad">
+        <div class="audit-section-head"><div class="audit-section-icon" aria-hidden="true">⌕</div><div><h2>Buscar actividad</h2><p>Filtrá los eventos por actividad, responsable, período o área.</p></div></div>
+        <div class="audit-filter-grid">
+            <div>
+                <label for="auditAction">Actividad</label>
+                <select id="auditAction" class="form-select" @bind="action">
+                    <option value="">Todas las actividades</option>
+                    <optgroup label="Usuarios y permisos">
+                        <option value="UserCreated">Usuario creado</option>
+                        <option value="UserUpdated">Usuario o permisos modificados</option>
+                    </optgroup>
+                    <optgroup label="Empresa">
+                        <option value="CompanyProfileUpdated">Datos empresariales modificados</option>
+                        <option value="CompanyLogoUploaded">Logotipo actualizado</option>
+                        <option value="CompanyLogoRestored">Logotipo restaurado</option>
+                    </optgroup>
+                    <optgroup label="Documentos y PDF">
+                        <option value="CompanyDocumentPdfPreferencesUpdated">Preferencias de documentos y PDF actualizadas</option>
+                    </optgroup>
+                    <optgroup label="Accesos">
+                        <option value="LoginSucceeded">Inicio de sesión</option>
+                        <option value="Logout">Cierre de sesión</option>
+                        <option value="LoginRejectedDisabled">Acceso rechazado: cuenta desactivada</option>
+                    </optgroup>
+                </select>
+            </div>
+            <div>
+                <label for="auditActor">Responsable</label>
+                <select id="auditActor" class="form-select" @bind="actorId">
+                    <option value="">Todos los usuarios</option>
+                    @foreach (var user in users.OrderBy(x => x.DisplayName).ThenBy(x => x.Email))
+                    {
+                        <option value="@user.Id">@user.DisplayName (@user.Email)</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="auditPeriod">Período</label>
+                <select id="auditPeriod" class="form-select" @bind="periodDays">
+                    <option value="7">Últimos 7 días</option>
+                    <option value="30">Últimos 30 días</option>
+                    <option value="90">Últimos 90 días</option>
+                    <option value="0">Todo el historial</option>
+                </select>
+            </div>
+            <div>
+                <label for="auditEntity">Área</label>
+                <select id="auditEntity" class="form-select" @bind="entityType">
+                    <option value="">Todas las áreas</option>
+                    <option value="User">Usuarios</option>
+                    <option value="Company">Empresa y documentos PDF</option>
+                    <option value="Session">Sesiones</option>
+                </select>
+            </div>
+        </div>
+        <div class="audit-filter-actions">
+            <button type="button" class="btn btn-primary audit-primary-button" disabled="@loading" @onclick="Filter">Aplicar filtros</button>
+            <button type="button" class="btn btn-outline-secondary audit-clear-button" disabled="@loading" @onclick="Reset">Limpiar filtros</button>
+        </div>
+    </section>
+
+    <section class="audit-results" aria-label="Historial de actividad">
+        <div class="audit-results-heading">
+            <div class="audit-results-title"><span class="audit-history-icon" aria-hidden="true">▤</span><h2>Historial de actividad</h2></div>
+            @if (!loading && string.IsNullOrEmpty(error))
+            {
+                <span class="audit-count">@total @(total == 1 ? "registro" : "registros")</span>
+            }
+        </div>
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div role="alert" class="alert alert-danger">@error <button class="btn btn-sm btn-outline-danger ms-2" @onclick="Load">Reintentar</button></div>
+        }
+        @if (loading)
+        {
+            <p role="status">Cargando historial…</p>
+        }
+        else if (string.IsNullOrEmpty(error) && items.Count == 0)
+        {
+            <div class="audit-empty">
+                <span class="audit-empty-icon" aria-hidden="true">▤</span>
+                <h3>No hay actividades para mostrar</h3>
+                <p>Probá otro período o limpiá los filtros. Si recién activaste la auditoría, los cambios anteriores no figuran en el historial.</p>
+            </div>
+        }
+        else if (items.Count > 0)
+        {
+            <div class="table-responsive audit-table-frame">
+                <table class="table audit-table">
+                    <thead>
+                        <tr><th scope="col">Fecha y hora</th><th scope="col">Actividad</th><th scope="col">Responsable</th><th scope="col">Elemento afectado</th><th scope="col">Detalle</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in items)
+                        {
+                            <tr>
+                                <td class="audit-date">@CostaRicaTime(item.OccurredAtUtc)</td>
+                                <td><span class="audit-action-badge">@ActionName(item.Action)</span></td>
+                                <td><span class="audit-actor">@ActorName(item.ActorUserId)</span></td>
+                                <td><span class="audit-entity">@EntityName(item)</span>@if (!string.IsNullOrWhiteSpace(item.EntityId)) { <span class="audit-entity-detail"> · @EntityLabel(item)</span> }</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(item.Details))
+                                    {
+                                        <details class="audit-detail-expand"><summary>Ver detalle</summary><pre class="audit-details">@FormatDetails(item)</pre></details>
+                                    }
+                                    else
+                                    {
+                                        <span class="audit-muted">Sin información adicional</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="audit-pagination">
+                <button type="button" class="btn btn-outline-secondary" disabled="@(loading || page <= 1)" @onclick="Previous">Anterior</button>
+                <span class="audit-page-counter">Página @(page) de @Math.Max(1, (int)Math.Ceiling(total / 25.0))</span>
+                <button type="button" class="btn btn-outline-secondary" disabled="@(loading || page * 25 >= total)" @onclick="Next">Siguiente</button>
+            </div>
+        }
+    </section>
+</div>
+
+
+@code {
+    private string action = "";
+    private string actorId = "";
+    private string entityType = "";
+    private int periodDays = 30;
+    private string? error;
+    private bool loading;
+    private int page = 1;
+    private int total;
+    private List<AuditItem> items = new();
+    private List<ManagedUser> users = new();
+
+    private sealed class AuditResponse
+    {
+        public int Total { get; set; }
+        public List<AuditItem> Items { get; set; } = new();
+    }
+    private sealed class AuditItem
+    {
+        public long Id { get; set; }
+        public DateTime OccurredAtUtc { get; set; }
+        public string? ActorUserId { get; set; }
+        public string Action { get; set; } = "";
+        public string EntityType { get; set; } = "";
+        public string? EntityId { get; set; }
+        public string? Details { get; set; }
+    }
+    private sealed class ManagedUserList { public List<ManagedUser> Users { get; set; } = new(); }
+    private sealed class ManagedUser
+    {
+        public string Id { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+        public string Email { get; set; } = "";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+        await Load();
+    }
+
+    private async Task LoadUsers()
+    {
+        try
+        {
+            var result = await Http.GetFromJsonAsync<ManagedUserList>("api/settings/users");
+            users = result?.Users ?? new();
+        }
+        catch (HttpRequestException)
+        {
+            // The audit endpoint is independent. Historical actor IDs remain visible if user lookup fails.
+        }
+    }
+
+    private async Task Filter() { page = 1; await Load(); }
+    private async Task Reset()
+    {
+        action = ""; actorId = ""; entityType = ""; periodDays = 30; page = 1;
+        await Load();
+    }
+    private async Task Previous() { if (page > 1) { page--; await Load(); } }
+    private async Task Next() { if (page * 25 < total) { page++; await Load(); } }
+
+    private async Task Load()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            var url = $"api/settings/audit?page={page}&pageSize=25";
+            if (!string.IsNullOrWhiteSpace(action)) url += "&action=" + Uri.EscapeDataString(action);
+            if (!string.IsNullOrWhiteSpace(actorId)) url += "&actorId=" + Uri.EscapeDataString(actorId);
+            if (!string.IsNullOrWhiteSpace(entityType)) url += "&entityType=" + Uri.EscapeDataString(entityType);
+            if (periodDays > 0) url += "&fromUtc=" + Uri.EscapeDataString(DateTime.UtcNow.AddDays(-periodDays).ToString("O", CultureInfo.InvariantCulture));
+            using var response = await Http.GetAsync(url);
+            if (!response.IsSuccessStatusCode)
+            {
+                error = response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                    ? "No tenés permiso para consultar el historial."
+                    : "No se pudo consultar el historial. Intentá de nuevo.";
+                items.Clear(); total = 0; return;
+            }
+            var result = await response.Content.ReadFromJsonAsync<AuditResponse>();
+            items = result?.Items ?? new();
+            total = result?.Total ?? 0;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            error = "No se pudo recuperar el historial. Verificá la conexión e intentá de nuevo.";
+            items.Clear(); total = 0;
+        }
+        finally { loading = false; }
+    }
+
+    private string ActorName(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return "No identificado";
+        var user = users.FirstOrDefault(x => x.Id == id);
+        return user is null ? $"Usuario {id}" : string.IsNullOrWhiteSpace(user.DisplayName) ? user.Email : user.DisplayName;
+    }
+
+    private string EntityLabel(AuditItem item)
+    {
+        if (item.EntityType == "User") return ActorName(item.EntityId);
+        if (item.Action == "CompanyDocumentPdfPreferencesUpdated") return "Preferencias comerciales";
+        if (item.EntityType == "Company") return "Datos empresariales";
+        return item.EntityId ?? "";
+    }
+
+    private static string CostaRicaTime(DateTime date)
+    {
+        var utc = DateTime.SpecifyKind(date, DateTimeKind.Utc);
+        return utc.AddHours(-6).ToString("dd/MM/yyyy HH:mm", CultureInfo.GetCultureInfo("es-CR"));
+    }
+
+    private static string EntityName(AuditItem item) => item.Action == "CompanyDocumentPdfPreferencesUpdated"
+        ? "Documentos y PDF"
+        : item.EntityType switch
+        {
+            "User" => "Usuario", "Company" => "Mi empresa", "Session" => "Sesión", _ => item.EntityType
+        };
+
+    private static string ActionName(string name) => name switch
+    {
+        "UserCreated" => "Usuario creado",
+        "UserUpdated" => "Usuario o permisos modificados",
+        "CompanyProfileUpdated" => "Datos empresariales modificados",
+        "CompanyLogoUploaded" => "Logotipo actualizado",
+        "CompanyLogoRestored" => "Logotipo restaurado",
+        "CompanyDocumentPdfPreferencesUpdated" => "Preferencias de documentos y PDF actualizadas",
+        "LoginSucceeded" => "Inicio de sesión",
+        "Logout" => "Cierre de sesión",
+        "LoginRejectedDisabled" => "Acceso rechazado: cuenta desactivada",
+        _ => name
+    };
+
+    private static string FormatDetails(AuditItem item)
+    {
+        var details = item.Details ?? string.Empty;
+        try
+        {
+            using var doc = JsonDocument.Parse(details);
+            var root = doc.RootElement;
+            if (item.Action == "CompanyDocumentPdfPreferencesUpdated")
+            {
+                // Older entries recorded all four fields whenever anything changed.
+                // Do not present that legacy list as a verified field-by-field difference.
+                if (root.ValueKind != JsonValueKind.Object ||
+                    !root.TryGetProperty("preciseChanges", out var precise) ||
+                    precise.ValueKind != JsonValueKind.True ||
+                    !root.TryGetProperty("changed", out var changed) ||
+                    changed.ValueKind != JsonValueKind.Array)
+                    return "Se actualizaron las preferencias de documentos comerciales. Este registro anterior no identifica con precisión cuáles opciones cambiaron.";
+
+                var labels = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["FooterMessage"] = "Mensaje al pie del documento",
+                    ["QuotationDefaultTerms"] = "Términos predeterminados de cotización",
+                    ["ShowWebsite"] = "Mostrar sitio web",
+                    ["ShowQuotationSeller"] = "Mostrar vendedor en cotizaciones"
+                };
+                var values = changed.EnumerateArray().ToList();
+                if (values.Any(x => x.ValueKind != JsonValueKind.String ||
+                    x.GetString() is not { } key || !labels.ContainsKey(key)))
+                    return "Se actualizaron las preferencias de documentos comerciales. No se pudo interpretar el detalle del cambio.";
+                var names = values.Select(x => labels[x.GetString()!]).Distinct().ToList();
+                return names.Count == 0
+                    ? "No se identificaron campos modificados."
+                    : "Campos modificados:\n• " + string.Join("\n• ", names);
+            }
+            return JsonSerializer.Serialize(root, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (JsonException) { return details; }
+    }
+}

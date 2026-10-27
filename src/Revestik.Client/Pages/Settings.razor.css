@@ -342,3 +342,62 @@
         width: 100%;
     }
 }
+/* CONFIG: visual organization; catalog actions and modal logic remain unchanged. */
+.settings-page { gap: 28px; max-width: 1320px; padding-bottom: 34px; }
+.settings-header { padding: 8px 0 2px; }
+.settings-header h1 { font-size: clamp(1.9rem, 3vw, 2.45rem); }
+.settings-header p { font-size: .93rem; margin-top: 5px; }
+.settings-group { display: grid; gap: 15px; min-width: 0; }
+.settings-group-title { display: flex; align-items: center; gap: 13px; }
+.settings-group-icon { flex: none; display: grid; place-items: center; width: 43px; height: 43px; border-radius: 13px; color: #99500a; font-size: .77rem; font-weight: 800; background: #fff0dc; border: 1px solid #f6d8af; }
+.settings-group-title h2 { margin: 0; color: #25313d; font-size: 1.08rem; letter-spacing: -.018em; }
+.settings-group-title p { margin: 4px 0 0; color: #7a8592; font-size: .81rem; }
+.settings-shortcut-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.settings-shortcut { min-width: 0; display: flex; align-items: flex-start; gap: 15px; padding: 23px 20px; background: white; border: 1px solid #e4e8ed; border-radius: 16px; text-decoration: none; box-shadow: 0 3px 12px rgba(25,37,52,.035); transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+.settings-shortcut:hover { transform: translateY(-2px); border-color: #efb665; box-shadow: 0 10px 25px rgba(40,49,60,.09); }
+.settings-shortcut:focus-visible { outline: 3px solid #f59e0b; outline-offset: 3px; }
+.settings-shortcut-icon { flex: none; display: grid; place-items: center; width: 47px; height: 47px; border-radius: 13px; background: #fff3e3; color: #a75b16; font-size: .72rem; font-weight: 800; letter-spacing: -.025em; }
+.settings-shortcut-body { display: grid; flex: 1; gap: 7px; min-width: 0; }
+.settings-shortcut-body strong { font-size: .98rem; color: #202c37; line-height: 1.35; }
+.settings-shortcut-body > span { color: #737f8b; font-size: .82rem; line-height: 1.55; }
+.settings-shortcut-arrow { flex: none; font-size: 1.18rem; color: #a5adb7; }
+.settings-shortcut:hover .settings-shortcut-arrow { color: #c4761a; }
+.settings-catalog-group > .settings-card { border-radius: 15px; box-shadow: 0 3px 12px rgba(25,37,52,.035); }
+.settings-catalog-group > .settings-card > .settings-section-heading { padding: 20px 22px; background: #fff; }
+.settings-catalog-group > .settings-card > .settings-section-heading h2 { font-size: 1.03rem; }
+.settings-catalog-group > .settings-card > .settings-section-heading p { line-height: 1.5; font-size: .82rem; }
+.settings-catalog-group .settings-row { padding: 15px 22px; }
+.settings-catalog-group .settings-row:hover { background: #fcfaf7; }
+.settings-catalog-group .settings-card .primary-button { border-radius: 9px; }
+@media (max-width: 820px) { .settings-shortcut-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .settings-page { gap: 24px; } .settings-group-title { align-items: flex-start; } .settings-shortcut { padding: 18px 15px; gap: 12px; } .settings-shortcut-icon { width: 42px; height: 42px; } .settings-catalog-group > .settings-card > .settings-section-heading { padding: 18px; } }
+@media (prefers-reduced-motion: reduce) { .settings-shortcut { transition: none; } .settings-shortcut:hover { transform: none; } }
+
+/* Catalog lists start collapsed; native details supports keyboard and screen readers. */
+.settings-disclosure > summary {
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.settings-disclosure > summary::-webkit-details-marker { display: none; }
+.settings-disclosure > summary:hover { background: #fff9f0; }
+.settings-disclosure > summary:focus-visible { outline: 3px solid #ee970d; outline-offset: -3px; }
+.settings-disclosure-arrow {
+    margin-left: auto;
+    color: #a66c17;
+    font-size: 1.5rem;
+    font-weight: 600;
+    transition: transform .18s ease;
+}
+.settings-disclosure[open] .settings-disclosure-arrow { transform: rotate(180deg); }
+.settings-catalog-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 20px;
+    background: #fff;
+    border-bottom: 1px solid #edf0f3;
+}
+.settings-shortcut-icon { font-size: 1.4rem; letter-spacing: normal; }
+@media (prefers-reduced-motion: reduce) {
+    .settings-disclosure-arrow { transition: none; }
+}

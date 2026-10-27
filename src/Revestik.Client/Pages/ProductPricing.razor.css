@@ -235,3 +235,7 @@
         width: 100%;
     }
 }
+/* Navegación consistente con Mi empresa. */
+.settings-back-link { display: inline-block; color: #455566; font-size: .85rem; font-weight: 400; text-decoration: underline; text-underline-offset: 2px; margin-bottom: 4px; }
+.settings-back-link:hover { color: #b96d00; }
+.settings-back-link:focus-visible { outline: 2px solid #d97706; outline-offset: 3px; border-radius: 2px; }

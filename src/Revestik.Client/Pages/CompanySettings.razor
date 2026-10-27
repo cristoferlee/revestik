@@ -1,0 +1,422 @@
+@page "/settings/company"
+@using System.Net
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Authorization
+@using Revestik.Client.Services.Locations
+@using Revestik.Shared.Company
+@using Revestik.Shared.Locations
+@attribute [Authorize(Roles = "Administrator")]
+@inject HttpClient Http
+@inject ILocationApiService LocationApi
+
+<PageTitle>Mi empresa | Revestik</PageTitle>
+
+<section class="company-settings">
+    <header class="company-settings__header">
+        <div>
+            <a href="/settings" class="company-settings__back">← Configuración</a>
+            <h1>Mi empresa</h1>
+            <p>Identidad legal e información de contacto de la empresa.</p>
+        </div>
+        @if (company is not null && !isEditing)
+        {
+            <button type="button" class="company-settings__primary" @onclick="BeginEdit">Editar información</button>
+        }
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <p class="company-settings__notice" role="status">@message</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <p class="company-settings__error" role="alert">@error</p>
+    }
+
+    @if (isLoading)
+    {
+        <p role="status">Cargando información empresarial...</p>
+    }
+    else if (company is null)
+    {
+        <button type="button" class="company-settings__secondary" @onclick="LoadAsync">Volver a intentar</button>
+    }
+    else
+    {
+        <section class="company-settings__card" aria-labelledby="company-legal-title">
+            <h2 id="company-legal-title">Identidad legal y fiscal</h2>
+            <p class="company-settings__hint">Estos datos están protegidos y no pueden modificarse desde la aplicación.</p>
+            <dl class="company-settings__details">
+                <div><dt>Razón social</dt><dd>@company.LegalName</dd></div>
+                <div><dt>Identificación</dt><dd>@company.IdentificationNumber</dd></div>
+                <div><dt>Tipo de identificación fiscal</dt><dd>@company.TaxIdentificationType</dd></div>
+                <div><dt>Número de identificación fiscal</dt><dd>@company.TaxIdentificationNumber</dd></div>
+            </dl>
+        </section>
+
+        <section class="company-settings__card" aria-labelledby="company-logo-title">
+            <h2 id="company-logo-title">Logotipo empresarial</h2>
+            <p class="company-settings__hint">El logotipo predeterminado se mantiene disponible. Los cambios a los PDF se harán en CONFIG-02D.</p>
+            <div class="company-settings__logo-frame">
+                @if (!string.IsNullOrWhiteSpace(logoDataUrl))
+                {
+                    <img src="@logoDataUrl" alt="Logotipo empresarial vigente" />
+                }
+                else if (isLoadingLogo)
+                {
+                    <p role="status">Cargando logotipo...</p>
+                }
+                else
+                {
+                    <p role="status">No se pudo mostrar el logotipo empresarial.</p>
+                }
+            </div>
+            <InputFile OnChange="SelectLogoAsync" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" disabled="@logoBusy" aria-label="Seleccionar un nuevo logotipo" />
+            @if (!string.IsNullOrEmpty(logoPreview))
+            {
+                <p class="company-settings__hint">Vista previa antes de guardar</p>
+                <div class="company-settings__logo-frame"><img src="@logoPreview" alt="Vista previa del nuevo logotipo" /></div>
+            }
+            <div class="company-settings__actions">
+                @if (selectedLogo is not null)
+                {
+                    <button type="button" class="company-settings__secondary" disabled="@logoBusy" @onclick="CancelLogo">Cancelar selección</button>
+                    <button type="button" class="company-settings__primary" disabled="@logoBusy" @onclick="SaveLogoAsync">@(logoBusy ? "Guardando..." : "Guardar logotipo")</button>
+                }
+                <button type="button" class="company-settings__secondary" disabled="@logoBusy" @onclick="RestoreLogoAsync">Restaurar predeterminado</button>
+            </div>
+        </section>
+
+        @if (!isEditing)
+        {
+            <section class="company-settings__card" aria-labelledby="company-contact-title">
+                <h2 id="company-contact-title">Información comercial</h2>
+                <dl class="company-settings__details">
+                    <div><dt>Nombre comercial</dt><dd>@company.CommercialName</dd></div>
+                    <div><dt>Teléfono</dt><dd>@company.PhoneNumber</dd></div>
+                    <div><dt>Correo</dt><dd>@company.Email</dd></div>
+                    <div><dt>Sitio web</dt><dd>@(string.IsNullOrWhiteSpace(company.Website) ? "No registrado" : company.Website)</dd></div>
+                    <div class="company-settings__wide"><dt>Dirección</dt><dd>@(string.IsNullOrWhiteSpace(company.Address) ? "Pendiente de completar" : company.Address)</dd></div>
+                </dl>
+
+            </section>
+        }
+        else
+        {
+            <section class="company-settings__card" aria-labelledby="company-edit-title">
+                <h2 id="company-edit-title">Editar información comercial</h2>
+                <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
+                    <div class="company-settings__fields">
+                        <div><label for="company-name">Nombre comercial</label><input id="company-name" @bind="form.CommercialName" maxlength="150" required disabled="@isSaving" /></div>
+                        <div><label for="company-phone">Teléfono</label><input id="company-phone" @bind="form.PhoneNumber" maxlength="20" required disabled="@isSaving" /></div>
+                        <div><label for="company-email">Correo empresarial</label><input id="company-email" type="email" @bind="form.Email" maxlength="254" required disabled="@isSaving" /></div>
+                        <div><label for="company-web">Sitio web (opcional)</label><input id="company-web" @bind="form.Website" maxlength="255" disabled="@isSaving" /></div>
+                    </div>
+                    <h3>Dirección</h3>
+                    @if (loadingLocations)
+                    {
+                        <p role="status">Cargando ubicaciones...</p>
+                    }
+                    <div class="company-settings__fields">
+                        <div>
+                            <label for="company-province">Provincia</label>
+                            <select id="company-province" value="@form.ProvinceCode" @onchange="ProvinceChangedAsync" disabled="@(isSaving || loadingLocations)" required>
+                                <option value="">Seleccionar provincia</option>
+                                @foreach (var item in provinces) { <option value="@item.Code">@item.Name</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <label for="company-canton">Cantón</label>
+                            <select id="company-canton" value="@form.CantonCode" @onchange="CantonChangedAsync" disabled="@(isSaving || loadingLocations || string.IsNullOrWhiteSpace(form.ProvinceCode))" required>
+                                <option value="">Seleccionar cantón</option>
+                                @foreach (var item in cantons) { <option value="@item.Code">@item.Name</option> }
+                            </select>
+                        </div>
+                        <div>
+                            <label for="company-district">Distrito</label>
+                            <select id="company-district" @bind="form.DistrictCode" disabled="@(isSaving || loadingLocations || string.IsNullOrWhiteSpace(form.CantonCode))" required>
+                                <option value="">Seleccionar distrito</option>
+                                @foreach (var item in districts) { <option value="@item.Code">@item.Name</option> }
+                            </select>
+                        </div>
+                        <div class="company-settings__wide">
+                            <label for="company-signs">Señas exactas</label>
+                            <textarea id="company-signs" @bind="form.OtherSigns" maxlength="160" rows="3" required disabled="@isSaving"></textarea>
+                        </div>
+                    </div>
+                    <div class="company-settings__actions">
+                        <button class="company-settings__secondary" type="button" disabled="@isSaving" @onclick="CancelEdit">Cancelar</button>
+                        <button class="company-settings__primary" type="submit" disabled="@(isSaving || loadingLocations || provinces.Count == 0 || cantons.Count == 0 || districts.Count == 0)">@(isSaving ? "Guardando..." : "Guardar cambios")</button>
+                    </div>
+                </form>
+            </section>
+        }
+    }
+</section>
+
+@code {
+    private IBrowserFile? selectedLogo;
+    private string? logoPreview;
+    private bool logoBusy;
+    private string? logoDataUrl;
+    private bool isLoadingLogo;
+
+    private async Task LoadLogoAsync()
+    {
+        isLoadingLogo = true;
+        logoDataUrl = null;
+        try
+        {
+            using var response = await Http.GetAsync("api/settings/company/logo");
+            if (!response.IsSuccessStatusCode)
+            {
+                error ??= "No se pudo cargar el logotipo empresarial.";
+                return;
+            }
+
+            var contentType = response.Content.Headers.ContentType?.MediaType;
+            if (contentType is not ("image/svg+xml" or "image/png" or "image/jpeg" or "image/webp"))
+            {
+                error ??= "El servidor devolvió un formato de logotipo no admitido.";
+                return;
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            logoDataUrl = $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch (HttpRequestException)
+        {
+            error ??= "No fue posible conectar con el servidor para cargar el logotipo.";
+        }
+        finally
+        {
+            isLoadingLogo = false;
+        }
+    }
+    private async Task SelectLogoAsync(InputFileChangeEventArgs e)
+    {
+        error=null; logoPreview=null; selectedLogo=null;
+        var file=e.File;
+        if(file.Size>2*1024*1024 || file.Size<=0)
+        { error="La imagen debe medir como máximo 2 MB."; return; }
+        try
+        {
+            await using var stream=file.OpenReadStream(2*1024*1024);
+            using var memory=new MemoryStream();
+            await stream.CopyToAsync(memory);
+            // Browser preview only; server independently validates content.
+            var type=Path.GetExtension(file.Name).ToLowerInvariant() switch
+            {
+                ".png"=>"image/png", ".jpg" or ".jpeg"=>"image/jpeg", ".webp"=>"image/webp", _=>null
+            };
+            if(type is null) { error="Seleccioná PNG, JPG o WebP."; return; }
+            logoPreview=$"data:{type};base64,{Convert.ToBase64String(memory.ToArray())}";
+            selectedLogo=file;
+        }
+        catch(Exception ex) when(ex is IOException or ArgumentException)
+        { error="No fue posible leer la imagen."; }
+    }
+    private void CancelLogo() { selectedLogo=null; logoPreview=null; }
+    private async Task SaveLogoAsync()
+    {
+        if(company is null || selectedLogo is null || logoBusy) return;
+        logoBusy=true; error=null; message=null;
+        try
+        {
+            using var content=new MultipartFormDataContent();
+            content.Add(new StringContent(company.Version),"version");
+            await using var stream=selectedLogo.OpenReadStream(2*1024*1024);
+            using var fileContent=new StreamContent(stream);
+            content.Add(fileContent,"file",selectedLogo.Name);
+            using var response=await Http.PostAsync("api/settings/company/logo",content);
+            if(response.StatusCode==HttpStatusCode.Conflict) { error="La empresa cambió; recargá los datos antes de guardar."; return; }
+            if(!response.IsSuccessStatusCode) { error=await response.Content.ReadAsStringAsync(); return; }
+            CancelLogo();
+            await LoadAsync();
+            message="Logotipo actualizado correctamente.";
+        }
+        catch(Exception ex) when(ex is HttpRequestException or IOException)
+        { error="No se pudo actualizar el logotipo."; }
+        finally { logoBusy=false; }
+    }
+    private async Task RestoreLogoAsync()
+    {
+        if(company is null || logoBusy) return;
+        logoBusy=true; error=null;message=null;
+        try
+        {
+            using var request=new HttpRequestMessage(HttpMethod.Delete,"api/settings/company/logo");
+            request.Headers.TryAddWithoutValidation("X-Company-Version",company.Version);
+            using var response=await Http.SendAsync(request);
+            if(response.StatusCode==HttpStatusCode.Conflict) { error="La empresa cambió; recargá los datos antes de continuar."; return; }
+            if(!response.IsSuccessStatusCode) { error="No fue posible restaurar el logotipo."; return; }
+            CancelLogo();
+            await LoadAsync();message="Logotipo predeterminado restaurado.";
+        }
+        catch(HttpRequestException) { error="No se pudo conectar con el servidor."; }
+        finally { logoBusy=false; }
+    }
+
+    private CompanyProfileResponse? company;
+    private EditValues form = new();
+    private IReadOnlyList<LocationOptionResponse> provinces = [];
+    private IReadOnlyList<LocationOptionResponse> cantons = [];
+    private IReadOnlyList<LocationOptionResponse> districts = [];
+    private bool isLoading = true;
+    private bool isEditing;
+    private bool loadingLocations;
+    private bool isSaving;
+    private string? error;
+    private string? message;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        error = null;
+        message = null;
+        try
+        {
+            company = await Http.GetFromJsonAsync<CompanyProfileResponse>("api/settings/company");
+            if (company is null)
+            {
+                logoDataUrl = null;
+                error = "La información empresarial no pudo cargarse.";
+            }
+            else
+            {
+                await LoadLogoAsync();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            company = null;
+            error = "No se pudo consultar la información empresarial.";
+        }
+        finally { isLoading = false; }
+    }
+
+    private async Task BeginEdit()
+    {
+        if (company is null) return;
+        error = null;
+        message = null;
+        form = new EditValues
+        {
+            CommercialName = company.CommercialName,
+            PhoneNumber = company.PhoneNumber,
+            Email = company.Email,
+            Website = company.Website,
+            ProvinceCode = company.ProvinceCode,
+            CantonCode = company.CantonCode,
+            DistrictCode = company.DistrictCode,
+            OtherSigns = company.OtherSigns,
+            Version = company.Version
+        };
+        isEditing = true;
+        await LoadLocationsAsync();
+    }
+
+    private async Task LoadLocationsAsync()
+    {
+        loadingLocations = true;
+        try
+        {
+            provinces = await LocationApi.GetProvincesAsync();
+            cantons = string.IsNullOrWhiteSpace(form.ProvinceCode) ? [] : await LocationApi.GetCantonsAsync(form.ProvinceCode);
+            districts = string.IsNullOrWhiteSpace(form.CantonCode) || string.IsNullOrWhiteSpace(form.ProvinceCode) ? [] : await LocationApi.GetDistrictsAsync(form.ProvinceCode, form.CantonCode);
+            if (provinces.Count == 0) error = "No se pudo cargar el catálogo de ubicaciones.";
+        }
+        catch (HttpRequestException)
+        {
+            error = "No se pudo cargar el catálogo de ubicaciones. Intentá nuevamente.";
+            provinces = []; cantons = []; districts = [];
+        }
+        finally { loadingLocations = false; }
+    }
+
+    private async Task ProvinceChangedAsync(ChangeEventArgs e)
+    {
+        form.ProvinceCode = e.Value?.ToString() ?? "";
+        form.CantonCode = "";
+        form.DistrictCode = "";
+        cantons = []; districts = [];
+        error = null;
+        if (string.IsNullOrWhiteSpace(form.ProvinceCode)) return;
+        loadingLocations = true;
+        try { cantons = await LocationApi.GetCantonsAsync(form.ProvinceCode); }
+        catch (HttpRequestException) { error = "No se pudieron cargar los cantones."; }
+        finally { loadingLocations = false; }
+    }
+
+    private async Task CantonChangedAsync(ChangeEventArgs e)
+    {
+        form.CantonCode = e.Value?.ToString() ?? "";
+        form.DistrictCode = "";
+        districts = [];
+        error = null;
+        if (string.IsNullOrWhiteSpace(form.CantonCode)) return;
+        loadingLocations = true;
+        try { districts = await LocationApi.GetDistrictsAsync(form.ProvinceCode, form.CantonCode); }
+        catch (HttpRequestException) { error = "No se pudieron cargar los distritos."; }
+        finally { loadingLocations = false; }
+    }
+
+    private void CancelEdit()
+    {
+        isEditing = false;
+        error = null;
+        form = new();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (isSaving || company is null) return;
+        isSaving = true;
+        error = null;
+        message = null;
+        var request = new UpdateCompanyProfileRequest(
+            form.CommercialName, form.PhoneNumber, form.Email, form.Website,
+            form.ProvinceCode, form.CantonCode, form.DistrictCode, form.OtherSigns, form.Version);
+        try
+        {
+            using var response = await Http.PutAsJsonAsync("api/settings/company", request);
+            if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                error = "La información fue modificada por otro usuario. Cancelá y volvé a cargar los datos antes de editar.";
+                return;
+            }
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                error = "Revisá los datos ingresados, especialmente la dirección y el correo.";
+                return;
+            }
+            if (!response.IsSuccessStatusCode)
+            {
+                error = "No se pudieron guardar los cambios. Intentá nuevamente.";
+                return;
+            }
+            company = await response.Content.ReadFromJsonAsync<CompanyProfileResponse>();
+            if (company is null) { error = "Los cambios se guardaron, pero no fue posible cargar el resultado."; return; }
+            isEditing = false;
+            message = "Información empresarial actualizada correctamente.";
+        }
+        catch (HttpRequestException) { error = "No fue posible conectar con el servidor."; }
+        finally { isSaving = false; }
+    }
+
+    private sealed class EditValues
+    {
+        public string CommercialName { get; set; } = "";
+        public string PhoneNumber { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Website { get; set; } = "";
+        public string ProvinceCode { get; set; } = "";
+        public string CantonCode { get; set; } = "";
+        public string DistrictCode { get; set; } = "";
+        public string OtherSigns { get; set; } = "";
+        public string Version { get; set; } = "";
+    }
+}

@@ -772,6 +772,23 @@ public sealed class QuotationServiceTests
         dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync();
 
+        // New emissions require an identity in this test's isolated in-memory DB.
+        dbContext.CompanyProfiles.Add(new CompanyProfile
+        {
+            Id = 1,
+            LegalName = "Revestik Integration Test",
+            IdentificationNumber = "3101999999",
+            TaxIdentificationType = "02",
+            TaxIdentificationNumber = "3101999999",
+            CommercialName = "Revestik Test",
+            PhoneNumber = "22222222",
+            Email = "company@example.com",
+            Website = "https://example.com",
+            Address = "Heredia, Costa Rica",
+            UpdatedAtUtc = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync();
+
         var service = CreateService(dbContext, "COT-000777");
         var request = CreateValidQuotationRequest(customer.Id);
 
@@ -805,6 +822,8 @@ public sealed class QuotationServiceTests
         Assert.NotNull(persistedQuotation.IssuedAtUtc);
         Assert.Equal("COT-000777", persistedQuotation.QuotationNumber);
         Assert.Equal(user.Id, persistedQuotation.CreatedByUserId);
+        Assert.False(string.IsNullOrWhiteSpace(persistedQuotation.CompanyIdentitySnapshotJson));
+        Assert.Contains("Revestik Integration Test", persistedQuotation.CompanyIdentitySnapshotJson!);
     }
 
     [Fact]
@@ -817,6 +836,23 @@ public sealed class QuotationServiceTests
 
         dbContext.Customers.Add(customer);
         dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+
+        // New emissions require an identity in this test's isolated in-memory DB.
+        dbContext.CompanyProfiles.Add(new CompanyProfile
+        {
+            Id = 1,
+            LegalName = "Revestik Integration Test",
+            IdentificationNumber = "3101999999",
+            TaxIdentificationType = "02",
+            TaxIdentificationNumber = "3101999999",
+            CommercialName = "Revestik Test",
+            PhoneNumber = "22222222",
+            Email = "company@example.com",
+            Website = "https://example.com",
+            Address = "Heredia, Costa Rica",
+            UpdatedAtUtc = DateTime.UtcNow
+        });
         await dbContext.SaveChangesAsync();
 
         var service = CreateService(dbContext, "COT-000888");
@@ -857,6 +893,11 @@ public sealed class QuotationServiceTests
         Assert.Equal(QuotationChargeType.Installation, charge.Type);
         Assert.Equal("Instalación proyecto", charge.Description);
         Assert.Equal(30000m, charge.Amount);
+
+        var persistedQuotation = await dbContext.Quotations.AsNoTracking()
+            .SingleAsync(quotation => quotation.Id == created.Id);
+        Assert.False(string.IsNullOrWhiteSpace(persistedQuotation.CompanyIdentitySnapshotJson));
+        Assert.Contains("Revestik Integration Test", persistedQuotation.CompanyIdentitySnapshotJson!);
     }
 
     // -------------------------------------------------------------------------

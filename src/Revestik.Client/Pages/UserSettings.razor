@@ -1,0 +1,195 @@
+@page "/settings/users"
+@using Microsoft.AspNetCore.Authorization
+@using Revestik.Client.Services.Users
+@using Revestik.Shared.Users
+@attribute [Authorize(Roles = "Administrator")]
+@inject UserAdministrationApiService Api
+
+<PageTitle>Usuarios y permisos | Revestik</PageTitle>
+
+<main class="user-settings">
+    <header class="users-heading">
+        <div>
+            <a href="/settings" class="settings-back-link">← Configuración</a>
+            <h1>Usuarios y permisos</h1>
+            <p>Administrá el acceso a Revestik. Cada cuenta tiene un rol.</p>
+        </div>
+        <button class="users-primary" type="button" @onclick="OpenCreate" disabled="@busy">Agregar usuario</button>
+    </header>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <p role="alert" class="users-error">@error</p>
+    }
+    @if (!string.IsNullOrEmpty(success))
+    {
+        <p role="status" class="users-success">@success</p>
+    }
+
+    <label class="users-search">Buscar usuario
+        <input type="search" @bind="search" @bind:event="oninput" placeholder="Nombre o correo" />
+    </label>
+
+    @if (busy && users.Count == 0)
+    {
+        <p>Cargando usuarios...</p>
+    }
+    else
+    {
+        <div class="users-table-wrap">
+            <table>
+                <thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr></thead>
+                <tbody>
+                    @foreach (var user in users.Where(u =>
+                        string.IsNullOrWhiteSpace(search) ||
+                        u.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                        u.Email.Contains(search, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        <tr>
+                            <td><strong>@user.DisplayName</strong><small>@user.Email</small></td>
+                            <td>@RoleLabel(user.Role)</td>
+                            <td>@(user.IsActive ? "Activo" : "Inactivo")</td>
+                            <td>@(user.LastLoginAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Sin acceso")</td>
+                            <td><button type="button" disabled="@busy" @onclick="() => OpenEdit(user)">Administrar</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (formOpen)
+    {
+        <div class="users-overlay">
+            <section class="users-dialog" role="dialog" aria-modal="true" aria-label="@(editingId is null ? "Agregar usuario" : "Administrar usuario")">
+                <h2>@(editingId is null ? "Agregar usuario" : "Administrar usuario")</h2>
+                <EditForm Model="form" OnValidSubmit="SaveAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    @if (editingId is null)
+                    {
+                        <label>Correo Google autorizado
+                            <InputText type="email" @bind-Value="form.Email" />
+                        </label>
+                    }
+                    else
+                    {
+                        <p class="users-hint">@form.Email</p>
+                    }
+                    <label>Nombre para mostrar
+                        <InputText @bind-Value="form.DisplayName" />
+                    </label>
+                    <label>Rol
+                        <InputSelect @bind-Value="form.Role">
+                            <option value="Administrator">Administrador</option>
+                            <option value="Accountant">Contabilidad</option>
+                            <option value="Sales">Ventas</option>
+                            <option value="Warehouse">Bodega</option>
+                        </InputSelect>
+                    </label>
+                    @if (editingId is not null)
+                    {
+                        <label class="users-check"><InputCheckbox @bind-Value="form.IsActive" /> Cuenta activa</label>
+                    }
+                    <p class="users-hint">Los cambios de acceso pueden tardar hasta un minuto en aplicarse a sesiones ya abiertas.</p>
+                    <div class="users-buttons">
+                        <button type="button" disabled="@busy" @onclick="CloseForm">Cancelar</button>
+                        <button type="submit" class="users-primary" disabled="@busy">@(busy ? "Guardando..." : "Guardar")</button>
+                    </div>
+                </EditForm>
+            </section>
+        </div>
+    }
+</main>
+
+@code {
+    private IReadOnlyList<ManagedUserResponse> users = [];
+    private UserForm form = new();
+    private string search = string.Empty;
+    private string? editingId;
+    private string? version;
+    private string? error;
+    private string? success;
+    private bool busy;
+    private bool formOpen;
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        busy = true;
+        try { users = await Api.ListAsync(); }
+        catch (HttpRequestException) { error = "No se pudieron cargar los usuarios."; }
+        finally { busy = false; }
+    }
+
+    private void OpenCreate()
+    {
+        error = success = null;
+        form = new(); editingId = version = null; formOpen = true;
+    }
+
+    private void OpenEdit(ManagedUserResponse user)
+    {
+        error = success = null;
+        editingId = user.Id; version = user.Version;
+        form = new UserForm { Email = user.Email, DisplayName = user.DisplayName,
+            Role = user.Role, IsActive = user.IsActive };
+        formOpen = true;
+    }
+
+    private void CloseForm() => formOpen = false;
+
+    private async Task SaveAsync()
+    {
+        busy = true;
+        error = success = null;
+        try
+        {
+            if (editingId is null)
+                await Api.CreateAsync(new CreateManagedUserRequest
+                {
+                    Email = form.Email, DisplayName = form.DisplayName, Role = form.Role
+                });
+            else
+                await Api.UpdateAsync(editingId, new UpdateManagedUserRequest
+                {
+                    DisplayName = form.DisplayName, Role = form.Role,
+                    IsActive = form.IsActive, Version = version ?? string.Empty
+                });
+            formOpen = false;
+            success = "Usuario guardado correctamente.";
+            await RefreshAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            error = ex.StatusCode switch
+            {
+                System.Net.HttpStatusCode.Conflict => "No se pudo guardar. La cuenta cambió o la operación compromete el acceso administrativo.",
+                System.Net.HttpStatusCode.Forbidden => "No tenés permisos para esta operación.",
+                _ => "No se pudo guardar el usuario. Revisá los datos e intentá de nuevo."
+            };
+        }
+        finally { busy = false; }
+    }
+
+    private static string RoleLabel(string role) => role switch
+    {
+        "Administrator" => "Administrador",
+        "Accountant" => "Contabilidad",
+        "Sales" => "Ventas",
+        "Warehouse" => "Bodega",
+        _ => "Sin asignar"
+    };
+
+    private sealed class UserForm
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.EmailAddress]
+        public string Email { get; set; } = string.Empty;
+        [System.ComponentModel.DataAnnotations.Required]
+        public string DisplayName { get; set; } = string.Empty;
+        public string Role { get; set; } = "Sales";
+        public bool IsActive { get; set; } = true;
+    }
+}
