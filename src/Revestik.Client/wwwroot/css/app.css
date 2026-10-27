@@ -124,3 +124,154 @@ textarea:focus-visible {
     cursor: pointer;
     font-size: 1.25rem;
 }
+
+
+/*
+ * RESPONSIVE-04A — Customers mobile cards.
+ * The existing Blazor table, handlers, permissions and pagination remain unchanged.
+ * All selectors are anchored to the Customers page to avoid affecting other modules.
+ */
+@media (max-width: 640px) {
+    .customers-page,
+    .customers-page .customer-card,
+    .customers-page .form-grid,
+    .customers-page .form-group,
+    .customers-page .address-grid,
+    .customers-page .customer-list-filters,
+    .customers-page .search-form {
+        min-width: 0;
+    }
+
+    .customers-page .customer-card {
+        padding: 16px;
+    }
+
+    .customers-page .form-group input:not([type="checkbox"]),
+    .customers-page .form-group select,
+    .customers-page .form-group textarea {
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .customers-page .table-container {
+        width: 100%;
+        overflow-x: visible;
+    }
+
+    .customers-page .table-container table,
+    .customers-page .table-container tbody {
+        display: block;
+        width: 100%;
+        min-width: 0;
+    }
+
+    /* Preserve a visually hidden header for assistive technology. */
+    .customers-page .table-container thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .customers-page .table-container tbody tr {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        width: 100%;
+        min-width: 0;
+        margin-bottom: 14px;
+        border: 1px solid var(--color-border);
+        border-top: 3px solid var(--color-primary);
+        border-radius: 13px;
+        padding: 10px 14px;
+        background: var(--color-surface);
+        box-shadow: 0 2px 8px rgb(0 0 0 / 4%);
+    }
+
+    .customers-page .table-container tbody tr:last-child {
+        margin-bottom: 0;
+    }
+
+    .customers-page .table-container tbody td {
+        display: grid;
+        grid-template-columns: minmax(0, 106px) minmax(0, 1fr);
+        align-items: baseline;
+        gap: 8px;
+        width: 100%;
+        min-width: 0;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--color-border);
+        font-size: 0.88rem;
+        overflow-wrap: anywhere;
+    }
+
+    .customers-page .table-container tbody td::before {
+        content: attr(data-label);
+        color: var(--color-text-secondary);
+        font-size: 0.76rem;
+        font-weight: 600;
+    }
+
+    .customers-page .table-container tbody td:nth-child(2) {
+        order: -1;
+        display: block;
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--color-text);
+        padding-top: 6px;
+        padding-bottom: 11px;
+    }
+
+    .customers-page .table-container tbody td:nth-child(2)::before {
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .customers-page .table-container tbody td:last-child {
+        display: block;
+        border-bottom: 0;
+        padding-top: 13px;
+        padding-bottom: 3px;
+    }
+
+    .customers-page .table-container tbody td:last-child::before {
+        display: block;
+        margin-bottom: 8px;
+    }
+
+    .customers-page .table-container .action-buttons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 115px), 1fr));
+        gap: 9px;
+    }
+
+    .customers-page .table-container .action-buttons button {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    .customers-page .pagination-controls {
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+    }
+
+    .customers-page .pagination-controls span {
+        flex: 1 0 100%;
+        order: -1;
+    }
+
+    .customers-page .pagination-controls button {
+        flex: 1 1 110px;
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 380px) {
+    .customers-page .table-container tbody td {
+        grid-template-columns: minmax(0, 85px) minmax(0, 1fr);
+        gap: 6px;
+    }
+}

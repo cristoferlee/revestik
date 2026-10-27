@@ -1,5 +1,6 @@
 .user-session {
     display: flex;
+    min-width: 0;
     align-items: center;
     justify-content: flex-end;
     gap: 10px;
@@ -53,6 +54,7 @@
     font: inherit;
     font-size: 0.72rem;
     font-weight: 600;
+    white-space: nowrap;
 }
 
 .logout-button:hover {
@@ -65,8 +67,24 @@
     opacity: 0.6;
 }
 
+@media (max-width: 920px) {
+    .logout-button {
+        min-height: 44px;
+    }
+}
+
 @media (max-width: 560px) {
     .user-details {
         display: none;
+    }
+}
+
+@media (max-width: 420px) {
+    .user-session {
+        gap: 6px;
+    }
+
+    .logout-button {
+        padding-inline: 9px;
     }
 }

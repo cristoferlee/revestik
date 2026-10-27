@@ -1,0 +1,305 @@
+/* RESPONSIVE-05 corrective: Documentos recibidos and CAByS only.
+   Loaded AFTER purchases-responsive.css and Blazor scoped styles.
+   Existing document table semantics and fiscal functions are unchanged. */
+@media (max-width: 900px) {
+  .received-documents-page,
+  .received-documents-page > *,
+  .received-documents-page :is(.received-card,.received-header,.section-heading,.filters-panel,.accounting-summary-grid,.accounting-currency-card,.gmail-integration-card,.secure-inbox-card,.received-workflow-nav,.financial-summary-card),
+  .cabys-page,
+  .cabys-page > *,
+  .cabys-page :is(.cabys-search-card,.cabys-status-card,.cabys-modal,.cabys-search-form) {
+    min-width:0;
+    max-width:100%;
+  }
+  .received-documents-page :is(.accounting-currency-card,.received-kpi,.received-card,.gmail-integration-grid,.category-editor-grid,.learning-rule-editor,.category-row,.detail-meta-grid,.classification-panel) {
+    min-width:0;
+    overflow-wrap:anywhere;
+  }
+  .received-documents-page .table-container {
+    max-width:100%;
+    min-width:0;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .received-documents-page :is(.filters-primary-row,.filters-secondary-row,.date-filter-fields,.category-editor-grid) {
+    min-width:0;
+    max-width:100%;
+  }
+  .received-documents-page :is(input,select,textarea) {
+    min-width:0;
+    max-width:100%;
+  }
+  .received-documents-page .modal-backdrop {
+    padding:10px;
+    min-width:0;
+  }
+  .received-documents-page .received-modal {
+    min-width:0;
+    max-width:100%;
+    width:100%;
+    max-height:calc(100dvh - 20px);
+    overflow-x:hidden;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+  }
+  .received-documents-page .received-modal .table-container {
+    overflow-x:auto;
+    overscroll-behavior-x:contain;
+  }
+  .cabys-page .table-container {
+    overflow-x:auto;
+    max-width:100%;
+    min-width:0;
+    -webkit-overflow-scrolling:touch;
+  }
+}
+@media (max-width: 700px) {
+  .received-documents-page .received-workflow-nav {
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    gap:8px;
+  }
+  .received-documents-page .received-workflow-nav > button {
+    width:100%;
+    min-width:0;
+    min-height:44px;
+    white-space:normal;
+  }
+  .received-documents-page .received-header,
+  .received-documents-page .section-heading {
+    flex-wrap:wrap;
+    gap:10px;
+    min-width:0;
+  }
+  .received-documents-page :is(.filters-primary-row,.date-filter-fields,.category-editor-grid) {
+    grid-template-columns:minmax(0,1fr);
+  }
+  .received-documents-page :is(.header-actions,.inbox-actions,.classification-actions,.filter-actions,.category-modal-actions,.category-editor-actions) {
+    flex-wrap:wrap;
+    min-width:0;
+  }
+  .received-documents-page :is(.header-actions,.inbox-actions,.classification-actions,.filter-actions,.category-modal-actions,.category-editor-actions) > button {
+    max-width:100%;
+    min-height:44px;
+    white-space:normal;
+    overflow-wrap:anywhere;
+  }
+  .received-documents-page .category-modal-heading {
+    align-items:stretch;
+  }
+  .received-documents-page .category-modal-heading > *,
+  .received-documents-page .detail-modal > * {
+    min-width:0;
+    max-width:100%;
+  }
+  .received-documents-page :is(.accounting-summary-grid,.gmail-integration-grid,.received-kpis,.history-kpis) {
+    grid-template-columns:minmax(0,1fr);
+  }
+  .received-documents-page :is(.currency-card-total,.accounting-currency-card strong,.received-kpi strong) {
+    min-width:0;
+    max-width:100%;
+    overflow-wrap:anywhere;
+    white-space:normal;
+  }
+  .received-documents-page :is(.file-picker-input,input[type="file"]) {
+    max-width:100%;
+    min-width:0;
+  }
+  .cabys-page .cabys-modal-backdrop {
+    padding:8px;
+  }
+  .cabys-page .cabys-modal {
+    max-height:calc(100dvh - 16px);
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    padding:14px;
+    overflow-x:hidden;
+    overflow-y:auto;
+  }
+  .cabys-page .cabys-modal-header {
+    flex-direction:column;
+    align-items:stretch;
+    gap:10px;
+  }
+  .cabys-page .cabys-modal-header button {
+    min-height:44px;
+    width:100%;
+  }
+}
+@media (max-width: 620px) {
+  /* CAByS: each table row becomes a compact card. Five existing columns;
+     labels correspond exactly to the current table header. */
+  .cabys-page .table-container {
+    overflow-x:visible;
+    overflow-y:visible;
+    border:0;
+  }
+  .cabys-page .table-container table,
+  .cabys-page .table-container tbody {
+    display:block;
+    min-width:0;
+    width:100%;
+  }
+  .cabys-page .table-container thead {
+    position:absolute;
+    width:1px;
+    height:1px;
+    margin:-1px;
+    overflow:hidden;
+    clip-path:inset(50%);
+    white-space:nowrap;
+  }
+  .cabys-page .table-container tbody tr {
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+    width:100%;
+    padding:10px 13px;
+    margin:0 0 12px;
+    border:1px solid #dfe4ea;
+    border-top:3px solid var(--color-primary,#f59e0b);
+    border-radius:12px;
+    background:#fff;
+  }
+  .cabys-page .table-container tbody td {
+    display:grid;
+    grid-template-columns:minmax(0,104px) minmax(0,1fr);
+    min-width:0;
+    width:100%;
+    gap:8px;
+    padding:9px 0;
+    border:0;
+    border-bottom:1px solid #e7ebef;
+    text-align:left;
+    overflow-wrap:anywhere;
+    white-space:normal;
+  }
+  .cabys-page .table-container tbody td::before {
+    display:block;
+    font-size:.75rem;
+    font-weight:650;
+    color:#697582;
+  }
+  .cabys-page .table-container tbody td:nth-child(1)::before { content:"CAByS"; }
+  .cabys-page .table-container tbody td:nth-child(2)::before { content:"Descripción"; }
+  .cabys-page .table-container tbody td:nth-child(3)::before { content:"Impuesto ref."; }
+  .cabys-page .table-container tbody td:nth-child(4)::before { content:"Rama"; }
+  .cabys-page .table-container tbody td:nth-child(5)::before { content:"Acción"; }
+  .cabys-page .table-container tbody td:last-child {
+    display:block;
+    border-bottom:0;
+    padding-bottom:2px;
+  }
+  .cabys-page .table-container tbody td:last-child::before {
+    margin-bottom:8px;
+  }
+  .cabys-page .table-container tbody td:last-child button {
+    width:100%;
+    min-height:44px;
+    min-width:0;
+  }
+  .cabys-page .cabys-pagination,
+  .cabys-page .pagination-controls {
+    flex-wrap:wrap;
+  }
+  .cabys-page .pagination-controls > button {
+    flex:1 1 100px;
+    min-height:44px;
+  }
+}
+@media (max-width:390px) {
+  .cabys-page .table-container tbody td:not(:last-child) {
+    grid-template-columns:minmax(0,82px) minmax(0,1fr);
+  }
+  .received-documents-page .received-modal {
+    padding:12px;
+  }
+  .received-documents-page .category-modal {
+    padding:0;
+  }
+}
+
+/* RESPONSIVE-05 final: main Documentos recibidos result list only.
+   Do not target quarantine, accounting totals or modal detail tables. */
+@media (max-width: 620px) {
+  .received-documents-page > .received-card > .table-container {
+    overflow-x: visible;
+    overflow-y: visible;
+    border: 0;
+    background: transparent;
+  }
+  .received-documents-page > .received-card > .table-container > table,
+  .received-documents-page > .received-card > .table-container > table > tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .received-documents-page > .received-card > .table-container > table > thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .received-documents-page > .received-card > .table-container > table > tbody > tr {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    margin: 0 0 12px;
+    padding: 10px 13px;
+    border: 1px solid #dfe4ea;
+    border-top: 3px solid var(--color-primary, #f59e0b);
+    border-radius: 12px;
+    background: #fff;
+  }
+  .received-documents-page > .received-card > .table-container > table > tbody > tr > td {
+    display: grid;
+    grid-template-columns: minmax(0, 102px) minmax(0, 1fr);
+    gap: 9px;
+    width: 100%;
+    min-width: 0;
+    padding: 9px 0;
+    border: 0;
+    border-bottom: 1px solid #e7ebef;
+    text-align: left;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  .received-documents-page > .received-card > .table-container > table > tbody > tr > td::before {
+    font-size: .75rem;
+    font-weight: 650;
+    color: #697582;
+  }
+  .received-documents-page > .received-card > .table-container > table > tbody > tr > td:nth-child(1)::before { content: 'Fecha'; }
+  .received-documents-page > .received-card > .table-container > table > tbody > tr > td:nth-child(2)::before { content: 'Proveedor'; }
+  .received-documents-page > .received-card > .table-container > table > tbody > tr > td:nth-child(3)::before { content: 'Consecutivo'; }
+  .received-documents-page > .received-card > .table-container > table > tbody > tr > td:nth-child(4)::before { content: 'Total'; }
+  .received-documents-page > .received-card > .table-container > table > tbody > tr > td:nth-child(5)::before { content: 'Categoría'; }
+  .received-documents-page > .received-card > .table-container > table > tbody > tr > td:nth-child(6)::before { content: 'Estado'; }
+  .received-documents-page > .received-card > .table-container > table > tbody > tr > td:nth-child(7) {
+    display: block;
+    border-bottom: 0;
+  }
+  .received-documents-page > .received-card > .table-container > table > tbody > tr > td:nth-child(7)::before {
+    content: 'Acción';
+    display: block;
+    margin-bottom: 8px;
+  }
+  .received-documents-page > .received-card > .table-container > table > tbody > tr > td:nth-child(7) button {
+    width: 100%;
+    min-height: 44px;
+    max-width: 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+}
+@media (max-width: 390px) {
+  .received-documents-page > .received-card > .table-container > table > tbody > tr > td:not(:last-child) {
+    grid-template-columns: minmax(0, 85px) minmax(0, 1fr);
+  }
+}

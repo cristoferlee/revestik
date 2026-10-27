@@ -157,11 +157,17 @@
 
     .navigation-links {
         display: none;
+        min-width: 0;
         padding-top: 8px;
     }
 
     .navigation-links-open {
         display: flex;
+        /* Keep all routes accessible without an excessively tall mobile menu. */
+        max-height: min(65dvh, 580px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
     }
 
     .navigation-links ::deep .navigation-link.active::before,
@@ -171,5 +177,20 @@
 
     .navigation-submenu {
         margin-left: 34px;
+    }
+}
+
+@media (max-width: 420px) {
+    .main-navigation {
+        padding-inline: 12px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .navigation-links ::deep .navigation-link,
+    .navigation-group-toggle,
+    .navigation-chevron,
+    .navigation-submenu ::deep .navigation-sublink {
+        transition: none;
     }
 }

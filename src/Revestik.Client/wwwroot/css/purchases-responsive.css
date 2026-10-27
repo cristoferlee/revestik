@@ -1,0 +1,303 @@
+/* REVESTIK RESPONSIVE-05 — Compras y fiscal.
+   Safely additive: only purchase, fiscal, CABYS and pricing page roots.
+   Desktop stays governed by existing Razor CSS.
+   No JavaScript or business behavior. */
+@media (max-width: 1100px) {
+  :is(.purchases-page,.purchases-history-page,.received-documents-page,.received-page,.fiscal-workspace,.cabys-page,.product-pricing-page,.pricing-page) {
+    min-width: 0;
+  }
+  :is(.purchases-page,.purchases-history-page,.fiscal-workspace,.cabys-page) > *,
+  :is(.purchases-page,.purchases-history-page,.fiscal-workspace,.cabys-page) :is(.purchase-card,.purchase-step-card,.history-card,.fiscal-panel,.received-card,.pricing-card,.cabys-search-card) {
+    min-width: 0;
+    max-width: 100%;
+  }
+  :is(.purchases-page,.purchases-history-page) .table-container,
+  :is(.cabys-page,.product-pricing-page,.pricing-page) .table-container {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  :is(.purchases-page,.purchases-history-page,.fiscal-workspace,.cabys-page) :is(.form-group,.form-grid,.filters-grid,.search-form,.detail-meta-grid,.section-heading,.product-actions,.form-actions,.filter-actions) {
+    min-width: 0;
+    max-width: 100%;
+  }
+  :is(.purchases-page,.purchases-history-page,.fiscal-workspace,.cabys-page) :is(input,select,textarea) {
+    max-width: 100%;
+  }
+  .received-page .filters-primary-row,
+  .received-documents-page .filters-primary-row {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+  .received-page .filters-primary-row .search-field,
+  .received-documents-page .filters-primary-row .search-field {
+    grid-column: 1/-1;
+  }
+  .cabys-page .table-container { overflow-x: auto; }
+}
+
+@media (max-width: 900px) {
+  /* New Purchase: search results and line tables must never be clipped
+     between existing 900px and 620px breakpoints. */
+  .purchases-page .search-form { grid-template-columns: minmax(0,1fr); }
+  .purchases-page .search-form > * { min-width:0; max-width:100%; }
+  .purchases-page .table-container { overflow-x:auto; }
+  .purchases-page .product-actions,
+  .purchases-page .form-actions { justify-content:flex-start; }
+  .purchases-history-page .table-container { overflow-x:auto; }
+  .product-pricing-page .pricing-card .search-form,
+  .pricing-page .pricing-card .search-form { grid-template-columns:minmax(0,1fr); }
+  .product-pricing-page .table-container,
+  .pricing-page .table-container { overflow-x:auto; }
+}
+
+@media (max-width: 760px) {
+  .purchases-page :is(.product-actions,.form-actions,.section-heading),
+  .purchases-history-page :is(.filter-actions,.form-actions,.section-heading,.payment-heading),
+  .cabys-page :is(.cabys-modal-header,.cabys-header-actions) {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .purchases-page :is(.product-actions,.form-actions) > *,
+  .purchases-history-page :is(.detail-actions,.form-actions,.filter-actions) > *,
+  .cabys-page .cabys-modal-header > * {
+    min-width:0;
+    max-width:100%;
+  }
+  .purchases-page :is(.primary-button,.secondary-button,.danger-button),
+  .purchases-history-page :is(.primary-button,.secondary-button,.danger-button),
+  .cabys-page :is(.primary-button,.secondary-button) {
+    min-height:44px;
+    overflow-wrap:anywhere;
+    white-space:normal;
+  }
+  .fiscal-workspace .received-workflow-nav {
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+  }
+  .fiscal-workspace .workflow-tab {
+    width:100%;
+    min-width:0;
+    min-height:44px;
+    text-align:left;
+    white-space:normal;
+  }
+  .fiscal-workspace .fiscal-toolbar {
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    min-width:0;
+  }
+  .fiscal-workspace .fiscal-input {
+    min-width:0;
+    width:100%;
+    max-width:100%;
+    flex: 0 0 auto;
+  }
+  .fiscal-workspace :is(.fiscal-actions,.fiscal-history-header) {
+    flex-wrap:wrap;
+    min-width:0;
+  }
+  .fiscal-workspace .fiscal-adjustment-row {
+    flex-wrap:wrap;
+    align-items:flex-start;
+  }
+  .fiscal-workspace :is(.fiscal-candidate,.fiscal-review,.fiscal-confirm,.fiscal-comparison-document,.fiscal-exception-panel) {
+    min-width:0;
+    max-width:100%;
+    overflow-wrap:anywhere;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Purchase and payables tables are labelled with data-label: transform
+     only regular data tables, never forms or special confirmation rows. */
+  :is(.purchases-page,.purchases-history-page,.product-pricing-page,.pricing-page) .table-container {
+    overflow-x:visible;
+    overflow-y:visible;
+    border:0;
+    background:transparent;
+  }
+  :is(.purchases-page,.purchases-history-page,.product-pricing-page,.pricing-page) .table-container table,
+  :is(.purchases-page,.purchases-history-page,.product-pricing-page,.pricing-page) .table-container tbody {
+    width:100%;
+    min-width:0;
+    display:block;
+  }
+  :is(.purchases-page,.purchases-history-page,.product-pricing-page,.pricing-page) .table-container thead {
+    position:absolute;
+    width:1px;
+    height:1px;
+    margin:-1px;
+    overflow:hidden;
+    clip-path:inset(50%);
+    white-space:nowrap;
+  }
+  :is(.purchases-page,.purchases-history-page,.product-pricing-page,.pricing-page) .table-container tbody > tr {
+    display:flex;
+    flex-direction:column;
+    gap:0;
+    width:100%;
+    min-width:0;
+    margin-bottom:12px;
+    padding:10px 13px;
+    border:1px solid var(--color-border,#e5e7eb);
+    border-top:3px solid var(--color-primary,#f59e0b);
+    border-radius:12px;
+    background:#fff;
+  }
+  :is(.purchases-page,.purchases-history-page,.product-pricing-page,.pricing-page) .table-container tbody > tr > td {
+    display:grid;
+    grid-template-columns:minmax(0,105px) minmax(0,1fr);
+    gap:7px;
+    width:100%;
+    min-width:0;
+    padding:9px 0;
+    border-bottom:1px solid var(--color-border,#e5e7eb);
+    overflow-wrap:anywhere;
+    white-space:normal;
+  }
+  :is(.purchases-page,.purchases-history-page,.product-pricing-page,.pricing-page) .table-container tbody > tr > td::before {
+    content:attr(data-label);
+    color:var(--color-text-secondary,#6b7280);
+    font-size:.76rem;
+    font-weight:650;
+  }
+  :is(.purchases-page,.purchases-history-page,.product-pricing-page,.pricing-page) .table-container tbody > tr > td:last-child {
+    border-bottom:0;
+  }
+  :is(.purchases-page,.purchases-history-page,.product-pricing-page,.pricing-page) .table-container tbody > tr > td :is(button,select) {
+    min-width:0;
+    max-width:100%;
+    min-height:44px;
+    white-space:normal;
+  }
+  /* Wide selector values must not force the entire card to grow. */
+  :is(.product-pricing-page,.pricing-page) .table-container tbody > tr > td select {
+    width:100%;
+  }
+  /* Supplier and purchase form action groups remain usable when expanded. */
+  .purchases-page :is(.product-actions,.form-actions) {
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .purchases-page :is(.product-actions,.form-actions) > button {
+    width:100%;
+  }
+  .purchases-history-page :is(.form-actions,.filter-actions,.detail-actions) {
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .purchases-history-page :is(.form-actions,.filter-actions,.detail-actions) > button {
+    width:100%;
+  }
+  .purchases-page .purchase-modal-backdrop { padding:8px; }
+  .purchases-page .purchase-modal {
+    width:100%;
+    min-width:0;
+    max-width:100%;
+    max-height:calc(100dvh - 16px);
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    padding:14px;
+  }
+  .purchases-page .confirmation-grid,
+  .purchases-history-page :is(.form-grid,.filters-grid,.detail-meta-grid,.summary-grid) {
+    grid-template-columns:minmax(0,1fr);
+  }
+  .purchases-history-page :is(.payment-panel,.history-card) {
+    min-width:0;
+    max-width:100%;
+  }
+  .purchases-history-page .pagination-controls {
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  .purchases-history-page .pagination-controls > span {
+    flex:1 1 100%;
+    text-align:center;
+    order:-1;
+  }
+  .purchases-history-page .pagination-controls > button { flex:1 1 100px;min-height:44px; }
+
+  /* CABYS results have no data-label and must remain a readable scrollable table. */
+  .cabys-page .table-container {
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .cabys-page .table-container table { min-width:690px; }
+  .cabys-page .cabys-modal-backdrop { padding:8px; }
+  .cabys-page .cabys-modal {
+    width:100%;
+    min-width:0;
+    max-width:100%;
+    max-height:calc(100dvh - 16px);
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    padding:14px;
+  }
+  .cabys-page .cabys-modal-header { flex-direction:column;align-items:stretch; }
+  .cabys-page .cabys-modal-header button { width:100%;min-height:44px; }
+  .cabys-page :is(.cabys-detail-grid,.cabys-detail-grid > div,.cabys-detail-section) {
+    min-width:0;
+    overflow-wrap:anywhere;
+  }
+  .cabys-page .cabys-search-form { grid-template-columns:minmax(0,1fr); }
+  .cabys-page .cabys-search-form :is(input,button) { min-width:0;width:100%;min-height:44px; }
+
+  /* Fiscal worklists: labelled reconciliation cells can become cards. */
+  .fiscal-workspace .table-container table,
+  .fiscal-workspace .table-container tbody { display:block;width:100%;min-width:0; }
+  .fiscal-workspace .table-container thead {
+    position:absolute;width:1px;height:1px;margin:-1px;
+    overflow:hidden;clip-path:inset(50%);white-space:nowrap;
+  }
+  .fiscal-workspace .table-container tbody tr {
+    display:flex;flex-direction:column;
+    width:100%;min-width:0;margin-bottom:10px;
+    padding:10px 13px;border:1px solid #e0e5ea;
+    border-top:3px solid #f59e0b;border-radius:11px;
+  }
+  .fiscal-workspace .table-container tbody td {
+    display:grid;grid-template-columns:minmax(0,90px) minmax(0,1fr);
+    gap:8px;min-width:0;width:100%;overflow-wrap:anywhere;
+    border-top:0;border-bottom:1px solid #e7edf2;
+  }
+  .fiscal-workspace .table-container tbody td::before {
+    content:attr(data-label);font-size:.75rem;font-weight:650;color:#697683;
+  }
+  .fiscal-workspace .table-container tbody td:last-child { border-bottom:0; }
+  .fiscal-workspace .table-container tbody td button { min-height:44px;min-width:0;max-width:100%; }
+
+  /* ReceivedDocuments: highly specialized tables and nested modals.
+     Preserve scrolling rather than applying a blind table conversion. */
+  :is(.received-documents-page,.received-page) .table-container {
+    max-width:100%;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  }
+  :is(.received-documents-page,.received-page) :is(.filters-primary-row,.date-filter-fields,.category-editor-grid,.classification-grid,.detail-meta-grid,.totals-grid) {
+    grid-template-columns:minmax(0,1fr);
+  }
+  :is(.received-documents-page,.received-page) :is(.modal-backdrop,.received-modal) {
+    min-width:0;
+  }
+  :is(.received-documents-page,.received-page) .modal-backdrop { padding:8px; }
+  :is(.received-documents-page,.received-page) .received-modal {
+    width:100%;max-width:100%;
+    max-height:calc(100dvh - 16px);
+    overflow-y:auto;overscroll-behavior:contain;
+  }
+  :is(.received-documents-page,.received-page) :is(.header-actions,.classification-actions,.inbox-actions,.filter-actions,.category-editor-actions) {
+    display:flex;flex-wrap:wrap;gap:8px;min-width:0;
+  }
+  :is(.received-documents-page,.received-page) :is(.header-actions,.classification-actions,.inbox-actions,.filter-actions,.category-editor-actions) button {
+    min-width:0;max-width:100%;min-height:44px;white-space:normal;
+  }
+  :is(.received-documents-page,.received-page) :is(.file-picker-input,input[type=file]) {
+    min-width:0;max-width:100%;
+  }
+}
+@media (max-width: 390px) {
+  :is(.purchases-page,.purchases-history-page,.product-pricing-page,.pricing-page) .table-container tbody > tr > td {
+    grid-template-columns:minmax(0,83px) minmax(0,1fr);
+  }
+}

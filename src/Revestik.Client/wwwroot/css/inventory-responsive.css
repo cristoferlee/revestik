@@ -1,0 +1,63 @@
+/* RESPONSIVE-05A: Conteo fisico / Productos. No altera la logica de Blazor. */
+@media (max-width: 900px) {
+  .physical-count-page, .physical-count-page > *,
+  .physical-count-page .physical-count-card,
+  .physical-count-page .physical-count-table-wrap,
+  .physical-count-page .table-heading { min-width: 0; max-width: 100%; }
+  .physical-count-page .count-summary strong,
+  .physical-count-page .count-notes p { overflow-wrap: anywhere; }
+  .physical-count-page .table-heading { flex-wrap: wrap; }
+  .physical-count-page .progress-text { white-space: normal; overflow-wrap: anywhere; }
+}
+@media (max-width: 620px) {
+  .physical-count-page .table-heading { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .physical-count-page .physical-count-table-wrap { overflow: visible; padding: 12px; }
+  .physical-count-page .physical-count-table,
+  .physical-count-page .physical-count-table tbody { display: block; min-width: 0; width: 100%; }
+  .physical-count-page .physical-count-table thead {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .physical-count-page .physical-count-table tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 0;
+    min-width: 0; margin: 0 0 12px; padding: 12px 14px;
+    background: #fff; border: 1px solid #dfe4ea;
+    border-top: 3px solid var(--color-primary, #f59e0b); border-radius: 12px;
+    box-shadow: 0 2px 8px rgb(23 32 42 / 4%);
+  }
+  .physical-count-page .physical-count-table tbody tr:last-child { margin-bottom: 0; }
+  .physical-count-page .physical-count-table tbody td,
+  .physical-count-page .physical-count-table tbody td:first-child {
+    display: grid; grid-template-columns: minmax(0, 110px) minmax(0, 1fr);
+    align-items: center; gap: 8px; min-width: 0; width: 100%;
+    padding: 10px 0; border: 0; border-bottom: 1px solid #edf0f3;
+    text-align: left; overflow-wrap: anywhere;
+  }
+  .physical-count-page .physical-count-table tbody td::before {
+    color: #788391; font-size: .74rem; font-weight: 650;
+  }
+  .physical-count-page .physical-count-table tbody td:nth-child(1) {
+    display: block; padding: 2px 0 12px;
+  }
+  .physical-count-page .physical-count-table tbody td:nth-child(1) strong {
+    display: block; font-size: .97rem; overflow-wrap: anywhere;
+  }
+  .physical-count-page .physical-count-table tbody td:nth-child(1)::before {
+    content: 'Producto'; display: block; margin-bottom: 5px;
+  }
+  .physical-count-page .physical-count-table tbody td:nth-child(2)::before { content: 'Stock sistema'; }
+  .physical-count-page .physical-count-table tbody td:nth-child(3)::before { content: 'Conteo físico'; }
+  .physical-count-page .physical-count-table tbody td:nth-child(4)::before { content: 'Diferencia'; }
+  .physical-count-page .physical-count-table tbody td:last-child { border-bottom: 0; }
+  .physical-count-page .physical-count-table input[type='number'] {
+    display: block; width: 100%; min-width: 0; max-width: 100%; min-height: 44px;
+    font-size: 1rem;
+  }
+  .physical-count-page .physical-count-actions { min-width: 0; }
+  .physical-count-page .physical-count-actions > * { min-width: 0; min-height: 44px; }
+}
+@media (max-width: 370px) {
+  .physical-count-page .physical-count-table tbody td:not(:first-child) {
+    grid-template-columns: minmax(0, 94px) minmax(0, 1fr);
+  }
+}

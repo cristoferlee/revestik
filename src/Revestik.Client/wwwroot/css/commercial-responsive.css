@@ -1,0 +1,551 @@
+/* RESPONSIVE-04B — Cotizaciones y Ventas.
+   Shared visual corrections only; original Razor, logic and scoped desktop CSS remain intact.
+   Loaded after the Blazor scoped stylesheet. */
+@media (max-width: 768px) {
+    .quotations-page {
+        min-width: 0;
+        gap: 16px;
+    }
+    .quotations-page > .page-header {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    .quotations-page > .page-header > a {
+        align-self: stretch;
+        text-align: center;
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .quotations-page .customer-card,
+    .quotations-page .quotation-line-card {
+        min-width: 0;
+        max-width: 100%;
+    }
+    .quotations-page .form-grid,
+    .quotations-page .quotation-line-form-grid,
+    .quotations-page .address-grid {
+        min-width: 0;
+    }
+    .quotations-page .form-group,
+    .quotations-page .form-group input,
+    .quotations-page .form-group select,
+    .quotations-page .form-group textarea,
+    .quotations-page .quotation-line-editor input,
+    .quotations-page .quotation-line-editor select,
+    .quotations-page .quotation-line-editor textarea {
+        min-width: 0;
+        max-width: 100%;
+    }
+    .quotations-page .table-container {
+        min-width: 0;
+        max-width: 100%;
+    }
+    .quotations-page .form-actions,
+    .quotations-page .table-row-actions {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .quotations-page .form-actions button,
+    .quotations-page .line-confirm-actions button {
+        min-height: 44px;
+    }
+    .quotations-page .quotation-lines-summary-header {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .quotations-page .quotation-lines-summary-header > button {
+        min-height: 44px;
+    }
+}
+@media (max-width: 640px) {
+    .quotations-page .customer-card {
+        padding: 16px;
+    }
+    .quotations-page .quotation-line-card {
+        min-width: 0;
+    }
+    .quotations-page .quotation-line-form-grid,
+    .quotations-page .form-grid,
+    .quotations-page .address-grid,
+    .quotations-page .quotation-line-summary {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .quotations-page .form-actions {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .quotations-page .form-actions > button,
+    .quotations-page .line-confirm-actions > button {
+        width: 100%;
+        min-height: 44px;
+    }
+    /* Convert ONLY the commercial line-item table.
+       Product and customer search tables retain their own horizontal scroll. */
+    .quotations-page .table-container.quotation-lines-table {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: visible;
+        border: 0;
+        background: transparent;
+    }
+    .quotations-page .quotation-lines-table table,
+    .quotations-page .quotation-lines-table tbody {
+        display: block;
+        min-width: 0;
+        width: 100%;
+    }
+    .quotations-page .quotation-lines-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+    .quotations-page .quotation-lines-table tbody tr {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        width: 100%;
+        margin-bottom: 13px;
+        padding: 11px 14px;
+        border: 1px solid var(--color-border, #e5e7eb);
+        border-top: 3px solid var(--color-primary, #f59e0b);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 2px 8px rgb(0 0 0 / 4%);
+    }
+    .quotations-page .quotation-lines-table tbody tr:last-child {
+        margin-bottom: 0;
+    }
+    .quotations-page .quotation-lines-table tbody td,
+    .quotations-page .quotation-lines-table tbody td:first-child {
+        display: grid;
+        grid-template-columns: minmax(0, 84px) minmax(0, 1fr);
+        gap: 9px;
+        min-width: 0;
+        width: 100%;
+        padding: 9px 0;
+        border: 0;
+        border-bottom: 1px solid var(--color-border, #e5e7eb);
+        text-align: left;
+        overflow-wrap: anywhere;
+        font-size: .88rem;
+    }
+    .quotations-page .quotation-lines-table tbody td::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--color-text-secondary, #6b7280);
+        font-weight: 600;
+        font-size: .76rem;
+    }
+    .quotations-page .quotation-lines-table tbody td:first-child {
+        display: block;
+        font-size: .98rem;
+        font-weight: 650;
+        padding: 5px 0 12px;
+    }
+    .quotations-page .quotation-lines-table tbody td:first-child::before {
+        margin-bottom: 5px;
+    }
+    .quotations-page .quotation-lines-table tbody td[data-label="Total"] {
+        color: #1f2937;
+        font-weight: 700;
+    }
+    .quotations-page .quotation-lines-table tbody td[data-label="Acciones"] {
+        display: block;
+        padding: 12px 0 2px;
+        border-bottom: 0;
+    }
+    .quotations-page .quotation-lines-table tbody td[data-label="Acciones"]::before {
+        margin-bottom: 8px;
+    }
+    .quotations-page .quotation-lines-table .table-row-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px;
+    }
+    .quotations-page .quotation-lines-table .table-row-actions button {
+        min-width: 0;
+        min-height: 44px;
+        width: 100%;
+        padding-inline: 8px;
+    }
+}
+@media (max-width: 380px) {
+    .quotations-page .quotation-lines-table tbody td:not(:first-child) {
+        grid-template-columns: minmax(0, 72px) minmax(0, 1fr);
+        gap: 6px;
+    }
+}
+
+
+/* RESPONSIVE-04B REPAIR: interactive sections, search results and actions.
+   These selectors affect only the two commercial pages and their embedded
+   commercial selectors. The desktop layout is deliberately untouched. */
+@media (max-width: 768px) {
+    .quotations-page,
+    .quotations-page > section,
+    .quotations-page .customer-card,
+    .quotations-page .quotation-line-card,
+    .quotations-page .product-search-panel,
+    .quotations-page .form-group,
+    .quotations-page .form-grid,
+    .quotations-page .page-header,
+    .quotations-page .search-form,
+    .quotations-page .line-editor-actions,
+    .quotations-page .selected-customer-card,
+    .quotations-page .post-issue-payment-form {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .quotations-page .page-header > div,
+    .quotations-page .line-editor-actions > *,
+    .quotations-page .post-issue-actions > *,
+    .quotations-page .quotation-lines-summary-header > * {
+        min-width: 0;
+    }
+
+    .quotations-page .quotation-line-editor > .page-header,
+    .quotations-page .product-search-panel > .page-header {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .quotations-page .line-editor-actions,
+    .quotations-page .quotation-line-card .page-header > .line-editor-actions {
+        display: grid;
+        width: 100%;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr));
+        gap: 9px;
+    }
+
+    .quotations-page .line-editor-actions > button,
+    .quotations-page .product-search-panel .page-header button,
+    .quotations-page .quotation-lines-summary-header > button {
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        text-align: center;
+    }
+
+    /* Embedded selectors: protect parent grids from minimum-content overflow. */
+    .quotations-page .product-search-panel .search-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        width: 100%;
+        gap: 10px;
+    }
+
+    .quotations-page .product-search-panel .search-form input,
+    .quotations-page .product-search-panel .search-form button,
+    .quotations-page .search-form input,
+    .quotations-page .search-form button {
+        min-width: 0;
+        max-width: 100%;
+        width: 100%;
+        min-height: 44px;
+    }
+
+    .quotations-page .product-search-panel .table-container,
+    .quotations-page .table-container {
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    /* ProductSelector had overflow:hidden, clipping its 760px result table. */
+    .quotations-page .product-search-panel .table-container {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .quotations-page .selected-customer-card,
+    .quotations-page .post-issue-payment-form,
+    .quotations-page .address-section {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .quotations-page .form-group input,
+    .quotations-page .form-group select,
+    .quotations-page .form-group textarea,
+    .quotations-page fieldset,
+    .quotations-page .quotation-totals {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .quotations-page .quotation-totals p {
+        flex-wrap: wrap;
+        gap: 6px 12px;
+        overflow-wrap: anywhere;
+    }
+    .quotations-page .quotation-totals strong,
+    .quotations-page .quotation-line-summary strong,
+    .quotations-page .post-issue-balance strong {
+        min-width: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .quotations-page .post-issue-actions,
+    .quotations-page .post-issue-payment-form .form-actions {
+        min-width: 0;
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .quotations-page .post-issue-actions button,
+    .quotations-page .post-issue-payment-form .form-actions button {
+        min-width: 0;
+        min-height: 44px;
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 640px) {
+    .quotations-page .product-search-panel,
+    .quotations-page .post-issue-payment-form {
+        padding: 13px;
+    }
+
+    .quotations-page .line-editor-actions {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .quotations-page .post-issue-actions,
+    .quotations-page .post-issue-payment-form .form-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .quotations-page .post-issue-actions button,
+    .quotations-page .post-issue-payment-form .form-actions button {
+        width: 100%;
+    }
+
+    /* Convert actual search result tables in both embedded ProductSelector
+       and CustomerSelector, as well as the Quotation product search.
+       The commercial line summary is styled separately above. */
+    .quotations-page .table-container:not(.quotation-lines-table) {
+        overflow-x: visible;
+        overflow-y: visible;
+    }
+    .quotations-page .table-container:not(.quotation-lines-table) table,
+    .quotations-page .table-container:not(.quotation-lines-table) tbody {
+        display: block;
+        width: 100%;
+        min-width: 0;
+    }
+    .quotations-page .table-container:not(.quotation-lines-table) thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+    .quotations-page .table-container:not(.quotation-lines-table) tbody tr {
+        display: flex;
+        flex-direction: column;
+        margin: 0 0 12px;
+        padding: 10px 12px;
+        min-width: 0;
+        width: 100%;
+        background: var(--color-surface,#fff);
+        border: 1px solid var(--color-border,#e5e7eb);
+        border-top: 3px solid var(--color-primary,#f59e0b);
+        border-radius: 12px;
+    }
+    .quotations-page .table-container:not(.quotation-lines-table) tbody tr:last-child {
+        margin-bottom: 0;
+    }
+    .quotations-page .table-container:not(.quotation-lines-table) tbody td {
+        display: grid;
+        grid-template-columns: minmax(0, 90px) minmax(0,1fr);
+        gap: 8px;
+        width: 100%;
+        min-width: 0;
+        padding: 9px 0;
+        border: 0;
+        border-bottom: 1px solid var(--color-border,#e5e7eb);
+        overflow-wrap: anywhere;
+        text-align: left;
+        font-size: .86rem;
+    }
+    .quotations-page .table-container:not(.quotation-lines-table) tbody td::before {
+        content: attr(data-label);
+        color: var(--color-text-secondary,#6b7280);
+        font-size: .76rem;
+        font-weight: 650;
+    }
+    .quotations-page .table-container:not(.quotation-lines-table) tbody td:first-child {
+        min-width: 0;
+    }
+    .quotations-page .table-container:not(.quotation-lines-table) tbody td:last-child {
+        display: block;
+        padding: 12px 0 2px;
+        border-bottom: 0;
+    }
+    .quotations-page .table-container:not(.quotation-lines-table) tbody td:last-child::before {
+        display: block;
+        margin-bottom: 7px;
+    }
+    .quotations-page .table-container:not(.quotation-lines-table) tbody td:last-child button {
+        min-width: 0;
+        width: 100%;
+        min-height: 44px;
+        white-space: normal;
+    }
+
+    .quotations-page .quotation-totals {
+        width: 100%;
+    }
+    .quotations-page .customer-pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    .quotations-page .customer-pagination > span {
+        flex: 1 1 100%;
+        text-align: center;
+        order: -1;
+    }
+    .quotations-page .customer-pagination button {
+        flex: 1 1 100px;
+        min-width: 0;
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 380px) {
+    .quotations-page .table-container:not(.quotation-lines-table) tbody td:not(:last-child) {
+        grid-template-columns: minmax(0, 74px) minmax(0, 1fr);
+    }
+}
+
+/* 04B closeout: keep the customer search control compact on phones. */
+@media (max-width: 640px) {
+  .quotations-page #commercial-customer-search,
+  .quotations-page #quotation-customer-search {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
+    padding: 8px 12px;
+    flex: 0 1 auto;
+    font-size: 16px;
+    line-height: normal;
+  }
+  .quotations-page .search-form:has(#commercial-customer-search),
+  .quotations-page .search-form:has(#quotation-customer-search) {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .quotations-page .search-form:has(#commercial-customer-search) button,
+  .quotations-page .search-form:has(#quotation-customer-search) button { min-height: 44px; }
+}
+
+/* RESPONSIVE-04C — Sales / quotations history and their expanded details. */
+@media (max-width: 900px) {
+  :is(.quotes-history-page, .sales-history-page),
+  :is(.quotes-history-page, .sales-history-page) > *,
+  :is(.quotes-history-page, .sales-history-page) .history-card,
+  :is(.quotes-history-page, .sales-history-page) .section-heading,
+  :is(.quotes-history-page, .sales-history-page) .filters-grid,
+  :is(.quotes-history-page, .sales-history-page) .form-group,
+  :is(.quotes-history-page, .sales-history-page) .payment-form-card,
+  :is(.quotes-history-page, .sales-history-page) .lifecycle-panel { min-width: 0; max-width: 100%; }
+  :is(.quotes-history-page, .sales-history-page) .table-container { min-width: 0; max-width: 100%; }
+  :is(.quotes-history-page, .sales-history-page) .summary-card strong,
+  :is(.quotes-history-page, .sales-history-page) .detail-meta-grid strong,
+  :is(.quotes-history-page, .sales-history-page) .totals-panel strong {
+    min-width: 0; white-space: normal; overflow-wrap: anywhere;
+  }
+  :is(.quotes-history-page, .sales-history-page) .totals-panel p { flex-wrap: wrap; gap: 6px 12px; }
+}
+@media (max-width: 700px) {
+  :is(.quotes-history-page, .sales-history-page) .history-card { padding: 16px; }
+  :is(.quotes-history-page, .sales-history-page) .page-header > a,
+  :is(.quotes-history-page, .sales-history-page) .filter-actions button,
+  :is(.quotes-history-page, .sales-history-page) .detail-actions button,
+  :is(.quotes-history-page, .sales-history-page) .detail-actions a,
+  :is(.quotes-history-page, .sales-history-page) .payment-quick-actions button,
+  :is(.quotes-history-page, .sales-history-page) .section-heading > button { min-height: 44px; max-width: 100%; }
+  :is(.quotes-history-page, .sales-history-page) .filters-grid input,
+  :is(.quotes-history-page, .sales-history-page) .filters-grid select,
+  :is(.quotes-history-page, .sales-history-page) .filters-grid textarea { width: 100%; max-width: 100%; min-width: 0; }
+  :is(.quotes-history-page, .sales-history-page) .pagination-controls { flex-wrap: wrap; gap: 8px; justify-content: center; }
+  :is(.quotes-history-page, .sales-history-page) .pagination-controls span { flex: 1 1 100%; order: -1; min-width: 0; text-align: center; }
+  :is(.quotes-history-page, .sales-history-page) .pagination-controls button { flex: 1 1 100px; min-width: 0; min-height: 44px; }
+  :is(.quotes-history-page, .sales-history-page) .payment-form-card,
+  :is(.quotes-history-page, .sales-history-page) .lifecycle-panel { padding: 14px; }
+  :is(.quotes-history-page, .sales-history-page) .payment-form-card .filter-actions button,
+  :is(.quotes-history-page, .sales-history-page) .lifecycle-panel .filter-actions button { width: 100%; }
+}
+@media (max-width: 640px) {
+  /* Each actual history row has data-label attributes. Hide only column headings
+     visually, retaining original table markup and existing Blazor actions. */
+  :is(.quotes-history-page, .sales-history-page) .table-container { overflow-x: visible; }
+  :is(.quotes-history-page, .sales-history-page) .table-container table,
+  :is(.quotes-history-page, .sales-history-page) .table-container tbody { display: block; width: 100%; min-width: 0; }
+  :is(.quotes-history-page, .sales-history-page) .table-container thead {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  :is(.quotes-history-page, .sales-history-page) .table-container tbody tr:not(.void-payment-row) {
+    display: flex; flex-direction: column; min-width: 0; width: 100%;
+    padding: 10px 12px; margin-bottom: 12px;
+    border: 1px solid var(--color-border,#e5e7eb);
+    border-top: 3px solid var(--color-primary,#f59e0b);
+    border-radius: 12px; background: #fff;
+  }
+  :is(.quotes-history-page, .sales-history-page) .table-container tbody tr:not(.void-payment-row):last-child { margin-bottom: 0; }
+  :is(.quotes-history-page, .sales-history-page) .table-container tbody tr:not(.void-payment-row) > td {
+    display: grid; grid-template-columns: minmax(0, 94px) minmax(0,1fr); gap: 8px;
+    min-width: 0; width: 100%; padding: 8px 0; border: 0;
+    border-bottom: 1px solid var(--color-border,#e5e7eb);
+    text-align: left; overflow-wrap: anywhere; font-size: .86rem;
+  }
+  :is(.quotes-history-page, .sales-history-page) .table-container tbody tr:not(.void-payment-row) > td::before {
+    content: attr(data-label); font-size: .76rem; font-weight: 650;
+    color: var(--color-text-secondary,#6b7280);
+  }
+  :is(.quotes-history-page, .sales-history-page) .table-container tbody tr:not(.void-payment-row) > td:last-child { border-bottom: 0; }
+  :is(.quotes-history-page, .sales-history-page) .table-container tbody tr:not(.void-payment-row) > td[data-label="Acción"] { display: block; padding-top: 12px; }
+  :is(.quotes-history-page, .sales-history-page) .table-container tbody tr:not(.void-payment-row) > td[data-label="Acción"]::before { display: block; margin-bottom: 8px; }
+  :is(.quotes-history-page, .sales-history-page) .table-container tbody tr:not(.void-payment-row) > td[data-label="Acción"] button { width: 100%; min-width: 0; min-height: 44px; }
+  /* A payment void-confirmation occupies its own spanning row; leave its inputs intact. */
+  .sales-history-page .payment-history tbody tr.void-payment-row,
+  .sales-history-page .payment-history tbody tr.void-payment-row > td { display: block; width: 100%; min-width: 0; }
+  .sales-history-page .payment-history .void-payment-panel { max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
+  .sales-history-page .payment-history .void-payment-panel textarea { max-width: 100%; }
+  .sales-history-page .payment-history .void-payment-panel .filter-actions { flex-direction: column; }
+  .sales-history-page .payment-history .void-payment-panel .filter-actions button { width: 100%; min-height: 44px; }
+}
+@media (max-width: 380px) {
+  :is(.quotes-history-page, .sales-history-page) .table-container tbody tr:not(.void-payment-row) > td {
+    grid-template-columns: minmax(0, 75px) minmax(0,1fr); gap: 6px;
+  }
+}
