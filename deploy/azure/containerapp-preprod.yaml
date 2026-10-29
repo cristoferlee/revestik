@@ -1,0 +1,62 @@
+name: ca-revestik-prod
+location: westus2
+type: Microsoft.App/containerApps
+identity:
+  type: UserAssigned
+  userAssignedIdentities:
+    "/subscriptions/314f1af8-fdb0-4f5c-a0f6-238e6941a442/resourcegroups/rg-revestik-prod/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-revestik-prod": {}
+properties:
+  managedEnvironmentId: "/subscriptions/314f1af8-fdb0-4f5c-a0f6-238e6941a442/resourceGroups/rg-revestik-prod/providers/Microsoft.App/managedEnvironments/cae-revestik-vnet-prod"
+  configuration:
+    activeRevisionsMode: Single
+    ingress:
+      external: true
+      targetPort: 8080
+      transport: auto
+      allowInsecure: false
+      ipSecurityRestrictions:
+        - name: AllowPreprodIP
+          description: Acceso temporal de pruebas
+          ipAddressRange: 177.93.21.181/32
+          action: Allow
+    registries:
+      - server: skillsnapcrregistry.azurecr.io
+        identity: "/subscriptions/314f1af8-fdb0-4f5c-a0f6-238e6941a442/resourcegroups/rg-revestik-prod/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-revestik-prod"
+    secrets:
+      - name: sql-connection
+        keyVaultUrl: https://kv-revestik-prod.vault.azure.net/secrets/revestik-sql-connection
+        identity: "/subscriptions/314f1af8-fdb0-4f5c-a0f6-238e6941a442/resourcegroups/rg-revestik-prod/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-revestik-prod"
+      - name: dp-certificate
+        keyVaultUrl: https://kv-revestik-prod.vault.azure.net/secrets/revestik-dataprotection-certificate
+        identity: "/subscriptions/314f1af8-fdb0-4f5c-a0f6-238e6941a442/resourcegroups/rg-revestik-prod/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-revestik-prod"
+      - name: dp-password
+        keyVaultUrl: https://kv-revestik-prod.vault.azure.net/secrets/revestik-dataprotection-password
+        identity: "/subscriptions/314f1af8-fdb0-4f5c-a0f6-238e6941a442/resourcegroups/rg-revestik-prod/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-revestik-prod"
+  template:
+    containers:
+      - name: revestik
+        image: skillsnapcrregistry.azurecr.io/revestik@sha256:6bc08f26974f0ad57360b32b9bfb32fb3fc831a19c2e027c8f45812b56ec3d02
+        resources:
+          cpu: 0.5
+          memory: 1Gi
+        env:
+          - name: ASPNETCORE_URLS
+            value: http://+:8080
+          - name: RevestikStorage__RootPath
+            value: /mnt/revestik-data
+          - name: ConnectionStrings__RevestikDatabase
+            secretRef: sql-connection
+          - name: DataProtection__CertificateBase64
+            secretRef: dp-certificate
+          - name: DataProtection__CertificatePassword
+            secretRef: dp-password
+        volumeMounts:
+          - volumeName: revestik-data-volume
+            mountPath: /mnt/revestik-data
+    volumes:
+      - name: revestik-data-volume
+        storageType: AzureFile
+        storageName: revestik-storage
+    scale:
+      minReplicas: 1
+      maxReplicas: 1

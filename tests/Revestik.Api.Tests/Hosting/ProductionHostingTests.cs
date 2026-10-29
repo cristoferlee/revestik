@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Revestik.Api.Tests.Hosting;
 
+[Collection("Isolated production hosting tests")]
 public sealed class ProductionHostingTests(ProductionHttpHostFixture hostFixture)
     : IAsyncLifetime, IClassFixture<ProductionHttpHostFixture>
 {
@@ -76,6 +77,53 @@ public sealed class ProductionHostingTests(ProductionHttpHostFixture hostFixture
     }
 
     [Fact]
+    public async Task ForwardedProtoHeader_DoesNotOverrideHttps_WithoutTrustedProxyConfiguration()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/");
+        request.Headers.TryAddWithoutValidation("X-Forwarded-Proto", "http");
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
+
+    [Fact]
+    public async Task ForwardedHostHeader_DoesNotChangeAppHost()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/");
+        request.Headers.TryAddWithoutValidation("X-Forwarded-Host", "attacker.example");
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public void ExplicitProxyMode_OnlyTrustsConfiguredPeerAndProto()
+    {
+        var options = new Microsoft.AspNetCore.Builder.ForwardedHeadersOptions();
+        var trusted = IPAddress.Parse("::ffff:100.100.0.26");
+        Revestik.Api.Configuration.RevestikForwardedHeaders.Configure(options, false, new[] { trusted });
+
+        Assert.Equal(Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto, options.ForwardedHeaders);
+        Assert.Equal(1, options.ForwardLimit);
+        Assert.Single(options.KnownProxies);
+        Assert.Equal(trusted, options.KnownProxies[0]);
+        Assert.Empty(options.KnownIPNetworks);
+    }
+
+    [Fact]
+    public void DynamicIngressMode_OnlyProcessesProtoWithSingleHop()
+    {
+        var options = new Microsoft.AspNetCore.Builder.ForwardedHeadersOptions();
+        Revestik.Api.Configuration.RevestikForwardedHeaders.Configure(options, true, Array.Empty<IPAddress>());
+
+        Assert.Equal(Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto, options.ForwardedHeaders);
+        Assert.Equal(1, options.ForwardLimit);
+        Assert.Empty(options.KnownProxies);
+        Assert.Empty(options.KnownIPNetworks);
+        // Empty trust lists in this opt-in mode mean ANY direct peer can send
+        // the scheme header: not safe unless ingress is the only path to Kestrel.
+    }
+
+    [Fact]
     public async Task StaticAsset_UsesManifestCacheHeaders()
     {
         var routes = factory.Services
@@ -129,3 +177,8 @@ public sealed class ProductionHostingTests(ProductionHttpHostFixture hostFixture
         Assert.NotNull(response.Headers.ETag);
     }
 }
+
+// Production Program reads its configuration before factory app-configuration hooks.
+// No other test collections should run while fixture-only environment values exist.
+[CollectionDefinition("Isolated production hosting tests", DisableParallelization = true)]
+public sealed class IsolatedProductionHostingCollection;

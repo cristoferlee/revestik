@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+.git/
+.vscode/
+**/App_Data/
+src/RevestikPrivateDocuments/
+**/appsettings.Development.json
+**/appsettings.Production.json
+**/*.pfx
+**/*.pem
+**/*.key
+*.sql
+*.zip
+artifacts/

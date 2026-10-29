@@ -458,6 +458,7 @@
                     </p>
                 </div>
 
+                <AuthorizeView Roles="Administrator,Accountant">
                 @if (selectedPurchase.OutstandingAmount > 0m)
                 {
                     <button type="button"
@@ -466,8 +467,10 @@
                         Registrar pago
                     </button>
                 }
+                </AuthorizeView>
             </div>
 
+            <AuthorizeView Roles="Administrator,Accountant">
             @if (isPaymentFormOpen)
             {
                 <section class="payment-panel">
@@ -538,6 +541,8 @@
                 </section>
             }
 
+            </AuthorizeView>
+
             @if (selectedPurchase.Payments.Count == 0)
             {
                 <p class="empty-state">
@@ -584,6 +589,7 @@
                                         @payment.CreatedByDisplayName
                                     </td>
                                     <td data-label="Acción">
+                                        <AuthorizeView Roles="Administrator,Accountant">
                                         @if (payment.Status == PurchasePaymentStatus.Active)
                                         {
                                             <button type="button"
@@ -592,7 +598,8 @@
                                                 Anular
                                             </button>
                                         }
-                                        else
+                                        </AuthorizeView>
+                                        @if (payment.Status != PurchasePaymentStatus.Active)
                                         {
                                             <small>
                                                 @payment.VoidReason
@@ -606,6 +613,7 @@
                 </div>
             }
 
+            <AuthorizeView Roles="Administrator,Accountant">
             @if (paymentPendingVoidId.HasValue)
             {
                 <section class="payment-panel">
@@ -634,6 +642,7 @@
                     </div>
                 </section>
             }
+            </AuthorizeView>
         </section>
     }
 

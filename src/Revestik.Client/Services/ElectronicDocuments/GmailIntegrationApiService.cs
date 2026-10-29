@@ -55,6 +55,26 @@ public sealed class GmailIntegrationApiService(HttpClient httpClient)
             cancellationToken);
     }
 
+    public async Task<GmailHistoricalSyncProgress> StartHistoricalSyncAsync(
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsync(
+            "api/integrations/gmail/sync/start", null, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await ReadRequiredAsync<GmailHistoricalSyncProgress>(
+            response, "No se recibió el estado de importación.", cancellationToken);
+    }
+
+    public async Task<GmailHistoricalSyncProgress> GetHistoricalSyncProgressAsync(
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.GetAsync(
+            "api/integrations/gmail/sync/progress", cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await ReadRequiredAsync<GmailHistoricalSyncProgress>(
+            response, "No se recibió el progreso de importación.", cancellationToken);
+    }
+
     public async Task DisconnectAsync(
         CancellationToken cancellationToken = default)
     {

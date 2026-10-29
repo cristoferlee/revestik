@@ -12,6 +12,7 @@ namespace Revestik.Api.Services.ElectronicDocuments;
 public sealed class ReceivedDocumentInboxService : IReceivedDocumentInboxService
 {
     private const int MaxXmlBytes = 5 * 1024 * 1024;
+    private static readonly SemaphoreSlim StageGate = new(1, 1);
     private const string ProtectorPurpose = "Revestik.ReceivedDocuments.Inbox.v1";
     private readonly RevestikDbContext dbContext;
     private readonly IElectronicDocumentXmlParser parser;
@@ -85,8 +86,35 @@ public sealed class ReceivedDocumentInboxService : IReceivedDocumentInboxService
             };
         }
 
-        await SaveAsync(envelope, cancellationToken);
-        return Map(envelope);
+        // Serialize staging within this application instance to avoid duplicate pending files.
+        await StageGate.WaitAsync(cancellationToken);
+        try
+        {
+            // A document accepted into SQL is already represented; do not add another inbox entry.
+            if (envelope.Status == ReceivedDocumentInboxStatus.Duplicate)
+                return Map(envelope);
+
+            if (!string.IsNullOrWhiteSpace(envelope.Clave))
+            {
+                foreach (var path in Directory.EnumerateFiles(storagePath, "*.inbox"))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var existing = await ReadAsync(path, cancellationToken);
+                    if (string.Equals(existing.Clave, envelope.Clave, StringComparison.Ordinal) &&
+                        string.Equals(existing.DocumentKind, envelope.DocumentKind, StringComparison.Ordinal))
+                    {
+                        envelope.Status = ReceivedDocumentInboxStatus.Duplicate;
+                        return Map(envelope);
+                    }
+                }
+            }
+            await SaveAsync(envelope, cancellationToken);
+            return Map(envelope);
+        }
+        finally
+        {
+            StageGate.Release();
+        }
     }
 
     public async Task<IReadOnlyList<ReceivedDocumentInboxItemResponse>> GetPendingAsync(CancellationToken cancellationToken)

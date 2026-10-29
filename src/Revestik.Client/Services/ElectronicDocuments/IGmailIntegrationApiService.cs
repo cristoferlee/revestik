@@ -13,6 +13,12 @@ public interface IGmailIntegrationApiService
     Task<GmailSyncResultResponse> SyncAsync(
         CancellationToken cancellationToken = default);
 
+    Task<GmailHistoricalSyncProgress> StartHistoricalSyncAsync(
+        CancellationToken cancellationToken = default);
+
+    Task<GmailHistoricalSyncProgress> GetHistoricalSyncProgressAsync(
+        CancellationToken cancellationToken = default);
+
     Task DisconnectAsync(
         CancellationToken cancellationToken = default);
 }

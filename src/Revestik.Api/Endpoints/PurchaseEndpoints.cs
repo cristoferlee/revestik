@@ -405,6 +405,7 @@ public static class PurchaseEndpoints
                     }
                 })
             .AddEndpointFilter<AntiforgeryValidationFilter>()
+            .RequireAuthorization(PolicyNames.ManagePurchasePayments)
             .WithName("RegisterPurchasePayment");
 
         group.MapPost(
@@ -463,6 +464,7 @@ public static class PurchaseEndpoints
                     }
                 })
             .AddEndpointFilter<AntiforgeryValidationFilter>()
+            .RequireAuthorization(PolicyNames.ManagePurchasePayments)
             .WithName("VoidPurchasePayment");
 
         return endpoints;

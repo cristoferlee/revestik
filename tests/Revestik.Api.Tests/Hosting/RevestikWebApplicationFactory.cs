@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -21,6 +23,8 @@ public sealed class RevestikWebApplicationFactory(
     : WebApplicationFactory<Program>
 {
     private readonly string inMemoryDatabaseName = $"RevestikHostingTests-{Guid.NewGuid()}";
+    private readonly string productionStorageRoot = Path.Combine(
+        Path.GetTempPath(), $"revestik-production-host-tests-{Guid.NewGuid():N}");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -32,8 +36,30 @@ public sealed class RevestikWebApplicationFactory(
         builder.ConfigureLogging(logging => logging.ClearProviders());
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
+            string? testCertificateBase64 = null;
+            if (environmentName == "Production")
+            {
+                Directory.CreateDirectory(productionStorageRoot);
+                using var rsa = RSA.Create(2048);
+                var request = new CertificateRequest(
+                    "CN=Revestik-ProductionHostingTests",
+                    rsa,
+                    HashAlgorithmName.SHA256,
+                    RSASignaturePadding.Pkcs1);
+                using var certificate = request.CreateSelfSigned(
+                    DateTimeOffset.UtcNow.AddDays(-1),
+                    DateTimeOffset.UtcNow.AddDays(2));
+                testCertificateBase64 = Convert.ToBase64String(
+                    certificate.Export(X509ContentType.Pkcs12, "test-only-password"));
+            }
+
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["RevestikStorage:RootPath"] = environmentName == "Production"
+                    ? productionStorageRoot : null,
+                ["DataProtection:CertificateBase64"] = testCertificateBase64,
+                ["DataProtection:CertificatePassword"] = environmentName == "Production"
+                    ? "test-only-password" : null,
                 ["ConnectionStrings:RevestikDatabase"] = databaseConnectionString ??
                     "Server=(local);Database=RevestikHostingTests;",
                 ["AllowedOrigins:0"] = "https://localhost:7081",

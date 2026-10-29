@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -13,6 +13,7 @@ internal sealed class GmailIntegrationService : IGmailIntegrationService
 {
     private const int MaxXmlBytes = 5 * 1024 * 1024;
     private const int CurrentRejectedValidationRevision = 2;
+    private const int PageSize = 20; // Conservative Gmail quota budget per manual sync.
     private const string GmailReadonlyScope =
         "https://www.googleapis.com/auth/gmail.readonly";
     private const string AuthorizationEndpoint =
@@ -102,18 +103,18 @@ internal sealed class GmailIntegrationService : IGmailIntegrationService
         EnsureConfigured();
 
         if (string.IsNullOrWhiteSpace(code))
-            throw new GmailIntegrationException("Google no devolviÃ³ un cÃ³digo de autorizaciÃ³n.");
+            throw new GmailIntegrationException("Google no devolvió un código de autorización.");
 
         oauthStateService.Validate(state, userId);
 
         var token = await ExchangeAuthorizationCodeAsync(code, cancellationToken);
         if (string.IsNullOrWhiteSpace(token.AccessToken))
-            throw new GmailIntegrationException("Google no devolviÃ³ un access token vÃ¡lido.");
+            throw new GmailIntegrationException("Google no devolvió un access token válido.");
 
         if (string.IsNullOrWhiteSpace(token.RefreshToken))
         {
             throw new GmailIntegrationException(
-                "Google no devolviÃ³ un refresh token. Desconecta el acceso previo en Google e intenta conectar nuevamente.");
+                "Google no devolvió un refresh token. Desconecta el acceso previo en Google e intenta conectar nuevamente.");
         }
 
         var profile = await GetProfileAsync(token.AccessToken, cancellationToken);
@@ -123,10 +124,14 @@ internal sealed class GmailIntegrationService : IGmailIntegrationService
                 StringComparison.OrdinalIgnoreCase))
         {
             throw new GmailIntegrationException(
-                $"La cuenta autorizada ({profile.EmailAddress}) no corresponde al buzÃ³n configurado.");
+                $"La cuenta autorizada ({profile.EmailAddress}) no corresponde al buzón configurado.");
         }
 
         var existing = await stateStore.LoadAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(existing.ConnectedMailbox) &&
+            !string.Equals(existing.ConnectedMailbox, profile.EmailAddress, StringComparison.OrdinalIgnoreCase))
+            throw new GmailIntegrationException("No se puede reutilizar el progreso de otro buzón de Gmail.");
+
         existing.ConnectedMailbox = profile.EmailAddress;
         existing.RefreshToken = token.RefreshToken;
         existing.ConnectedAtUtc = DateTime.UtcNow;
@@ -154,7 +159,7 @@ internal sealed class GmailIntegrationService : IGmailIntegrationService
                     StringComparison.OrdinalIgnoreCase))
             {
                 throw new GmailIntegrationException(
-                    "Gmail no estÃ¡ conectado con la cuenta de facturaciÃ³n configurada.");
+                    "Gmail no está conectado con la cuenta de facturación configurada.");
             }
 
             try
@@ -168,9 +173,9 @@ internal sealed class GmailIntegrationService : IGmailIntegrationService
                     state,
                     cancellationToken);
 
-                state.LastSuccessfulSyncUtc = result.CompletedAtUtc;
-                state.LastSyncError = null;
-                PruneProcessedAttachments(state);
+                state.LastSyncError = result.Failed > 0
+                    ? "Algunos mensajes quedaron pendientes para la siguiente sincronización."
+                    : null;
                 await stateStore.SaveAsync(state, cancellationToken);
 
                 return result;
@@ -225,31 +230,36 @@ internal sealed class GmailIntegrationService : IGmailIntegrationService
             }
         }
 
-        await stateStore.ClearAsync(cancellationToken);
+        // Disconnect only the OAuth credential, never the document ledger or scan cursor.
+        state.RefreshToken = null;
+        state.ConnectedAtUtc = null;
+        state.LastSyncError = null;
+        await stateStore.SaveAsync(state, cancellationToken);
     }
 
     private async Task<GmailSyncResultResponse> SynchronizeMailboxAsync(
-        string accessToken,
-        GmailIntegrationState state,
-        CancellationToken cancellationToken)
+        string accessToken, GmailIntegrationState state, CancellationToken cancellationToken)
     {
         RemoveRetryableRejectedAttachments(state);
-
-        var processed = state.ProcessedAttachments
-            .Select(x => x.Key)
+        var processed = state.ProcessedAttachments.Select(x => x.Key)
             .ToHashSet(StringComparer.Ordinal);
+        var completed = state.CompletedMessageIds.ToHashSet(StringComparer.Ordinal);
 
-        var fromUtc = state.LastSuccessfulSyncUtc.HasValue
-            ? state.LastSuccessfulSyncUtc.Value.AddMinutes(-10)
-            : DateTime.UtcNow.AddDays(-Math.Max(1, options.InitialLookbackDays));
-
-        var afterUnix = new DateTimeOffset(fromUtc).ToUnixTimeSeconds();
-        var query = $"has:attachment filename:xml after:{afterUnix}";
-
-        var messageIds = await ListMessageIdsAsync(
-            accessToken,
-            query,
-            cancellationToken);
+        // A sweep has a frozen upper bound so new arrivals cannot disturb pagination.
+        if (string.IsNullOrWhiteSpace(state.SweepQuery))
+        {
+            var started = DateTime.UtcNow;
+            var before = new DateTimeOffset(started).ToUnixTimeSeconds();
+            var after = state.HistoricalSweepCompleted && state.LastSuccessfulSyncUtc.HasValue
+                ? new DateTimeOffset(state.LastSuccessfulSyncUtc.Value.AddMinutes(-10)).ToUnixTimeSeconds()
+                : (long?)null;
+            state.SweepStartedUtc = started;
+            state.SweepQuery = after.HasValue
+                ? $"has:attachment filename:xml after:{after.Value} before:{before}"
+                : $"has:attachment filename:xml before:{before}";
+            state.SweepPageToken = null;
+            await stateStore.SaveAsync(state, cancellationToken);
+        }
 
         var messagesScanned = 0;
         var xmlAttachmentsFound = 0;
@@ -260,40 +270,48 @@ internal sealed class GmailIntegrationService : IGmailIntegrationService
         var failed = 0;
         var alreadyProcessed = 0;
 
-        foreach (var messageId in messageIds)
+        var pageToken = state.SweepPageToken;
+        var url = AddQueryString($"{GmailApiBaseUrl}users/me/messages",
+            new Dictionary<string, string?>
+            {
+                ["q"] = state.SweepQuery,
+                ["maxResults"] = PageSize.ToString(CultureInfo.InvariantCulture),
+                ["pageToken"] = pageToken,
+                ["includeSpamTrash"] = "false"
+            });
+        var page = await GetAuthorizedJsonAsync<GmailMessageListDto>(accessToken, url, cancellationToken);
+        foreach (var messageId in page.Messages.Select(x => x.Id).Where(x => !string.IsNullOrWhiteSpace(x)))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (completed.Contains(messageId))
+            {
+                alreadyProcessed++;
+                continue;
+            }
             messagesScanned++;
-
             GmailMessageDto message;
             try
             {
-                message = await GetMessageAsync(
-                    accessToken,
-                    messageId,
-                    cancellationToken);
+                message = await GetMessageAsync(accessToken, messageId, cancellationToken);
             }
+            catch (GmailQuotaException) { throw; }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 failed++;
-                logger.LogWarning(
-                    exception,
-                    "Unable to read Gmail message {MessageId}.",
-                    messageId);
+                logger.LogWarning(exception, "Unable to read Gmail message {MessageId}.", messageId);
                 continue;
             }
 
+            var messageFailed = false;
             foreach (var attachment in GmailMimePartWalker.FindXmlAttachments(message.Payload))
             {
                 xmlAttachmentsFound++;
                 var ledgerKey = $"{messageId}:{attachment.Identity}";
-
                 if (processed.Contains(ledgerKey))
                 {
                     alreadyProcessed++;
                     continue;
                 }
-
                 if (attachment.DeclaredSize > MaxXmlBytes)
                 {
                     rejected++;
@@ -301,117 +319,62 @@ internal sealed class GmailIntegrationService : IGmailIntegrationService
                     await stateStore.SaveAsync(state, cancellationToken);
                     continue;
                 }
-
                 try
                 {
-                    var bytes = await GetAttachmentBytesAsync(
-                        accessToken,
-                        messageId,
-                        attachment,
-                        cancellationToken);
-
-                    var inboxItem = await inboxService.StageAsync(
-                        bytes,
-                        attachment.FileName,
-                        $"Gmail:{messageId}",
-                        cancellationToken);
-
+                    var bytes = await GetAttachmentBytesAsync(accessToken, messageId, attachment, cancellationToken);
+                    var inboxItem = await inboxService.StageAsync(bytes, attachment.FileName,
+                        $"Gmail:{messageId}", cancellationToken);
                     switch (inboxItem.Status)
                     {
-                        case ReceivedDocumentInboxStatus.Duplicate:
-                            duplicates++;
-                            break;
-                        case ReceivedDocumentInboxStatus.RecognizedNotEnabled:
-                            recognizedNotEnabled++;
-                            break;
-                        default:
-                            staged++;
-                            break;
+                        case ReceivedDocumentInboxStatus.Duplicate: duplicates++; break;
+                        case ReceivedDocumentInboxStatus.RecognizedNotEnabled: recognizedNotEnabled++; break;
+                        default: staged++; break;
                     }
-
-                    MarkProcessed(
-                        state,
-                        processed,
-                        ledgerKey,
-                        $"Staged:{inboxItem.Status}");
-
+                    MarkProcessed(state, processed, ledgerKey, $"Staged:{inboxItem.Status}");
                     await stateStore.SaveAsync(state, cancellationToken);
                 }
+                catch (GmailQuotaException) { throw; }
                 catch (ReceivedDocumentInboxException exception)
                 {
                     rejected++;
-                    MarkProcessed(
-                        state,
-                        processed,
-                        ledgerKey,
-                        "Rejected:" + Truncate(exception.Message, 120));
-
+                    MarkProcessed(state, processed, ledgerKey, "Rejected:" + Truncate(exception.Message, 120));
                     await stateStore.SaveAsync(state, cancellationToken);
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
                     failed++;
-                    logger.LogWarning(
-                        exception,
-                        "Unable to process Gmail XML attachment {AttachmentKey}.",
-                        ledgerKey);
+                    messageFailed = true;
+                    logger.LogWarning(exception, "Unable to process Gmail XML attachment {AttachmentKey}.", ledgerKey);
                 }
+            }
+            if (!messageFailed)
+            {
+                completed.Add(messageId);
+                state.CompletedMessageIds.Add(messageId);
+                await stateStore.SaveAsync(state, cancellationToken);
             }
         }
 
-        return new GmailSyncResultResponse(
-            messagesScanned,
-            xmlAttachmentsFound,
-            staged,
-            duplicates,
-            recognizedNotEnabled,
-            rejected,
-            failed,
-            alreadyProcessed,
-            DateTime.UtcNow);
-    }
-
-    private async Task<IReadOnlyList<string>> ListMessageIdsAsync(
-        string accessToken,
-        string query,
-        CancellationToken cancellationToken)
-    {
-        var results = new List<string>();
-        string? pageToken = null;
-        var maximum = Math.Clamp(options.MaxMessagesPerSync, 1, 500);
-
-        do
+        // Do not advance the page if any message or attachment failed.
+        if (failed == 0)
         {
-            var remaining = maximum - results.Count;
-            if (remaining <= 0)
-                break;
-
-            var url = AddQueryString(
-                $"{GmailApiBaseUrl}users/me/messages",
-                new Dictionary<string, string?>
-                {
-                    ["q"] = query,
-                    ["maxResults"] = Math.Min(remaining, 100)
-                        .ToString(CultureInfo.InvariantCulture),
-                    ["pageToken"] = pageToken,
-                    ["includeSpamTrash"] = "false"
-                });
-
-            var page = await GetAuthorizedJsonAsync<GmailMessageListDto>(
-                accessToken,
-                url,
-                cancellationToken);
-
-            results.AddRange(
-                page.Messages
-                    .Select(x => x.Id)
-                    .Where(x => !string.IsNullOrWhiteSpace(x)));
-
-            pageToken = page.NextPageToken;
+            if (string.IsNullOrWhiteSpace(page.NextPageToken))
+            {
+                state.LastSuccessfulSyncUtc = state.SweepStartedUtc;
+                state.HistoricalSweepCompleted = true;
+                state.SweepQuery = null;
+                state.SweepPageToken = null;
+                state.SweepStartedUtc = null;
+                // Subsequent sweeps only overlap 10 minutes. Historical IDs no longer need retention.
+                state.CompletedMessageIds.Clear();
+                state.ProcessedAttachments.Clear();
+            }
+            else
+                state.SweepPageToken = page.NextPageToken;
+            await stateStore.SaveAsync(state, cancellationToken);
         }
-        while (!string.IsNullOrWhiteSpace(pageToken) && results.Count < maximum);
-
-        return results;
+        return new GmailSyncResultResponse(messagesScanned, xmlAttachmentsFound, staged,
+            duplicates, recognizedNotEnabled, rejected, failed, alreadyProcessed, DateTime.UtcNow);
     }
 
     private Task<GmailMessageDto> GetMessageAsync(
@@ -459,7 +422,7 @@ internal sealed class GmailIntegrationService : IGmailIntegrationService
         catch (FormatException)
         {
             throw new GmailIntegrationException(
-                "Gmail devolviÃ³ un adjunto XML con codificaciÃ³n base64url invÃ¡lida.");
+                "Gmail devolvió un adjunto XML con codificación base64url inválida.");
         }
     }
 
@@ -490,7 +453,7 @@ internal sealed class GmailIntegrationService : IGmailIntegrationService
         {
             throw new GmailIntegrationException(
                 token?.ErrorDescription ??
-                "Google rechazÃ³ el intercambio del cÃ³digo OAuth.");
+                "Google rechazó el intercambio del código OAuth.");
         }
 
         return token;
@@ -539,26 +502,37 @@ internal sealed class GmailIntegrationService : IGmailIntegrationService
             cancellationToken);
 
     private async Task<T> GetAuthorizedJsonAsync<T>(
-        string accessToken,
-        string url,
-        CancellationToken cancellationToken)
+        string accessToken, string url, CancellationToken cancellationToken)
     {
-        using var client = httpClientFactory.CreateClient();
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Authorization =
-            new AuthenticationHeaderValue("Bearer", accessToken);
-
-        using var response = await client.SendAsync(request, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new GmailIntegrationException(
-                $"Gmail API devolviÃ³ HTTP {(int)response.StatusCode}. {Truncate(body, 180)}");
-        }
+            using var client = httpClientFactory.CreateClient();
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var response = await client.SendAsync(request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+                return await response.Content.ReadFromJsonAsync<T>(cancellationToken)
+                    ?? throw new GmailIntegrationException("Gmail API devolvió una respuesta vacía.");
 
-        return await response.Content.ReadFromJsonAsync<T>(cancellationToken)
-            ?? throw new GmailIntegrationException(
-                "Gmail API devolviÃ³ una respuesta vacÃ­a.");
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            var quotaExceeded = (int)response.StatusCode == 429 ||
+                ((int)response.StatusCode == 403 &&
+                 (body.Contains("quota", StringComparison.OrdinalIgnoreCase) ||
+                  body.Contains("rateLimit", StringComparison.OrdinalIgnoreCase) ||
+                  body.Contains("userRateLimitExceeded", StringComparison.OrdinalIgnoreCase)));
+            if (quotaExceeded)
+            {
+                if (attempt == 2)
+                    throw new GmailQuotaException("Gmail alcanzó su límite temporal de solicitudes. El progreso quedó guardado; vuelve a sincronizar más tarde.");
+                var delay = TimeSpan.FromSeconds(attempt == 0 ? 3 : 8);
+                if (response.Headers.RetryAfter?.Delta is { } retry && retry > delay)
+                    delay = retry < TimeSpan.FromMinutes(2) ? retry : TimeSpan.FromMinutes(2);
+                await Task.Delay(delay, cancellationToken);
+                continue;
+            }
+            throw new GmailIntegrationException($"Gmail API devolvió HTTP {(int)response.StatusCode}. {Truncate(body, 180)}");
+        }
+        throw new GmailQuotaException("La cuota de Gmail continúa limitada.");
     }
 
     private void EnsureConfigured()
@@ -566,7 +540,7 @@ internal sealed class GmailIntegrationService : IGmailIntegrationService
         if (!options.IsConfigured)
         {
             throw new GmailIntegrationException(
-                "La integraciÃ³n Gmail todavÃ­a no tiene ClientId y ClientSecret configurados.");
+                "La integración Gmail todavía no tiene ClientId y ClientSecret configurados.");
         }
     }
 
@@ -599,22 +573,11 @@ internal sealed class GmailIntegrationService : IGmailIntegrationService
             item.ValidationRevision < CurrentRejectedValidationRevision);
     }
 
-    private static void PruneProcessedAttachments(GmailIntegrationState state)
-    {
-        var cutoff = DateTime.UtcNow.AddDays(-365);
-
-        state.ProcessedAttachments = state.ProcessedAttachments
-            .Where(x => x.ProcessedAtUtc >= cutoff)
-            .OrderByDescending(x => x.ProcessedAtUtc)
-            .Take(10_000)
-            .ToList();
-    }
-
     private static string SanitizeSyncError(Exception exception) =>
         Truncate(
             exception is GmailIntegrationException
                 ? exception.Message
-                : "La sincronizaciÃ³n de Gmail fallÃ³ de forma inesperada.",
+                : "La sincronización de Gmail falló de forma inesperada.",
             250);
 
     private static string Truncate(string value, int maxLength) =>

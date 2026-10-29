@@ -7,6 +7,12 @@ internal sealed class GmailIntegrationState
     public DateTime? ConnectedAtUtc { get; set; }
     public DateTime? LastSuccessfulSyncUtc { get; set; }
     public string? LastSyncError { get; set; }
+    // A persisted, bounded Gmail search sweep. The page token advances only after a whole page succeeds.
+    public string? SweepQuery { get; set; }
+    public string? SweepPageToken { get; set; }
+    public DateTime? SweepStartedUtc { get; set; }
+    public bool HistoricalSweepCompleted { get; set; }
+    public List<string> CompletedMessageIds { get; set; } = [];
     public List<GmailProcessedAttachment> ProcessedAttachments { get; set; } = [];
 }
 

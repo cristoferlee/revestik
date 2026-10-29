@@ -55,6 +55,15 @@ public static class ProjectDocumentUploadPolicy
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
             if (archive.Entries.Count > 2000) return false;
             if (archive.Entries.Any(e => e.Length > 64L * 1024 * 1024)) return false;
+            // Bound combined decompressed size as well as each individual entry.
+            long totalUncompressed = 0;
+            foreach (var entry in archive.Entries)
+            {
+                if (entry.Length > 128L * 1024 * 1024 - totalUncompressed) return false;
+                totalUncompressed += entry.Length;
+            }
+            if (archive.Entries.Count(e => e.FullName == "[Content_Types].xml") != 1 ||
+                archive.Entries.Count(e => e.FullName == mainPart) != 1) return false;
             return archive.GetEntry("[Content_Types].xml") is not null && archive.GetEntry(mainPart) is not null;
         }
         catch (InvalidDataException) { return false; }

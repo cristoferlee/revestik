@@ -45,10 +45,28 @@ public sealed class LegacyQuarantineRecoveryTests
         await f.Inbox.AcceptAsync(first.Id, "tester", default);
         var duplicate = await f.Inbox.StageAsync([1], "second.xml", "Gmail:test", default);
         Assert.Equal(ReceivedDocumentInboxStatus.Duplicate, duplicate.Status);
-        Assert.True(await f.Inbox.RejectAsync(duplicate.Id, default));
+        // GMAIL-QUOTA-01: a known duplicate is not staged as a quarantine copy.
+        Assert.False(await f.Inbox.RejectAsync(duplicate.Id, default));
         Assert.Empty(await f.Inbox.GetPendingAsync(default));
         Assert.Single(f.Db.ElectronicDocuments);
         Assert.Empty(f.Db.Purchases);
+    }
+
+    [Fact]
+    public async Task DuplicatePendingDocument_DoesNotCreateAnotherInboxCopy()
+    {
+        await using var f = new Fixture(HaciendaXmlDocumentKind.TiqueteElectronico);
+        var first = await f.Inbox.StageAsync([1], "first.xml", "Gmail:first", default);
+        Assert.Equal(ReceivedDocumentInboxStatus.PendingReview, first.Status);
+
+        var duplicate = await f.Inbox.StageAsync([1], "second.xml", "Gmail:second", default);
+        Assert.Equal(ReceivedDocumentInboxStatus.Duplicate, duplicate.Status);
+        Assert.False(await f.Inbox.RejectAsync(duplicate.Id, default));
+
+        var pending = await f.Inbox.GetPendingAsync(default);
+        Assert.Single(pending);
+        Assert.Equal(first.Id, pending[0].Id);
+        Assert.Empty(f.Db.ElectronicDocuments);
     }
 
     private sealed class Fixture : IAsyncDisposable

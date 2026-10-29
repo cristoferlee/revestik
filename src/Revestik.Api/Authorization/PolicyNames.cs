@@ -25,6 +25,9 @@ public static class PolicyNames
     public const string ManagePurchases =
         "ManagePurchases";
 
+    public const string ManagePurchasePayments =
+        "ManagePurchasePayments";
+
     public const string ManageExpenses =
         "ManageExpenses";
 

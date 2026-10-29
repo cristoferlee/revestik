@@ -1,3 +1,4 @@
+using Revestik.Api.Extensions;
 using System.Security.Claims;
 using Revestik.Api.Authorization;
 using Revestik.Api.Configuration;
@@ -118,6 +119,7 @@ public static class BankVoucherGmailIntegrationEndpoints
                 })
             .RequireAuthorization(PolicyNames.ManageExpenses)
             .AddEndpointFilter<AntiforgeryValidationFilter>()
+            .RequireRateLimiting(RevestikRateLimiting.GmailSync)
             .WithName("SyncBankVoucherGmail");
 
         group.MapPost(

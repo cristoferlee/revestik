@@ -1,3 +1,4 @@
+using Revestik.Api.Extensions;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http.Features;
 using Revestik.Api.Authorization;
@@ -64,7 +65,8 @@ public static class ProjectDocumentEndpoints
             catch (ProjectOperationException e) { return Problem(e); }
             catch (InvalidDataException e) { return Results.BadRequest(e.Message); }
             catch (BadHttpRequestException) { return Results.BadRequest("Carga multipart inválida."); }
-        }).AddEndpointFilter<AntiforgeryValidationFilter>();
+        }).AddEndpointFilter<AntiforgeryValidationFilter>()
+          .RequireRateLimiting(RevestikRateLimiting.DocumentUpload);
         ProjectDocumentLifecycleEndpoints.Map(group);
         return endpoints;
     }

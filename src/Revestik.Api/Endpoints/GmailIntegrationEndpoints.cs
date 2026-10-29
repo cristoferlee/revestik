@@ -1,3 +1,4 @@
+using Revestik.Api.Extensions;
 using System.Security.Claims;
 using Revestik.Api.Authorization;
 using Revestik.Api.Configuration;
@@ -117,16 +118,38 @@ public static class GmailIntegrationEndpoints
                 })
             .RequireAuthorization(PolicyNames.ManageAccountingClassification)
             .AddEndpointFilter<AntiforgeryValidationFilter>()
+            .RequireRateLimiting(RevestikRateLimiting.GmailSync)
             .WithName("SyncGmailReceivedDocuments");
+
+        group.MapPost(
+                "/sync/start",
+                (GmailHistoricalSyncWorker worker, GmailSyncCoordinator coordinator) =>
+                    !coordinator.IsSyncing && worker.TryStart()
+                        ? Results.Accepted("/api/integrations/gmail/sync/progress", worker.Snapshot())
+                        : Results.Conflict(worker.Snapshot()))
+            .RequireAuthorization(PolicyNames.ManageAccountingClassification)
+            .AddEndpointFilter<AntiforgeryValidationFilter>()
+            .RequireRateLimiting(RevestikRateLimiting.GmailSync)
+            .WithName("StartHistoricalGmailSync");
+
+        group.MapGet(
+                "/sync/progress",
+                (GmailHistoricalSyncWorker worker) => Results.Ok(worker.Snapshot()))
+            .RequireAuthorization(PolicyNames.ManageAccountingClassification)
+            .WithName("GetHistoricalGmailSyncProgress");
 
         group.MapPost(
                 "/disconnect",
                 async (
                     IGmailIntegrationService service,
+                    GmailHistoricalSyncWorker worker,
                     CancellationToken cancellationToken) =>
                 {
                     try
                     {
+                        var job = worker.Snapshot();
+                        if (job.Running || job.Queued)
+                            return Results.Problem("La importación histórica sigue en curso.", statusCode: StatusCodes.Status409Conflict);
                         await service.DisconnectAsync(cancellationToken);
                         return Results.NoContent();
                     }

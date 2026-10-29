@@ -8,3 +8,8 @@ public sealed class GmailSyncAlreadyRunningException()
 
 public sealed class GmailRateLimitException(string message)
     : GmailIntegrationException(message);
+
+internal sealed class GmailQuotaException : GmailIntegrationException
+{
+    public GmailQuotaException(string message) : base(message) { }
+}

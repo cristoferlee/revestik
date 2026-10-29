@@ -1,3 +1,4 @@
+using Revestik.Api.Extensions;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -104,6 +105,7 @@ public static class AuthenticationEndpoints
                         properties,
                         [GoogleDefaults.AuthenticationScheme]);
                 })
+            .RequireRateLimiting(RevestikRateLimiting.Login)
             .WithName("LoginWithGoogle")
             .AllowAnonymous();
 

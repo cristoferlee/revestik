@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -139,7 +140,7 @@ public sealed class CompanyPdfBrandingProviderTests
     private static CompanyPdfBrandingProvider CreateProvider(RevestikDbContext db)
     {
         var env = new IsolatedHostEnvironment();
-        return new CompanyPdfBrandingProvider(db, new CompanyLogoStorage(env), Options.Create(Legacy));
+        return new CompanyPdfBrandingProvider(db, new CompanyLogoStorage(env, new ConfigurationBuilder().Build()), Options.Create(Legacy));
     }
 
     private sealed class IsolatedHostEnvironment : IHostEnvironment

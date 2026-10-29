@@ -4,11 +4,14 @@ using System.IO;
 namespace Revestik.Api.Services.Company;
 
 // Company assets have their own private storage; project evidence is not reused.
-public sealed class CompanyLogoStorage(IHostEnvironment environment)
+public sealed class CompanyLogoStorage(IHostEnvironment environment, IConfiguration configuration)
 {
     public const int MaxBytes = 2 * 1024 * 1024;
     private const int MaxDimension = 8192;
-    private readonly string root = Path.Combine(environment.ContentRootPath, "App_Data", "company-logos");
+    private readonly string root = !environment.IsProduction()
+        ? Path.Combine(environment.ContentRootPath, "App_Data", "company-logos")
+        : Path.Combine(configuration["RevestikStorage:RootPath"]
+            ?? throw new InvalidOperationException("Persistent storage is required."), "company-logos");
 
     public async Task<string> StoreAsync(byte[] bytes, CancellationToken ct)
     {

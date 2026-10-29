@@ -259,6 +259,19 @@
             </div>
         }
 
+        @if (gmailHistoricalProgress is not null)
+        {
+            <div class="status-message">
+                Importación: @(gmailHistoricalProgress.Running ? "En curso" : gmailHistoricalProgress.Queued ? "Pendiente" : "Detenida / finalizada").
+                Páginas @gmailHistoricalProgress.Pages; mensajes @gmailHistoricalProgress.MessagesScanned;
+                XML incorporados @gmailHistoricalProgress.Staged; duplicados @gmailHistoricalProgress.Duplicates.
+                @if (!string.IsNullOrWhiteSpace(gmailHistoricalProgress.Error))
+                {
+                    <span>@gmailHistoricalProgress.Error</span>
+                }
+            </div>
+        }
+
         <div class="gmail-integration-actions">
             <AuthorizeView Roles="Administrator">
                 @if (!gmailStatus.IsConnected)
@@ -279,7 +292,18 @@
                             class="primary-button"
                             disabled="@isBusy"
                             @onclick="SyncGmailAsync">
-                        @(gmailStatus.IsSyncing ? "Sincronizando..." : "Sincronizar ahora")
+                        Iniciar / reanudar importación
+                    </button>
+                }
+            </AuthorizeView>
+
+            <AuthorizeView Roles="Administrator,Accountant">
+                @if (gmailStatus.IsConnected)
+                {
+                    <button type="button" class="secondary-button"
+                            disabled="@isBusy"
+                            @onclick="RefreshGmailProgressAsync">
+                        Consultar progreso
                     </button>
                 }
             </AuthorizeView>
@@ -1015,6 +1039,7 @@
     private bool isClassifying;
     private bool isSavingCategory;
     private bool isSavingLearningRule;
+    private Revestik.Client.Services.ElectronicDocuments.GmailHistoricalSyncProgress? gmailHistoricalProgress;
     private bool isGmailBusy;
     private string? errorMessage;
     private string? successMessage;
@@ -1104,22 +1129,29 @@
     private async Task SyncGmailAsync()
     {
         if (isGmailBusy) return;
-
         isGmailBusy = true;
         errorMessage = null;
         successMessage = null;
-
         try
         {
-            var result = await GmailIntegrationApi.SyncAsync(
+            gmailHistoricalProgress = await GmailIntegrationApi.StartHistoricalSyncAsync(
                 cancellationTokenSource.Token);
+            successMessage = "Importación histórica iniciada. Podés consultar su progreso sin repetir la sincronización.";
+            await RefreshAsync();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { errorMessage = exception.Message; }
+        finally { isGmailBusy = false; }
+    }
 
-            successMessage =
-                $"Gmail sincronizado: {result.Staged} en cuarentena, " +
-                $"{result.Duplicates} duplicados, " +
-                $"{result.RecognizedNotEnabled} válidos pendientes de soporte, " +
-                $"{result.Rejected} rechazados y {result.Failed} errores.";
-
+    private async Task RefreshGmailProgressAsync()
+    {
+        if (isGmailBusy) return;
+        isGmailBusy = true;
+        try
+        {
+            gmailHistoricalProgress = await GmailIntegrationApi.GetHistoricalSyncProgressAsync(
+                cancellationTokenSource.Token);
             await RefreshAsync();
         }
         catch (OperationCanceledException) { }
