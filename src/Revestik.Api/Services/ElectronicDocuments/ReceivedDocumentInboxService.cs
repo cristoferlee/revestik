@@ -119,16 +119,26 @@ public sealed class ReceivedDocumentInboxService : IReceivedDocumentInboxService
 
     public async Task<IReadOnlyList<ReceivedDocumentInboxItemResponse>> GetPendingAsync(CancellationToken cancellationToken)
     {
-        var result = new List<ReceivedDocumentInboxItemResponse>();
-        foreach (var path in Directory.EnumerateFiles(storagePath, "*.inbox"))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var item = await ReadAsync(path, cancellationToken);
-            if (item.Status is ReceivedDocumentInboxStatus.PendingReview
-                or ReceivedDocumentInboxStatus.Duplicate
-                or ReceivedDocumentInboxStatus.RecognizedNotEnabled)
-                result.Add(Map(item));
-        }
+        // Bound concurrent Azure Files reads instead of reading each envelope sequentially.
+        // All files remain encrypted and the original status filtering is preserved.
+        var result = new System.Collections.Concurrent.ConcurrentBag<ReceivedDocumentInboxItemResponse>();
+
+        await Parallel.ForEachAsync(
+            Directory.EnumerateFiles(storagePath, "*.inbox"),
+            new ParallelOptions
+            {
+                MaxDegreeOfParallelism = 8,
+                CancellationToken = cancellationToken
+            },
+            async (path, ct) =>
+            {
+                var item = await ReadAsync(path, ct);
+                if (item.Status is ReceivedDocumentInboxStatus.PendingReview
+                    or ReceivedDocumentInboxStatus.Duplicate
+                    or ReceivedDocumentInboxStatus.RecognizedNotEnabled)
+                    result.Add(Map(item));
+            });
+
         return result.OrderByDescending(x => x.ReceivedAtUtc).ToList();
     }
 

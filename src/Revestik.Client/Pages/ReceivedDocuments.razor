@@ -1194,8 +1194,13 @@
                 inboxId,
                 cancellationTokenSource.Token);
 
+            // The API has confirmed acceptance. Remove only this inbox item.
+            // A full refresh remains available through the Update button.
+            inboxItems = inboxItems
+                .Where(item => item.Id != inboxId)
+                .ToArray();
+
             successMessage = "Documento aceptado e incorporado correctamente.";
-            await RefreshAsync();
         }
         catch (OperationCanceledException) { }
         catch (Exception exception) { errorMessage = exception.Message; }
