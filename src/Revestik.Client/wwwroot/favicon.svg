@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -35 153 153" width="512" height="512" role="img" aria-labelledby="title">
+<title id="title">Revestik RK</title>
+<g transform="translate(-45,-19)">
+<g xmlns:xlink="http://www.w3.org/1999/xlink" id="letter-R" transform="translate(45 19) scale(0.16058 0.16226) translate(-23 -24)"><path fill="#050505" d="M 23,24 H 244 C 339,24 414,101 414,194 C 414,276 367,338 302,356 L 434,591 H 306 L 192,375 H 137 V 591 H 23 V 264 H 232 C 271,264 294,237 294,201 C 294,165 270,137 232,137 H 23 Z"/></g>
+
+</g>
+<g transform="translate(-689,-19)">
+<path xmlns:xlink="http://www.w3.org/1999/xlink" id="letter-K" fill="#FFBD59" fill-rule="evenodd" d="M759 19 H776 V54 L800 19 H820 L791 63 L822 109 H802 L777 74 V109 H759 Z"/>
+
+</g>
+</svg>

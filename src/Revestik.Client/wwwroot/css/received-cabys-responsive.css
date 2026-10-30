@@ -303,3 +303,94 @@
     grid-template-columns: minmax(0, 85px) minmax(0, 1fr);
   }
 }
+
+/* RESPONSIVE-06D — Contador documental: desglose móvil */
+@media (max-width: 620px) {
+    .received-documents-page .accounting-summary-card > details {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .received-documents-page .accounting-summary-card > details > table {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        border-collapse: separate;
+    }
+
+    .received-documents-page .accounting-summary-card > details > table > thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .received-documents-page .accounting-summary-card > details > table > tbody {
+        display: grid;
+        gap: 12px;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .received-documents-page .accounting-summary-card > details > table > tbody > tr {
+        display: grid;
+        width: 100%;
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid #dfe4ea;
+        border-top: 3px solid #f59e0b;
+        border-radius: 12px;
+        background: #fff;
+    }
+
+    .received-documents-page .accounting-summary-card > details > table > tbody > tr > td {
+        display: grid;
+        grid-template-columns: minmax(0, 90px) minmax(0, 1fr);
+        gap: 8px;
+        min-width: 0;
+        width: 100%;
+        padding: 9px 0;
+        border: 0;
+        border-bottom: 1px solid #e7ebef;
+        overflow-wrap: anywhere;
+        white-space: normal;
+        text-align: left;
+    }
+
+    .received-documents-page .accounting-summary-card > details > table > tbody > tr > td:last-child {
+        border-bottom: 0;
+    }
+
+    .received-documents-page .accounting-summary-card > details > table > tbody > tr > td::before {
+        color: #697582;
+        font-size: .75rem;
+        font-weight: 650;
+    }
+
+    .received-documents-page .accounting-summary-card > details > table > tbody > tr > td:nth-child(1)::before {
+        content: "Clave";
+    }
+
+    .received-documents-page .accounting-summary-card > details > table > tbody > tr > td:nth-child(2)::before {
+        content: "Tipo";
+    }
+
+    .received-documents-page .accounting-summary-card > details > table > tbody > tr > td:nth-child(3)::before {
+        content: "Fecha";
+    }
+
+    .received-documents-page .accounting-summary-card > details > table > tbody > tr > td:nth-child(4)::before {
+        content: "Moneda";
+    }
+
+    .received-documents-page .accounting-summary-card > details > table > tbody > tr > td:nth-child(5)::before {
+        content: "Importe";
+    }
+
+    .received-documents-page .accounting-summary-card > details > table > tbody > tr > td:nth-child(6)::before {
+        content: "Resultado";
+    }
+}

@@ -1,50 +1,62 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
     <title>Revestik</title>
-
     <base href="/" />
-
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-        href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
-        rel="stylesheet" />
-
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="css/loading.css" />
     <link rel="stylesheet" href="Revestik.Client.styles.css" />
     <link rel="stylesheet" href="css/commercial-responsive.css" />
     <link rel="stylesheet" href="css/inventory-responsive.css" />
     <link rel="stylesheet" href="css/purchases-responsive.css" />
     <link rel="stylesheet" href="css/received-cabys-responsive.css" />
-    <link rel="icon" type="image/png" href="favicon.png" />
-
+    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1" />
+    <link rel="alternate icon" type="image/x-icon" href="favicon.ico?v=1" />
+    <link rel="apple-touch-icon" href="favicon-192.png?v=1" />
     <script type="importmap"></script>
 </head>
-
 <body>
     <div id="app">
-        <svg class="loading-progress" aria-label="Cargando Revestik">
-            <circle r="40%" cx="50%" cy="50%" />
-            <circle r="40%" cx="50%" cy="50%" />
-        </svg>
+      <main class="rk-loader" role="status" aria-label="Cargando Revestik" aria-live="off">
+        <div class="rk-loader-content">
+          <span class="rk-loader-sr-only">Cargando Revestik. Esperá mientras se inicia la aplicación.</span>
+          <svg class="rk-loader-logo" viewBox="0 0 864 130" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+<g id="letter-R"><g transform="translate(45 19) scale(0.16058 0.16226) translate(-23 -24)"><path fill="#050505" d="M 23,24 H 244 C 339,24 414,101 414,194 C 414,276 367,338 302,356 L 434,591 H 306 L 192,375 H 137 V 591 H 23 V 264 H 232 C 271,264 294,237 294,201 C 294,165 270,137 232,137 H 23 Z"/></g></g>
+<path id="letter-E" fill="#050505" fill-rule="evenodd" d="M159 19 H205 V37 H176 V55 H200 V72 H176 V91 H205 V109 H159 Z"/>
+<path id="letter-V" fill="#050505" fill-rule="evenodd" d="M250 19 H270 L289 69 L307 19 H328 L291 109 H286 Z"/>
+<path id="letter-E2" fill="#050505" fill-rule="evenodd" d="M376 19 H422 V37 H393 V55 H417 V72 H393 V91 H422 V109 H376 Z"/>
+<path id="letter-S" fill="#050505" fill-rule="evenodd" d="M520 22 L518 39 C510 35 503 34 497 35 C490 36 488 41 491 47 C494 52 501 55 509 59 C522 66 528 75 527 86 C527 101 515 110 499 110 C488 110 479 107 472 103 L474 85 C483 91 492 94 500 92 C508 91 511 85 508 80 C505 76 498 73 489 69 C478 63 472 55 473 45 C473 29 485 18 501 18 C509 18 516 20 520 22 Z"/>
+<path id="letter-T" fill="#050505" fill-rule="evenodd" d="M571 19 H634 V37 H611 V109 H594 V37 H571 Z"/>
+<path id="letter-I" fill="#050505" fill-rule="evenodd" d="M685 19 H702 V109 H685 Z"/>
+<path id="letter-K" fill="#FFBD59" fill-rule="evenodd" d="M759 19 H776 V54 L800 19 H820 L791 63 L822 109 H802 L777 74 V109 H759 Z"/>
 
-        <div class="loading-progress-text"></div>
+</svg>
+          <div class="rk-loader-bar" aria-hidden="true">
+            <div class="rk-loader-bar-fill"></div>
+          </div>
+          <div class="rk-loader-message" aria-hidden="true">
+            <span>Preparando tus datos…</span>
+            <span>Organizando tu espacio de trabajo…</span>
+            <span>Revisando que todo esté en orden…</span>
+            <span>Preparando tus herramientas…</span>
+            <span>Afinando los últimos detalles…</span>
+          </div>
+          <p class="rk-loader-percent" aria-hidden="true"></p>
+        </div>
+      </main>
     </div>
-
     <div id="blazor-error-ui">
         Se produjo un error inesperado.
         <a href="." class="reload">Recargar</a>
-        <span class="dismiss">Ã—</span>
+        <span class="dismiss">×</span>
     </div>
-
     <script src="_framework/blazor.webassembly.js"></script>
     <script src="js/quotationDownload.js"></script>
 </body>
-
 </html>

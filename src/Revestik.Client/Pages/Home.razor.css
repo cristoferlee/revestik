@@ -502,3 +502,52 @@
 .fx-rates span, .fx-result span { font-size:.85rem; color:var(--color-text-secondary,#6b7280); }
 .fx-result { background:var(--color-background,#f3f4f6); }
 @media(max-width:520px) { .fx-rates { grid-template-columns:1fr; } }
+
+/* RESPONSIVE-06C — Dashboard para celulares */
+@media (max-width: 660px) {
+    .dashboard-page {
+        width: 100%;
+        min-width: 0;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .dashboard-page > *,
+    .dashboard-overview,
+    .dashboard-overview-main,
+    .dashboard-overview-side,
+    .dashboard-overview-heading,
+    .dashboard-hero {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .dashboard-overview-main,
+    .dashboard-overview-grid,
+    .dashboard-overview-side {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .dashboard-overview-grid {
+        grid-template-rows: auto;
+        grid-auto-flow: row;
+    }
+
+    .dashboard-overview-heading {
+        flex-wrap: wrap;
+    }
+
+    .dashboard-toolbar {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .dashboard-toolbar select {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .dashboard-overview-card {
+        width: 100%;
+        min-width: 0;
+    }
+}

@@ -194,3 +194,14 @@
         transition: none;
     }
 }
+
+@media (min-width: 921px) {
+    .navigation-links {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        scrollbar-color: #64748b transparent;
+    }
+}

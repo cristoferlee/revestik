@@ -28,3 +28,91 @@
 
 .company-settings__logo-frame { display:flex; align-items:center; justify-content:center; min-height:115px; padding:16px; margin:14px 0; border:1px solid #dfe4ea; border-radius:8px; background:#f9fafb; }
 .company-settings__logo-frame img { display:block; max-height:180px; max-width:100%; object-fit:contain; }
+
+/* RESPONSIVE-06B — Mi empresa */
+@media (max-width: 680px) {
+    .company-settings {
+        width: 100%;
+        min-width: 0;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .company-settings__header,
+    .company-settings__header > div,
+    .company-settings__card,
+    .company-settings__details,
+    .company-settings__fields {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .company-settings__header p,
+    .company-settings__hint,
+    .company-settings__card {
+        overflow-wrap: anywhere;
+    }
+
+    .company-settings__card {
+        width: 100%;
+    }
+
+    .company-settings__card input[type="file"] {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .company-settings__fields input,
+    .company-settings__fields select,
+    .company-settings__fields textarea {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .company-settings__actions > button {
+        max-width: 100%;
+    }
+}
+/* RESPONSIVE-06B — Formulario Editar información */
+@media (max-width: 680px) {
+    .company-settings form {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .company-settings__fields {
+        width: 100%;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .company-settings__fields > div,
+    .company-settings__wide {
+        min-width: 0;
+        max-width: 100%;
+        grid-column: 1 / -1;
+    }
+
+    .company-settings__fields input,
+    .company-settings__fields select,
+    .company-settings__fields textarea {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .company-settings__actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+    }
+
+    .company-settings__actions button {
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+    }
+}
