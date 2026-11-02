@@ -1,22 +1,72 @@
 # Architecture
 
-Revestik is a single .NET 10 solution organized as a modular monolith. It has a Blazor WebAssembly client, a trusted ASP.NET Core API and shared transport contracts. EF Core and SQL Server provide relational persistence. The server hosts the published client in a same-origin deployment.
+## System overview
 
-## Boundaries
+Revestik is a **.NET 10 modular monolith**. A Blazor WebAssembly client communicates with a trusted ASP.NET Core Minimal API through shared request/response contracts. Entity Framework Core persists business state in SQL Server. In production, the API also serves the published client as a same-origin application.
 
-- **Client:** navigation, interaction and early validation; never trusted for permission or financial enforcement.
-- **API:** endpoints, services, authentication, authorization, antiforgery, transactions, document generation, uploads and external integrations.
-- **Shared:** transport DTOs and contracts; persistence entities belong on the server.
-- **Database:** relational constraints, indexes, migrations and concurrency safeguards.
+```text
+Browser (Blazor WebAssembly)
+          |
+          | HTTPS / cookie-authenticated API calls
+          v
+ASP.NET Core API (Identity, authorization, CSRF, rate limits)
+          |
+          +-- Domain services / transactional workflows --> EF Core --> SQL Server
+          +-- Private document and state storage
+          +-- PDF generation (QuestPDF)
+          +-- Gmail / Hacienda / BCCR / location services
+```
 
-## Domain separation
+The architecture is not microservices, CQRS, or an event-driven distributed system. The deployment model favors operational simplicity for a small internal team.
 
-Customers are master data for related projects and commercial records. Quotations do not reserve inventory. Issued sales can consume stock via FIFO; voiding restores original stock provenance. Purchases feed inventory only via explicit receipt. Received fiscal XML, vouchers, expenses and reconciliation follow distinct validation and business flows. Project abonos are operational records, not Sales payments or bank transactions.
+## Solution boundaries
 
-## External trust boundaries
+| Project | Responsibility |
+| --- | --- |
+| `Revestik.Client` | UI, navigation, client interaction, responsive presentation, non-authoritative validation |
+| `Revestik.Api` | Endpoints, authentication, authorization, domain rules, transactions, persistence, integrations, document handling |
+| `Revestik.Shared` | Transport DTOs and shared contracts; not database entities |
+| `Revestik.Api.Tests` | Automated domain, API, security, and database integration verification |
 
-Google OAuth establishes an external identity; Revestik controls application access. Gmail is an input channel, not proof that a fiscal document is accepted. XML is validated securely before canonical processing. Uploaded project files are stored privately, outside publicly served web assets.
+Business-critical invariants are enforced on the backend and, where appropriate, reinforced by database constraints and transactions.
 
-## Design decisions
+## Business modules
 
-Accepted ADRs in `docs/adr/` describe the Client/API/Shared separation, cookie sessions and EF Core/SQL Server choice. Do not alter accepted rationale when updating the operational summary. New ADRs are for consequential, difficult-to-reverse decisions, not routine features.
+- **Customers and commercial workflows:** customer records, quotations, sales, discounts, payments, PDF outputs.
+- **Products and inventory:** catalog, stock movements, physical counts, FIFO cost layers and cost resolution.
+- **Suppliers and procurement:** purchases, accounts payable, explicit receiving into inventory.
+- **Electronic documents and fiscal workflows:** Hacienda XML v4.4 intake, secure parsing, CABYS, classification, reconciliation, period summaries.
+- **Expenses and bank vouchers:** independent operational records and review workflows.
+- **Projects:** customer-linked records, milestones, tasks, deadlines, project payments, documents, activity, and reports.
+- **Dashboard and reporting:** activity trends, recent events, expense summaries, gross margin, operating results, document alerts, exchange rates.
+- **Administration:** company preferences, users and permissions, authentication, audit records.
+
+## Critical domain distinctions
+
+1. **Quotations do not reserve or deduct inventory.** Inventory changes occur through explicit sale and receipt workflows.
+2. **Sales inventory movements use FIFO cost provenance.** Voiding a sale must preserve the correct restoration semantics.
+3. **Purchases do not silently receive stock.** The receiving workflow is explicit.
+4. **Received XML documents are not interchangeable with manual purchases, bank vouchers, or expenses.** Reconciliation prevents unintended duplication.
+5. **Project payments are operational project records**, not `SalePayments`, bank movements, or tax documents. Closed project states enforce write restrictions.
+
+The normative rule identifiers and qualifications are in [BUSINESS_RULES.md](BUSINESS_RULES.md). This summary does not replace them.
+
+## Identity and trust boundaries
+
+Google OAuth establishes external identity; ASP.NET Core Identity and server-side authorization determine application access. Application sessions use cookies. Antiforgery validation protects relevant authenticated mutations. The server validates role and resource scope, rather than trusting UI visibility.
+
+Incoming Gmail messages, XML attachments, and user uploads are untrusted. Electronic documents pass through controlled validation and intake flows. Project files are private, not served from the public web root.
+
+## Gmail ingestion and background processing
+
+Historical Gmail synchronization runs in an API-hosted `BackgroundService`, with persisted checkpoints, duplicate handling, bounded page processing, and resume/retry paths. The current worker permits one active job **per API process**. Scaling to multiple replicas would require distributed coordination; it must not be assumed safe without a new design.
+
+## Production hosting and state
+
+The production architecture uses Azure Container Apps and Azure SQL Database. The API requires a configured durable, private storage root for received-document inbox data, Gmail state, project documents, and persistent Data Protection keys. Data Protection keys are protected with a certificate. The runtime fails startup if mandatory production storage or certificate configuration is absent.
+
+Azure deployment manifests in `deploy/azure/` may be historical or environment-specific. They are not proof of current live settings. See [OPERATIONS.md](OPERATIONS.md) for verification responsibilities.
+
+## Architectural decision records
+
+Accepted ADRs in [`docs/adr/`](adr/) are the source of truth for previously approved consequential decisions. Add a new ADR when changing a difficult-to-reverse architectural choice; do not silently rewrite accepted rationale.
