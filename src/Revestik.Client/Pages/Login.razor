@@ -10,6 +10,16 @@
 
 <section class="login-page">
     <div class="login-card">
+        @if (IsDatabaseTemporarilyUnavailable)
+        {
+            <div class="login-recovery" role="alert">
+                <div class="login-recovery-icon" aria-hidden="true">↻</div>
+                <h1>No pudimos completar el inicio de sesión</h1>
+                <p>Estamos tardando un poco más de lo habitual en conectarnos. Por favor, recargá la página para volver a intentarlo.</p>
+            </div>
+        }
+        else
+        {
         <header class="login-header">
             <p class="login-eyebrow">Acceso seguro</p>
             <h1>Iniciar sesión</h1>
@@ -19,7 +29,9 @@
             </p>
         </header>
 
-        @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        }
+
+        @if (!IsDatabaseTemporarilyUnavailable && !string.IsNullOrWhiteSpace(ErrorMessage))
         {
             <div class="login-message login-error" role="alert">
                 @ErrorMessage
@@ -37,8 +49,16 @@
             <button type="button"
                     class="google-login-button"
                     @onclick="LoginWithGoogle">
-                <span class="google-mark" aria-hidden="true">G</span>
-                Continuar con Google
+                @if (IsDatabaseTemporarilyUnavailable)
+                {
+                    <span aria-hidden="true">↻</span>
+                    <span>Volver a intentar</span>
+                }
+                else
+                {
+                    <span class="google-mark" aria-hidden="true">G</span>
+                    <span>Continuar con Google</span>
+                }
             </button>
         }
         else
@@ -48,10 +68,17 @@
             </div>
         }
 
-        <p class="login-help">
-            Solo pueden ingresar usuarios previamente autorizados
-            por el administrador.
-        </p>
+        @if (IsDatabaseTemporarilyUnavailable)
+        {
+            <p class="login-help">No es necesario realizar ninguna configuración.</p>
+        }
+        else
+        {
+            <p class="login-help">
+                Solo pueden ingresar usuarios previamente autorizados
+                por el administrador.
+            </p>
+        }
     </div>
 </section>
 
@@ -66,6 +93,9 @@
     [Parameter]
     [SupplyParameterFromQuery(Name = "error")]
     public string? ErrorCode { get; set; }
+
+    private bool IsDatabaseTemporarilyUnavailable =>
+        ErrorCode == "database_temporarily_unavailable";
 
     private string? ErrorMessage =>
         ErrorCode switch

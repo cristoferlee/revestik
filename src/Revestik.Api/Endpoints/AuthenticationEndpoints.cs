@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Data.SqlClient;
 using Revestik.Api.Authorization;
 using Revestik.Api.Data;
 using Revestik.Api.Services.Audit;
@@ -184,188 +185,206 @@ public static class AuthenticationEndpoints
         var logger = loggerFactory.CreateLogger(
             "Revestik.Api.Authentication");
 
-        var externalLogin =
-            await signInManager.GetExternalLoginInfoAsync();
-
-        if (externalLogin is null ||
-            !string.Equals(
-                externalLogin.LoginProvider,
-                GoogleDefaults.AuthenticationScheme,
-                StringComparison.Ordinal))
+        try
         {
-            logger.LogWarning(
-                "Google authentication callback did not contain valid external login information.");
+            var externalLogin =
+                await signInManager.GetExternalLoginInfoAsync();
 
-            return RedirectWithError(
-                clientBaseUrl,
-                "external_login_failed");
-        }
-
-        var email = externalLogin.Principal.FindFirstValue(
-            ClaimTypes.Email);
-
-        if (string.IsNullOrWhiteSpace(email))
-        {
-            logger.LogWarning(
-                "Google authentication did not return an email address.");
-
-            return RedirectWithError(
-                clientBaseUrl,
-                "email_not_available");
-        }
-
-        email = email.Trim();
-
-        if (!GoogleEmailVerification.IsVerified(externalLogin.Principal))
-        {
-            logger.LogWarning("Google sign-in rejected: email not verified.");
-            return RedirectWithError(clientBaseUrl, "email_not_verified");
-        }
-
-        var user = await userManager.FindByLoginAsync(
-            externalLogin.LoginProvider,
-            externalLogin.ProviderKey);
-
-        if (user is null)
-        {
-            user = await userManager.FindByEmailAsync(email);
-        }
-
-        if (user is null)
-        {
-            var bootstrapEmail = configuration[
-                "Authentication:BootstrapAdministratorEmail"];
-
-            if (!string.Equals(
-                    email,
-                    bootstrapEmail?.Trim(),
-                    StringComparison.OrdinalIgnoreCase))
+            if (externalLogin is null ||
+                !string.Equals(
+                    externalLogin.LoginProvider,
+                    GoogleDefaults.AuthenticationScheme,
+                    StringComparison.Ordinal))
             {
                 logger.LogWarning(
-                    "Google login was denied because the account is not authorized.");
+                    "Google authentication callback did not contain valid external login information.");
 
                 return RedirectWithError(
                     clientBaseUrl,
-                    "account_not_authorized");
+                    "external_login_failed");
             }
 
-            user = new ApplicationUser
+            var email = externalLogin.Principal.FindFirstValue(
+                ClaimTypes.Email);
+
+            if (string.IsNullOrWhiteSpace(email))
             {
-                UserName = email,
-                Email = email,
-                EmailConfirmed = true,
-                DisplayName = GetDisplayName(
-                    externalLogin.Principal,
-                    email),
-                IsActive = true,
-                LockoutEnabled = true,
-                CreatedAtUtc = DateTime.UtcNow
-            };
+                logger.LogWarning(
+                    "Google authentication did not return an email address.");
 
-            var createResult =
-                await userManager.CreateAsync(user);
+                return RedirectWithError(
+                    clientBaseUrl,
+                    "email_not_available");
+            }
 
-            if (!createResult.Succeeded)
+            email = email.Trim();
+
+            if (!GoogleEmailVerification.IsVerified(externalLogin.Principal))
+            {
+                logger.LogWarning("Google sign-in rejected: email not verified.");
+                return RedirectWithError(clientBaseUrl, "email_not_verified");
+            }
+
+            var user = await userManager.FindByLoginAsync(
+                externalLogin.LoginProvider,
+                externalLogin.ProviderKey);
+
+            if (user is null)
+            {
+                user = await userManager.FindByEmailAsync(email);
+            }
+
+            if (user is null)
+            {
+                var bootstrapEmail = configuration[
+                    "Authentication:BootstrapAdministratorEmail"];
+
+                if (!string.Equals(
+                        email,
+                        bootstrapEmail?.Trim(),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    logger.LogWarning(
+                        "Google login was denied because the account is not authorized.");
+
+                    return RedirectWithError(
+                        clientBaseUrl,
+                        "account_not_authorized");
+                }
+
+                user = new ApplicationUser
+                {
+                    UserName = email,
+                    Email = email,
+                    EmailConfirmed = true,
+                    DisplayName = GetDisplayName(
+                        externalLogin.Principal,
+                        email),
+                    IsActive = true,
+                    LockoutEnabled = true,
+                    CreatedAtUtc = DateTime.UtcNow
+                };
+
+                var createResult =
+                    await userManager.CreateAsync(user);
+
+                if (!createResult.Succeeded)
+                {
+                    LogIdentityErrors(
+                        logger,
+                        "create bootstrap administrator",
+                        createResult.Errors);
+
+                    return RedirectWithError(
+                        clientBaseUrl,
+                        "account_creation_failed");
+                }
+
+                var roleResult = await userManager.AddToRoleAsync(
+                    user,
+                    RoleNames.Administrator);
+
+                if (!roleResult.Succeeded)
+                {
+                    await userManager.DeleteAsync(user);
+
+                    LogIdentityErrors(
+                        logger,
+                        "assign administrator role",
+                        roleResult.Errors);
+
+                    return RedirectWithError(
+                        clientBaseUrl,
+                        "role_assignment_failed");
+                }
+            }
+
+            if (!user.IsActive)
+            {
+                logger.LogWarning(
+                    "A disabled user attempted to sign in.");
+                SecurityAudit.Record(db, "LoginRejectedDisabled", "User", user.Id, user.Id);
+                await db.SaveChangesAsync(ct);
+
+                return RedirectWithError(
+                    clientBaseUrl,
+                    "account_disabled");
+            }
+
+            var existingLogins =
+                await userManager.GetLoginsAsync(user);
+
+            var hasGoogleLogin = existingLogins.Any(login =>
+                string.Equals(
+                    login.LoginProvider,
+                    externalLogin.LoginProvider,
+                    StringComparison.Ordinal) &&
+                string.Equals(
+                    login.ProviderKey,
+                    externalLogin.ProviderKey,
+                    StringComparison.Ordinal));
+
+            if (!hasGoogleLogin)
+            {
+                var loginResult = await userManager.AddLoginAsync(
+                    user,
+                    externalLogin);
+
+                if (!loginResult.Succeeded)
+                {
+                    LogIdentityErrors(
+                        logger,
+                        "link Google login",
+                        loginResult.Errors);
+
+                    return RedirectWithError(
+                        clientBaseUrl,
+                        "login_link_failed");
+                }
+            }
+
+            user.LastLoginAtUtc = DateTime.UtcNow;
+
+            var updateResult = await userManager.UpdateAsync(user);
+
+            if (!updateResult.Succeeded)
             {
                 LogIdentityErrors(
                     logger,
-                    "create bootstrap administrator",
-                    createResult.Errors);
+                    "update last login time",
+                    updateResult.Errors);
 
                 return RedirectWithError(
                     clientBaseUrl,
-                    "account_creation_failed");
+                    "account_update_failed");
             }
 
-            var roleResult = await userManager.AddToRoleAsync(
+            await signInManager.SignInAsync(
                 user,
-                RoleNames.Administrator);
+                isPersistent: false,
+                externalLogin.LoginProvider);
 
-            if (!roleResult.Succeeded)
-            {
-                await userManager.DeleteAsync(user);
-
-                LogIdentityErrors(
-                    logger,
-                    "assign administrator role",
-                    roleResult.Errors);
-
-                return RedirectWithError(
-                    clientBaseUrl,
-                    "role_assignment_failed");
-            }
-        }
-
-        if (!user.IsActive)
-        {
-            logger.LogWarning(
-                "A disabled user attempted to sign in.");
-            SecurityAudit.Record(db, "LoginRejectedDisabled", "User", user.Id, user.Id);
+            SecurityAudit.Record(db, "LoginSucceeded", "User", user.Id, user.Id);
             await db.SaveChangesAsync(ct);
 
-            return RedirectWithError(
-                clientBaseUrl,
-                "account_disabled");
+            return Results.Redirect(
+                $"{clientBaseUrl}{safeReturnPath}");
         }
-
-        var existingLogins =
-            await userManager.GetLoginsAsync(user);
-
-        var hasGoogleLogin = existingLogins.Any(login =>
-            string.Equals(
-                login.LoginProvider,
-                externalLogin.LoginProvider,
-                StringComparison.Ordinal) &&
-            string.Equals(
-                login.ProviderKey,
-                externalLogin.ProviderKey,
-                StringComparison.Ordinal));
-
-        if (!hasGoogleLogin)
+        catch (SqlException ex) when (ex.Number == -2 && !ct.IsCancellationRequested)
         {
-            var loginResult = await userManager.AddLoginAsync(
-                user,
-                externalLogin);
+            logger.LogError(ex,
+                "SQL connection timed out during Google authentication callback.");
 
-            if (!loginResult.Succeeded)
-            {
-                LogIdentityErrors(
-                    logger,
-                    "link Google login",
-                    loginResult.Errors);
+            var loginUrl = QueryHelpers.AddQueryString(
+                $"{clientBaseUrl}/login",
+                new Dictionary<string, string?>
+                {
+                    ["error"] = "database_temporarily_unavailable",
+                    ["returnPath"] = safeReturnPath
+                });
 
-                return RedirectWithError(
-                    clientBaseUrl,
-                    "login_link_failed");
-            }
+            return Results.Redirect(loginUrl);
         }
-
-        user.LastLoginAtUtc = DateTime.UtcNow;
-
-        var updateResult = await userManager.UpdateAsync(user);
-
-        if (!updateResult.Succeeded)
-        {
-            LogIdentityErrors(
-                logger,
-                "update last login time",
-                updateResult.Errors);
-
-            return RedirectWithError(
-                clientBaseUrl,
-                "account_update_failed");
-        }
-
-        await signInManager.SignInAsync(
-            user,
-            isPersistent: false,
-            externalLogin.LoginProvider);
-
-        SecurityAudit.Record(db, "LoginSucceeded", "User", user.Id, user.Id);
-        await db.SaveChangesAsync(ct);
-
-        return Results.Redirect(
-            $"{clientBaseUrl}{safeReturnPath}");
     }
 
     private static string GetClientBaseUrl(
