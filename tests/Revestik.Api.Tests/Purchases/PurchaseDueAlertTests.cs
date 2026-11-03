@@ -16,8 +16,12 @@ public sealed class PurchaseDueAlertTests
 
         var fixture = await SeedBaseAsync(db);
 
-        var today =
-            DateOnly.FromDateTime(DateTime.UtcNow);
+        // Purchase due-date alerts are calculated in Costa Rica local time.
+        // UTC may already be on the next calendar day when Costa Rica is not.
+        var today = DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.UtcNow,
+                TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica")));
 
         await AddCreditPurchaseAsync(
             db,
