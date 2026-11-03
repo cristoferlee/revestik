@@ -326,3 +326,121 @@ The owner shared a video showing an e-commerce website editor with visual templa
 Follow **INVESTIGATE → PLAN → APPROVE → IMPLEMENT → VERIFY → STOP**. Preserve unrelated local files, internal business logic and secrets. No overlapping CSS override layers. Use small maintainable code, responsive semantic HTML, accessible controls and genuinely verified facts. Owner-facing communication in Spanish; repository-facing documentation in English. Report owner smoke-test evidence separately from agent-executed verification.
 
 **Current STOP:** Documentation synchronization; next development task is `PUBLIC-PROJECTS-01` investigation. Do not infer that local ZIP implementations were committed or deployed.
+
+## 12. Update — 2026-11-03: Public Projects, Glassy viewer and independent Public Products design
+
+> **Status / authority:** `PUBLIC-PROJECTS-01A/01B/01B1`, `PUBLIC-GLASS-01A/01B` are reported by the owner as locally integrated/smoke-tested. `PUBLIC-PRODUCTS-01` is **investigated and architecturally approved in conversation, NOT implemented**. The next bounded implementation is `PUBLIC-PRODUCTS-01A1 — Data Foundation`, requiring separate scope approval before changes to migrations/SQL and separate authorization for Git commit/push or deployment. **Never deploy the unfinished public site.**
+>
+> **GitHub verification:** On 2026-11-03, `main` pointed to `91f7f33ad187de2d5fab82179a51af15bd9a42b7` (`test(purchases): align due alert dates with Costa Rica timezone`). This is a source reference, **not** proof that local `src/Revestik.Public` code was committed. Recheck HEAD and working tree at start of next chat. The present checkpoint is an exported update and has **not been pushed to GitHub**.
+
+### 12.1 Completed local UI work since §11 — owner-reported evidence
+
+| Block | Scope / outcome | Evidence boundary |
+| --- | --- | --- |
+| `PUBLIC-PROJECTS-01A` | Sample public project catalog, shared `PublicProjectCatalog.cs`, reusable `ProjectGallery.razor`; three example projects reused in Home featured area and Projects index | Owner-approved local integration/smoke; demo data only |
+| `PUBLIC-PROJECTS-01B` | Individual project detail pages in ES/EN/DE; gallery, project features/materials, contact CTA, localization/SEO and 404 handling for unknown project slugs | Owner-approved local smoke; placeholder photos/content, not live CMS/database |
+| `PUBLIC-PROJECTS-01B1` | Compile correction (`using Revestik.Public` in public `Program.cs`) | Owner reported successful local result |
+| `PUBLIC-GLASS-01A` | Global reusable Glassy lightbox on project-detail imagery: dark/blur backdrop, thin golden edge (`#FFBD59`), controls, keyboard/touch support, focus/reduced-motion considerations | Owner approved local smoke; full automated accessibility suite not yet proven |
+| `PUBLIC-GLASS-01B` | Glassy viewer added to Home featured projects, five featured finishes/categories, Solutions editorial image and Projects index through reusable `PublicZoomAction.razor`, keeping navigation links separate; hero remains unchanged | Owner reported successful local tests |
+
+Existing Home decisions from §11 remain binding: architectural/editorial look; approximately five curated featured categories on Home; three project placeholders; SEO-first responsive SSR; ES/EN/DE; visual palette; Glassy only where appropriate. **Do not claim any photograph, sample project or product is a real/authorized published asset.**
+
+**Local integration caveat:** Previously delivered incremental ZIP patches were applied under `C:\Projects\Revestik\src\Revestik.Public` and checked by the owner. Public site was previously described as local/untracked, with `Revestik.sln` modified and `src/Revestik.Public/` untracked. Those states must be rechecked, never asserted current without a new `git status -sb`. Protect untracked Gmail `.gmail-quota01.bak` and unrelated working files. No PUBLIC-PRODUCTS implementation, new product API, schema, migration, xUnit run, or Azure change occurred in this conversation.
+
+### 12.2 Approved commercial scope — `PUBLIC-PRODUCTS-01`
+
+The product administrator described **a hierarchical, searchable, editable brochure/catalog**, not a fixed 10–20-product showcase and not an e-commerce checkout. Home retains about five featured editorial categories, but the interior `Nuestros productos` section can grow well beyond 20 products. Categories and subcategories are editable content, not hard-coded enums. Initial category families, subject to editorial naming review:
+
+1. **Pisos exteriores:** porcelanatos, cerámicas, WPC/decking and exterior applications.
+2. **Pisos interiores:** cerámicas, porcelanatos, vinyl/plastic flooring and interior applications.
+3. **Azulejos:** bathrooms, kitchens, decorative walls and applicable tile/porcelain.
+4. **Grifería:** faucets, showers, washbasin/kitchen fixtures and accessories.
+5. **Morteros:** adhesives, grouts, leveling and related products; **brand is an attribute**, not automatically a subcategory.
+6. **Fachadas:** fachaletas, façade cladding and exterior coverings.
+7. **Muebles:** finished furniture and suitable room/application subcategories.
+
+Every main category may have a **localized, editable hero** with architectural/ambient images, title, descriptive copy, order and supporting images. Individual public products have a commercial name, optional reference price **with currency**, description, imagery/gallery, brand and later relevant specifications. Full public ES/EN/DE content and SEO metadata require reviewed localized text; no automatic publication of AI drafts. `Consultar precio` and `Consultar disponibilidad` are suitable CTAs; do not imply guaranteed immediate stock or prices where not verified.
+
+**Critical structural rule — many-to-many:** One public product may belong to multiple subcategories in *different* parent categories, e.g. a verified wood-look porcelain tile suitable for interior **and** exterior can appear in both `Pisos interiores → Porcelanatos` and `Pisos exteriores → Porcelanatos`. **One product record, one canonical product URL, one set of editorial content/images**; `PublicCatalogProductSubcategory` contains membership. Product suitability must be supported by manufacturer's real specifications; category membership cannot invent exterior/slip-resistance suitability.
+
+**Hard separation from inventory:** `Revestik.Api` existing operational `Products`, `ProductCategories`, stock, purchasing, sales, FIFO layers and movements remain for internal business only. Public catalog is an **entirely independent data domain**, **without a foreign key, synchronization, automatic copying or creation of inventory records**. It represents lines normally commercialized, not necessarily currently in stock. Reuse general infrastructure only (EF Core, SQL Server, Identity, server authorization, audit, upload patterns); do not reuse internal inventory permissions or product data.
+
+**Permissions:** Only users authorized by existing `PolicyNames.AdministratorOnly` may create, edit, organize, preview, publish, unpublish, archive, upload/replace category/product imagery, or otherwise mutate any public-catalog content. Anyone may read **published** content only. The existing `PolicyNames.ManageProductCatalog` controls an internal product function and **MUST NOT** authorize public website edits. Never rely on hiding UI controls as access control.
+
+**No V1 cart, checkout, mass marketplace, live stock sync or product auto-publication.** Category/product public GETs and admin write endpoints are future proposals only; these endpoints do **not** exist yet in GitHub-verified source.
+
+### 12.3 `PUBLIC-PRODUCTS-01A` SQL Server architecture — proposed and agreed for planning
+
+Use the **existing SQL Server / EF Core infrastructure**, including `RevestikDbContext` with `ApplyConfigurationsFromAssembly`; no additional production database by default. Environments: local SQL Server Express (`localhost\SQLEXPRESS` in owner-reported local configuration), xUnit integration with SQL Server via Testcontainers, and Azure SQL Database (`RevestikDb`, serverless) in production. Validate actual connection settings per environment; no implicit production migrations. SQL images are **metadata only**; binary files use separately secured durable media storage with a vetted public delivery path/cache.
+
+**Initial logical domain tables** (names provisional; finalize public snapshot/revision structure before migrations):
+
+| Table | Responsibility / important constraints |
+| --- | --- |
+| `PublicCatalogCategories` | Category identity, immutable Id, unique stable slug, ordering, enabled state, version/concurrency; hero content via translations and media |
+| `PublicCatalogSubcategories` | Parent CategoryId FK, `(CategoryId, Slug)` unique, ordering, enabled state |
+| `PublicCatalogProducts` | Stable Id, unique public slug, optional brand/price, currency, featured/order, timestamps and concurrency |
+| `PublicCatalogProductSubcategories` | `(ProductId, SubcategoryId)` composite PK, FKs, reverse lookup index; no duplicate links |
+| `PublicCatalogCategoryTranslations` | `(CategoryId, LanguageCode)` unique, localized name/description/SEO |
+| `PublicCatalogSubcategoryTranslations` | `(SubcategoryId, LanguageCode)` unique, localized name/description/SEO |
+| `PublicCatalogProductTranslations` | `(ProductId, LanguageCode)` unique, commercial name/description/SEO |
+| `PublicCatalogImages` | Stored-media key, owner kind/parent association, content type, dimensions, role (cover/gallery/hero), order, localized alt text; enforce exactly one valid owner |
+
+**Open design requirement, not yet resolved into final SQL schema:** Support a **draft/editing revision that is invisible to public GET** while retaining a **stable prior published snapshot**. Category, product, subcategory membership, translations, price and images must publish together as one coherent revision, using a SQL transaction and server-side invariant validation. Proposed approaches include immutable publication snapshots or revision tables plus a published-version pointer. **Do not create the initial eight tables as if status flags alone provide this behavior**; the revision/snapshot schema must be finalized first. `rowversion` guards concurrent editing; returned conflicts must be handled rather than overwriting changes. Treat images and multi-record publication as a consistency problem: validate staged media, publish DB pointers atomically, and use cleanup/recovery for orphan files.
+
+Desired SQL rules: PK/FK integrity, uniqueness for slugs and language/entity pairs, membership uniqueness, nonnegative `decimal(18,2)` optional price, valid 3-letter currency when price is present, controlled publication status, reasonable lengths, UTC `datetime2`, useful indexes for published listings/sorting and category queries, limited cascading deletes, and soft removal/archiving of public content. Slugs are not primary keys; define SEO redirects for later slug changes. Avoid excessive indexes before query evidence. Reuse proven patterns from `CompanyProfileConfiguration` (`IsRowVersion`) and `ProjectDocumentConfiguration` (SQL Server identity, concurrency and FKs).
+
+### 12.4 Backend-first security — non-negotiable acceptance criteria
+
+**Every business invariant, mutation, publication and permission check is authoritative in the backend.** Client-side validation is user-experience only. For the public catalog and all subsequent website modules (projects, images, inquiries, CMS, contacts), enforce:
+
+- Server-side authentication and **`AdministratorOnly`** authorization on **every** administrative route, including read-only draft/preview and uploads; anonymous/other-role access rejected, regardless of UI.
+- Server-side DTO and domain validation: required/malformed fields, length limits, valid locales (`es/en/de`), sanitized plain text or strictly vetted markup, price/currency rules, existing category/subcategory associations, uniqueness and verified publication completeness.
+- Antiforgery for cookie-authenticated writes; existing `AntiforgeryValidationFilter` and endpoint conventions are reusable. `DisableAntiforgery` is not a bypass: verify accompanying explicit filter where applicable.
+- CSRF, rate limits, bounded pagination and search, file-size and image dimensions/content sniffing with hardened decoder/processing, safe server-generated file names, no upload-to-public-executable directory, EXIF/metadata privacy handling, safe content delivery headers.
+- No anonymous draft reads; public SSR/API GETs project **only approved/published snapshots**, with no private record leakage. Explicit cache invalidation on publish/unpublish; no static/memory cache exposing restricted state.
+- Concurrency control (`rowversion`, HTTP 409/appropriate error response), SQL transactions for multi-entity publishing, idempotent safe commands where justified; SQL constraints are a defense-in-depth backstop, not a substitute for API checks.
+- Record content-management security audit (actor user id, action, entity, timestamps) via existing `SecurityAudit.Record`, in same business transaction when applicable; avoid logging secrets, private content or entire binary files.
+- Restrict public website server-to-API/data access and minimize granted identities; never expose internal admin services or database credentials publicly. Production security settings must be explicitly verified; do not infer security from development behavior.
+
+**Verified source patterns as of repository read:** `RevestikDbContext` uses SQL Server and assembly-scanned configurations; `PolicyNames.AdministratorOnly` exists; `PolicyNames.ManageProductCatalog` is **internal**; `CompanyLogoEndpoints` uses `RequireAuthorization(AdministratorOnly)` and explicit `AntiforgeryValidationFilter` on writes; `CompanyLogoStorage` validates PNG/JPEG/WebP structure and uses private durable storage; `SecurityAudit.Record` persists audit records via the current context. Reuse patterns, not company-logo paths or restricted assets.
+
+### 12.5 Automated tests / cross-environment verification — mandatory
+
+**xUnit is required where appropriate**, not only as a correctness check but also to reduce the risk of environment-specific failures before deployment. **However, passing xUnit on Windows/local SQL Server or a SQL Server Testcontainer does NOT prove an Azure Container Apps + Azure SQL production deployment will run correctly.** Treat tests as one gate alongside environment-config validation, release build, database migration rehearsal, and explicit post-deployment smoke/health tests after deployment is separately authorized.
+
+`PUBLIC-PRODUCTS-01A1` focused xUnit integration tests against actual SQL Server via **Testcontainers** must cover:
+
+1. One product attached to multiple subcategories/categories; no duplicate membership.
+2. SQL FK rejection of nonexistent parent/subcategory/product and appropriate delete policies.
+3. Unique category/product slugs, scoped subcategory slugs, unique `(entity, language)` translations.
+4. Valid/invalid and nullable prices, currency consistency, data length/check constraints.
+5. Draft vs published snapshot isolation, including edit-after-publish, publish/unpublish and atomic rollback on failure; if revision logic is scoped to later block, explicitly mark tests pending, not passed.
+6. Concurrency behavior using separate EF Core DbContext instances and `rowversion`.
+7. Repeatable migrations from fresh SQL Server and model/schema validation; test migration rollback/recovery as appropriate.
+8. Confirm public catalog models have **no FK or service coupling** to operational Products/Inventory/FIFO.
+
+When HTTP endpoints are implemented in `01B`, add xUnit API/integration tests for `401/403`, CSRF, privilege escalation attempts, malformed/tampered DTOs, draft/public leakage, invalid subcategory membership, unknown slugs/404, rate limiting, pagination, re-publication and audit outcomes. When image uploads are implemented in `01C`, test oversized/corrupt/polyglot files, unsupported formats, media ownership, staged-orphan cleanup, safe image retrieval and access restrictions. Validate ES/EN/DE routing/SEO, real responsive/mobile and a11y by appropriate checks in `01D–01E`.
+
+**Environment matrix (separate evidence):**
+
+| Gate | Required verification |
+| --- | --- |
+| Local development | `dotnet build` + focused xUnit + SQL Server Express smoke/migration rehearsal |
+| CI | Deterministic xUnit Testcontainers SQL Server integration on compatible runner, portable paths and environment variables, no reliance on workstation-local secrets or `localhost\\SQLEXPRESS` |
+| Release build | `dotnet publish -c Release` with Linux/container target constraints and configuration tests where practical; verify case-sensitive paths and persistence assumptions |
+| Preproduction / approved deployment | Correct connection strings/identities, migration approval/backup plan, SQL permissions, persistent media paths and public/private routing |
+| Production (only after explicit authorization) | Health check, actual Azure SQL connectivity, static/media serving, OAuth/admin security, anonymous published content, 401/403/CSRF, basic performance and observability; rollback plan |
+
+Last existing owner-reported full-suite outcome from earlier work was **1,073/1,073 xUnit tests passed**. There is also a user-reported `CI-FIX-01` for a Costa Rica timezone mismatch in `PurchaseDueAlertTests.cs`, with a passed GitHub Actions run `41555083649` on commit `91f7f33...`; verify CI run and any fresh regression evidence at the time of implementation. **No product-catalog xUnit tests have been authored or executed yet.** Never report a build, integration or deployment as passed without the actual output.
+
+### 12.6 Bounded implementation roadmap / next gate
+
+1. `PUBLIC-PRODUCTS-01A1 — Data Foundation`: finalize immutable snapshots/revisions and all invariants, then implement models, EF Core configurations/DbSets, indexes/checks, migration and focused xUnit/SQL Server Testcontainers tests. **Requires explicit approval of exact file/migration scope.** Do not apply to production.
+2. `PUBLIC-PRODUCTS-01B — API + security`: authenticated Administrator-only content operations and anonymous published-only GET; DTO validation, CSRF, audit, server-side publish transaction, concurrency, xUnit integration.
+3. `PUBLIC-PRODUCTS-01C — Media`: secure upload and optimized public delivery, per-category ambient hero/gallery, product images, content versioning and cleanup.
+4. `PUBLIC-PRODUCTS-01D — Admin UI`: editor in existing authenticated `app.revestikcr.com` for categories, subcategories, products, assigned memberships, translations, preview and publication.
+5. `PUBLIC-PRODUCTS-01E — Public SSR`: localized category and product listing/detail routes in untracked/local `src/Revestik.Public`, Glassy viewer reuse, SEO canonical/hreflang, fast responsive rendering and public-only projection.
+6. Following website tasks: Solutions/About/Contact/legal/privacy/cookies and safe inquiry inbox; final media/legal/security/performance audits, **entire-site acceptance before any public deploy**. Owner separately authorizes commits/push, migration execution and each deployment.
+
+**STOP / next-chat handoff:** The current conversation concluded product architecture and backend security requirements, but **no PUBLIC-PRODUCTS files were implemented, no migration run, no product xUnit run, and no deploy**. Start by reading this entire checkpoint and `AGENTS.md`; inspect live GitHub SHA and local worktree, especially untracked public-project files and Gmail backup. Move to `PUBLIC-PRODUCTS-01A1` with a short final schema/revision PLAN and exact files/tests, obtain explicit approval, then IMPLEMENT → VERIFY → STOP. Use incremental ZIPs relative to `C:\Projects\Revestik` with no unrelated files and preserve working tree. No commit/push/deployment without separate authorization.
