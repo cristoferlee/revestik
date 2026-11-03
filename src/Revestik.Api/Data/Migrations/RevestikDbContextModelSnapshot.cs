@@ -3292,6 +3292,295 @@ namespace Revestik.Api.Data.Migrations
                     b.ToTable("ProjectTaskRevisions", (string)null);
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DescriptionDe")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("DescriptionEn")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("DescriptionEs")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("HeroDescriptionDe")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("HeroDescriptionEn")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("HeroDescriptionEs")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("HeroTitleDe")
+                        .HasMaxLength(180)
+                        .HasColumnType("nvarchar(180)");
+
+                    b.Property<string>("HeroTitleEn")
+                        .HasMaxLength(180)
+                        .HasColumnType("nvarchar(180)");
+
+                    b.Property<string>("HeroTitleEs")
+                        .HasMaxLength(180)
+                        .HasColumnType("nvarchar(180)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("NameDe")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NameEn")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NameEs")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.HasIndex("IsActive", "DisplayOrder");
+
+                    b.ToTable("PublicCatalogCategories", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PublicCatalogCategories_DisplayOrder", "[DisplayOrder] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogProduct", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Brand")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Currency")
+                        .HasMaxLength(3)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(3)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("Price")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SalesUnit")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.HasIndex("IsPublished", "IsArchived", "DisplayOrder");
+
+                    b.ToTable("PublicCatalogProducts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PublicCatalogProducts_DisplayOrder", "[DisplayOrder] >= 0");
+
+                            t.HasCheckConstraint("CK_PublicCatalogProducts_Price", "[Price] IS NULL OR [Price] >= 0");
+
+                            t.HasCheckConstraint("CK_PublicCatalogProducts_PriceFields", "([Price] IS NULL AND [Currency] IS NULL) OR ([Price] IS NOT NULL AND [Currency] IS NOT NULL AND [Currency] IN ('CRC','USD') AND [SalesUnit] IS NOT NULL AND LEN(LTRIM(RTRIM([SalesUnit]))) > 0)");
+
+                            t.HasCheckConstraint("CK_PublicCatalogProducts_PublishedArchived", "NOT ([IsPublished] = 1 AND [IsArchived] = 1)");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogProductSubcategory", b =>
+                {
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SubcategoryId")
+                        .HasColumnType("int");
+
+                    b.HasKey("ProductId", "SubcategoryId");
+
+                    b.HasIndex("SubcategoryId", "ProductId");
+
+                    b.ToTable("PublicCatalogProductSubcategories", (string)null);
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogProductTranslation", b =>
+                {
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LanguageCode")
+                        .HasMaxLength(2)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(2)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SeoDescription")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<string>("SeoTitle")
+                        .HasMaxLength(180)
+                        .HasColumnType("nvarchar(180)");
+
+                    b.HasKey("ProductId", "LanguageCode");
+
+                    b.ToTable("PublicCatalogProductTranslations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PublicCatalogProductTranslations_Language", "[LanguageCode] IN ('es','en','de')");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogSubcategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DescriptionDe")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("DescriptionEn")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("DescriptionEs")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("NameDe")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NameEn")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NameEs")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId", "Slug")
+                        .IsUnique();
+
+                    b.HasIndex("CategoryId", "IsActive", "DisplayOrder");
+
+                    b.ToTable("PublicCatalogSubcategories", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PublicCatalogSubcategories_DisplayOrder", "[DisplayOrder] >= 0");
+                        });
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
                 {
                     b.Property<int>("Id")
@@ -4800,6 +5089,47 @@ namespace Revestik.Api.Data.Migrations
                     b.Navigation("ProjectTask");
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogProductSubcategory", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.PublicCatalog.PublicCatalogProduct", "Product")
+                        .WithMany("SubcategoryLinks")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.PublicCatalog.PublicCatalogSubcategory", "Subcategory")
+                        .WithMany("ProductLinks")
+                        .HasForeignKey("SubcategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Subcategory");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogProductTranslation", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.PublicCatalog.PublicCatalogProduct", "Product")
+                        .WithMany("Translations")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogSubcategory", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.PublicCatalog.PublicCatalogCategory", "Category")
+                        .WithMany("Subcategories")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
                 {
                     b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", "CreatedByUser")
@@ -5099,6 +5429,23 @@ namespace Revestik.Api.Data.Migrations
             modelBuilder.Entity("Revestik.Api.Models.ProjectTask", b =>
                 {
                     b.Navigation("Revisions");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogCategory", b =>
+                {
+                    b.Navigation("Subcategories");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogProduct", b =>
+                {
+                    b.Navigation("SubcategoryLinks");
+
+                    b.Navigation("Translations");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogSubcategory", b =>
+                {
+                    b.Navigation("ProductLinks");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>

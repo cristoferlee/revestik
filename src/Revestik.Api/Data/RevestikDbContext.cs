@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Models;
 using Revestik.Api.Models.Identity;
+using Revestik.Api.Models.PublicCatalog;
 
 namespace Revestik.Api.Data;
 
@@ -31,6 +32,11 @@ public sealed class RevestikDbContext(DbContextOptions<RevestikDbContext> option
     public DbSet<ElectronicDocumentCategory> ElectronicDocumentCategories => Set<ElectronicDocumentCategory>();
     public DbSet<ElectronicDocumentClassificationRule> ElectronicDocumentClassificationRules => Set<ElectronicDocumentClassificationRule>();
     public DbSet<ElectronicDocumentCabysClassificationRule> ElectronicDocumentCabysClassificationRules => Set<ElectronicDocumentCabysClassificationRule>();
+    public DbSet<PublicCatalogCategory> PublicCatalogCategories => Set<PublicCatalogCategory>();
+    public DbSet<PublicCatalogSubcategory> PublicCatalogSubcategories => Set<PublicCatalogSubcategory>();
+    public DbSet<PublicCatalogProduct> PublicCatalogProducts => Set<PublicCatalogProduct>();
+    public DbSet<PublicCatalogProductSubcategory> PublicCatalogProductSubcategories => Set<PublicCatalogProductSubcategory>();
+    public DbSet<PublicCatalogProductTranslation> PublicCatalogProductTranslations => Set<PublicCatalogProductTranslation>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
     public DbSet<UnitOfMeasure> UnitsOfMeasure => Set<UnitOfMeasure>();
