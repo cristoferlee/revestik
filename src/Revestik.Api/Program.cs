@@ -1,3 +1,5 @@
+using Revestik.Api.Services.PublicCatalog;
+using Revestik.Api.Endpoints.PublicCatalog;
 using Revestik.Api.Services.Company;
 using Revestik.Api.Integrations.Bccr;
 using Microsoft.EntityFrameworkCore;
@@ -216,6 +218,8 @@ builder.Services.PostConfigure<ProjectFileStorageOptions>(options =>
         options.RootPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "RevestikPrivateDocuments"));
 });
 builder.Services.AddSingleton<IProjectFileStorage, LocalProjectFileStorage>();
+builder.Services.AddSingleton<PublicCatalogMediaStorage>();
+builder.Services.AddHostedService<PublicCatalogMediaCleanupWorker>();
 builder.Services.AddSingleton<CompanyLogoStorage>();
 builder.Services.AddScoped<CompanyPdfBrandingProvider>();
 
@@ -334,6 +338,7 @@ app.MapBccrExchangeRateEndpoints();
 app.MapOperatingResultDashboardEndpoints();
 app.MapGmailIntegrationEndpoints();
 app.MapBankVoucherGmailIntegrationEndpoints();
+app.MapPublicCatalogEndpoints();
 app.MapProductEndpoints();
 app.MapInventoryCatalogEndpoints();
 app.MapInventoryEndpoints();

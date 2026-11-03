@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <!-- Copy the exact approved source assets into the public web root BEFORE build/publish. -->
+  <Target Name="CopyRevestikBrandAssets" BeforeTargets="Build;Publish">
+    <MakeDir Directories="$(MSBuildProjectDirectory)/wwwroot/assets" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/../Revestik.Client/wwwroot/favicon.svg" DestinationFiles="$(MSBuildProjectDirectory)/wwwroot/assets/revestik-rk.svg" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/../Revestik.Client/wwwroot/assets/logo/revestik.svg" DestinationFiles="$(MSBuildProjectDirectory)/wwwroot/assets/revestik-logo.svg" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/../Revestik.Client/wwwroot/assets/logo/revestik-sidebar-logo.png" DestinationFiles="$(MSBuildProjectDirectory)/wwwroot/assets/revestik-sidebar-logo.png" SkipUnchangedFiles="true" />
+  </Target>
+  <ItemGroup>
+    <Content Update="wwwroot/assets/revestik-rk.svg;wwwroot/assets/revestik-logo.svg;wwwroot/assets/revestik-sidebar-logo.png" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

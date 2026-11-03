@@ -1,0 +1,33 @@
+@page "/es/proyectos"
+@page "/en/projects"
+@page "/de/projekte"
+@inject NavigationManager Navigation
+@{
+    var lang = Locale.FromUri(Navigation.Uri);
+    var seo = PublicSeo.Get(lang, 1);
+}
+<PageTitle>@seo.Title</PageTitle>
+<HeadContent>
+    <meta name="description" content="@seo.Description" />
+    <meta name="robots" content="noindex,follow" />
+</HeadContent>
+<main id="main" class="subpage projects-index">
+    <div class="subpage-inner">
+        <header class="projects-index-header">
+            <p class="eyebrow">REVESTIK &middot; COSTA RICA</p>
+            <h1>@seo.Heading</h1>
+            <p class="projects-index-intro">@GetIntroduction(lang)</p>
+        </header>
+        <ProjectGallery Language="@lang" />
+    </div>
+</main>
+
+@code {
+    // Explicitly identify the entries as examples until projects are reviewed and published.
+    private static string GetIntroduction(string language) => language switch
+    {
+        "en" => "Explore illustrative project categories. Photographs and details of verified projects will appear here after approval.",
+        "de" => "Entdecken Sie beispielhafte Projektkategorien. Fotos und Details geprüfter Projekte folgen nach Freigabe.",
+        _ => "Explorá nuestras categorías de proyectos de ejemplo. Las fotografías y los detalles de obras verificadas se publicarán después de su aprobación."
+    };
+}

@@ -1,0 +1,321 @@
+@page "/es"
+@page "/en"
+@page "/de"
+@inject NavigationManager Navigation
+@using Revestik.Public.Services
+@inject PublicCatalogReader Catalog
+@{
+    var lang = Locale.FromUri(Navigation.Uri);
+    var t = Locale.Get(lang);
+    var seo = PublicSeo.Get(lang, 0);
+    var slides = GetSlides(lang);
+}
+<PageTitle>@seo.Title</PageTitle>
+<HeadContent>
+    <meta name="description" content="@seo.Description" />
+    <meta name="robots" content="noindex,follow" />
+</HeadContent>
+<main id="main">
+    <section class="home-hero" aria-labelledby="home-title" data-hero-gallery aria-label="@GetGalleryLabel(lang)">
+        <div class="hero-viewport" aria-live="off">
+            @for (var i = 0; i < slides.Length; i++)
+            {
+                var index = i;
+                <div class="hero-slide @(index == 0 ? "is-active" : null)" data-hero-slide aria-hidden="@(index == 0 ? "false" : "true")">
+                    <div class="hero-media-placeholder" role="img" aria-label="@slides[index]">
+                        <span class="placeholder-marker" aria-hidden="true">@((index + 1).ToString("00"))</span>
+                        <span class="placeholder-label">@slides[index]</span>
+                        <span class="placeholder-note">@GetImagePending(lang)</span>
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="hero-shade" aria-hidden="true"></div>
+        <div class="home-hero-shell">
+            <div class="home-hero-copy">
+                <p class="eyebrow">REVESTIK &middot; COSTA RICA</p>
+                <h1 id="home-title">@seo.Heading</h1>
+                <p class="home-hero-description">@seo.Description</p>
+                <div class="hero-actions">
+                    <a class="hero-action-primary" href="@SiteLinks.Path(lang, 2)">@t.Nav[2]</a>
+                    <a class="hero-action-secondary" href="@SiteLinks.Path(lang, 5)">@t.Inquiry</a>
+                </div>
+            </div>
+            <div class="hero-gallery-controls" aria-label="@GetGalleryLabel(lang)">
+                <div class="hero-progress" aria-hidden="true">
+                    @for (var i = 0; i < slides.Length; i++)
+                    {
+                        <span class="hero-progress-segment @(i == 0 ? "is-active" : null)" data-hero-indicator></span>
+                    }
+                </div>
+                <span data-hero-status class="hero-gallery-status" role="status" aria-live="off">01 / 03</span>
+                <button type="button" data-hero-prev aria-label="@GetPrevious(lang)" title="@GetPrevious(lang)"><span aria-hidden="true">&#8592;</span></button>
+                <button type="button" data-hero-next aria-label="@GetNext(lang)" title="@GetNext(lang)"><span aria-hidden="true">&#8594;</span></button>
+                <button type="button" data-hero-pause aria-label="@GetPause(lang)" title="@GetPause(lang)" data-pause-label="@GetPause(lang)" data-play-label="@GetPlay(lang)"><span data-hero-pause-icon aria-hidden="true">&#10074;&#10074;</span></button>
+            </div>
+        </div>
+    </section>
+    <div class="sections-shell">
+        <section class="featured-projects" aria-labelledby="featured-projects-title">
+            <div class="featured-projects-header">
+                <div>
+                    <span class="section-index" aria-hidden="true">01</span>
+                    <h2 id="featured-projects-title">@GetProjectHeading(lang)</h2>
+                    <p>@GetProjectIntro(lang)</p>
+                </div>
+                <a class="featured-projects-all" href="@SiteLinks.Path(lang, 1)">
+                    @GetAllProjects(lang) <span aria-hidden="true">&#8594;</span>
+                </a>
+            </div>
+            <ProjectGallery Language="@lang" />
+        </section>
+        <section class="featured-products" aria-labelledby="featured-products-title">
+            <div class="featured-products-header">
+                <div>
+                    <span class="section-index" aria-hidden="true">02</span>
+                    <p class="featured-products-eyebrow">@GetProductsHeading(lang)</p>
+                    <h2 id="featured-products-title">@GetProductsSubheading(lang)</h2>
+                </div>
+                <a class="featured-projects-all" href="@SiteLinks.Path(lang, 2)">@GetAllProducts(lang) <span aria-hidden="true">&#8594;</span></a>
+            </div>
+            <div class="featured-products-grid">
+                @foreach (var product in FeaturedProducts.Take(5))
+                {
+                    <div class="featured-product">
+                        <a class="featured-product-link" href="@($"{SiteLinks.Path(lang, 2)}/{product.Slug}")" aria-label="@(product.Text(lang)?.Name ?? product.Slug)">
+                            <div class="featured-product-image">
+                                @if (product.CoverImageId is int cover)
+                                {
+                                    <img src="@($"/media/catalog/{cover}")" alt="@(product.Text(lang)?.Name ?? product.Slug)" loading="lazy" width="680" height="510" />
+                                }
+                            </div>
+                            <span class="featured-product-label">@(product.Text(lang)?.Name ?? product.Slug) <span aria-hidden="true">&#8594;</span></span>
+                        </a>
+                    </div>
+                }
+                @if (FeaturedProducts.Count == 0)
+                {
+                    <p>@(lang == "en" ? "Featured products will appear once published." : lang == "de" ? "Ausgewählte Produkte erscheinen nach der Veröffentlichung." : "Los productos destacados aparecerán cuando se publiquen.")</p>
+                }
+            </div>
+        </section>
+        <section class="home-solutions" aria-labelledby="home-solutions-title">
+            <div class="home-solutions-copy">
+                <p class="home-section-eyebrow">@GetSolutionsEyebrow(lang)</p>
+                <h2 id="home-solutions-title">@GetSolutionsTitle(lang)</h2>
+                <p>@GetSolutionsText(lang)</p>
+                <a class="home-text-link" href="@SiteLinks.Path(lang, 3)">@GetSolutionsLink(lang) <span aria-hidden="true">&#8594;</span></a>
+            </div>
+            <button type="button"
+                    class="home-solutions-media public-photo-trigger"
+                    data-public-image
+                    data-gallery="@($"home-solutions-{lang}")"
+                    data-image-label="@GetSolutionsImageLabel(lang)"
+                    data-placeholder-note="@GetImagePending(lang)"
+                    aria-haspopup="dialog"
+                    aria-label="@GetSolutionsExpandLabel(lang)">
+                <span aria-hidden="true" class="home-solutions-image-icon">&#9633;</span>
+                <span aria-hidden="true">@GetImagePending(lang)</span>
+                <span aria-hidden="true" class="public-photo-zoom">&#x2922;</span>
+            </button>
+        </section>
+        <section class="home-advantages" aria-labelledby="home-advantages-title">
+            <div class="home-advantages-heading">
+                <p class="home-section-eyebrow">@GetWhyEyebrow(lang)</p>
+                <h2 id="home-advantages-title">@GetWhyTitle(lang)</h2>
+                <p>@GetWhyIntroduction(lang)</p>
+            </div>
+            <div class="home-advantages-grid">
+                @foreach (var advantage in GetAdvantages(lang))
+                {
+                    <div class="home-advantage">
+                        <span class="home-advantage-rule" aria-hidden="true"></span>
+                        <h3>@advantage.Title</h3>
+                        <p>@advantage.Description</p>
+                    </div>
+                }
+            </div>
+        </section>
+    </div>
+    <section class="home-contact-cta" aria-labelledby="home-contact-cta-title">
+        <div class="home-contact-cta-inner">
+            <div>
+                <p class="home-section-eyebrow">@GetContactEyebrow(lang)</p>
+                <h2 id="home-contact-cta-title">@GetContactTitle(lang)</h2>
+                <p>@GetContactText(lang)</p>
+            </div>
+            <div class="home-contact-actions">
+                <a class="home-contact-primary" href="@SiteLinks.Path(lang, 5)">@t.Inquiry</a>
+                <a class="home-contact-secondary" href="@SiteLinks.Path(lang, 5)">@GetContactLink(lang) <span aria-hidden="true">&#8594;</span></a>
+            </div>
+        </div>
+    </section>
+</main>
+
+@code {
+    private List<ProductDto> FeaturedProducts = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { FeaturedProducts = (await Catalog.Products(1, null, null, null)).Items.Take(5).ToList(); }
+        catch (HttpRequestException) { FeaturedProducts = []; }
+        catch (TaskCanceledException) { FeaturedProducts = []; }
+    }
+
+    private sealed record Advantage(string Title, string Description);
+
+    // Editorial copy: verify the service descriptions with the business before publishing.
+    private static string GetSolutionsEyebrow(string lang) => lang switch
+    {
+        "en" => "REVESTIK SOLUTIONS", "de" => "REVESTIK LÖSUNGEN", _ => "SOLUCIONES REVESTIK"
+    };
+    private static string GetSolutionsTitle(string lang) => lang switch
+    {
+        "en" => "Materials for every space.", "de" => "Materialien für jeden Raum.", _ => "Materiales para cada espacio."
+    };
+    private static string GetSolutionsText(string lang) => lang switch
+    {
+        "en" => "Explore porcelain tiles, wall coverings and selected finishes for construction and renovation. Ask us about options for your project.",
+        "de" => "Entdecken Sie Feinsteinzeug, Wandverkleidungen und ausgewählte Oberflächen für Bau und Renovierung. Fragen Sie uns nach Möglichkeiten für Ihr Projekt.",
+        _ => "Explorá porcelanatos, revestimientos y acabados seleccionados para construcción y remodelación. Consultanos por opciones para tu proyecto."
+    };
+    private static string GetSolutionsLink(string lang) => lang switch
+    {
+        "en" => "Explore solutions", "de" => "Lösungen entdecken", _ => "Conocer soluciones"
+    };
+    private static string GetSolutionsExpandLabel(string lang) => lang switch
+    {
+        "en" => "Enlarge REVESTIK solutions photograph",
+        "de" => "Foto der REVESTIK-Lösungen vergrößern",
+        _ => "Ampliar fotografía de Soluciones REVESTIK"
+    };
+    private static string GetSolutionsImageLabel(string lang) => lang switch
+    {
+        "en" => "Space reserved for a construction finish photograph", "de" => "Platz für ein Foto von Baumaterialien und Oberflächen", _ => "Espacio para fotografía de acabados para construcción"
+    };
+    private static string GetWhyEyebrow(string lang) => lang switch
+    {
+        "en" => "WORKING WITH REVESTIK", "de" => "MIT REVESTIK", _ => "CON REVESTIK"
+    };
+    private static string GetWhyTitle(string lang) => lang switch
+    {
+        "en" => "A more personal way to choose finishes.", "de" => "Oberflächen persönlich auswählen.", _ => "Una forma más cercana de elegir acabados."
+    };
+    private static string GetWhyIntroduction(string lang) => lang switch
+    {
+        "en" => "A few ways we aim to make it easier to explore materials and plan your next project.",
+        "de" => "Einige Möglichkeiten, wie wir die Materialauswahl und Projektplanung erleichtern möchten.",
+        _ => "Así buscamos facilitar la elección de materiales y la planificación de tus espacios."
+    };
+    private static Advantage[] GetAdvantages(string lang) => lang switch
+    {
+        "en" =>
+        [
+            new("Personal attention", "Tell us what you need and explore relevant options."),
+            new("Selected finishes", "Review product categories without an overwhelming catalog."),
+            new("Project-focused approach", "Find ideas for residential and commercial spaces."),
+            new("Clear communication", "Start with a conversation about your requirements.")
+        ],
+        "de" =>
+        [
+            new("Persönlicher Kontakt", "Beschreiben Sie Ihren Bedarf und entdecken Sie passende Möglichkeiten."),
+            new("Ausgewählte Oberflächen", "Entdecken Sie Kategorien ohne unübersichtlichen Katalog."),
+            new("Projektorientiert", "Finden Sie Ideen für private und gewerbliche Räume."),
+            new("Klare Kommunikation", "Beginnen Sie mit einem Gespräch über Ihre Anforderungen.")
+        ],
+        _ =>
+        [
+            new("Atención personalizada", "Contanos qué necesitás y explorá opciones para tu espacio."),
+            new("Acabados seleccionados", "Conocé nuestras categorías sin navegar un catálogo interminable."),
+            new("Enfoque en proyectos", "Encontrá ideas para espacios residenciales y comerciales."),
+            new("Comunicación clara", "Empezá con una conversación sobre lo que buscás.")
+        ]
+    };
+    private static string GetContactEyebrow(string lang) => lang switch
+    {
+        "en" => "LET'S TALK", "de" => "SPRECHEN WIR", _ => "CONVERSEMOS"
+    };
+    private static string GetContactTitle(string lang) => lang switch
+    {
+        "en" => "Have a project in mind?", "de" => "Sie planen ein Projekt?", _ => "¿Tenés un proyecto en mente?"
+    };
+    private static string GetContactText(string lang) => lang switch
+    {
+        "en" => "Tell us what you're looking for. We would like to learn about your project.",
+        "de" => "Erzählen Sie uns von Ihren Vorstellungen. Wir möchten Ihr Projekt kennenlernen.",
+        _ => "Contanos qué estás buscando. Queremos conocer tu proyecto."
+    };
+    private static string GetContactLink(string lang) => lang switch
+    {
+        "en" => "Contact", "de" => "Kontakt", _ => "Contacto"
+    };
+
+    private static string GetProjectHeading(string lang) => lang switch
+    {
+        "en" => "Featured projects", "de" => "Ausgewählte Projekte", _ => "Proyectos destacados"
+    };
+
+    private static string GetProjectIntro(string lang) => lang switch
+    {
+        "en" => "A preview of the projects and spaces we will share here.",
+        "de" => "Ein Vorgeschmack auf die Projekte und Räume, die wir hier vorstellen werden.",
+        _ => "Un adelanto de los proyectos y espacios que compartiremos aquí."
+    };
+
+    private static string GetAllProjects(string lang) => lang switch
+    {
+        "en" => "View projects", "de" => "Projekte ansehen", _ => "Ver proyectos"
+    };
+
+    private static string GetProductsHeading(string lang) => lang switch
+    {
+        "en" => "OUR PRODUCTS", "de" => "UNSERE PRODUKTE", _ => "NUESTROS PRODUCTOS"
+    };
+
+    private static string GetProductsSubheading(string lang) => lang switch
+    {
+        "en" => "Materials that inspire.", "de" => "Materialien, die inspirieren.", _ => "Materiales que inspiran."
+    };
+
+    private static string GetAllProducts(string lang) => lang switch
+    {
+        "en" => "View all products", "de" => "Alle Produkte ansehen", _ => "Ver todos los productos"
+    };
+
+    private static string[] GetSlides(string lang) => lang switch
+    {
+        "en" => ["Residential project image", "Architectural finishes image", "Commercial project image"],
+        "de" => ["Bild eines Wohnprojekts", "Bild architektonischer Oberflächen", "Bild eines Gewerbeprojekts"],
+        _ => ["Fotografía de proyecto residencial", "Fotografía de acabados arquitectónicos", "Fotografía de proyecto comercial"]
+    };
+
+    private static string GetPause(string lang) => lang switch
+    {
+        "en" => "Pause slideshow", "de" => "Diashow pausieren", _ => "Pausar carrusel"
+    };
+
+    private static string GetPlay(string lang) => lang switch
+    {
+        "en" => "Resume slideshow", "de" => "Diashow fortsetzen", _ => "Reanudar carrusel"
+    };
+
+    private static string GetGalleryLabel(string lang) => lang switch
+    {
+        "en" => "Featured architectural images", "de" => "Ausgewählte Architekturbilder", _ => "Imágenes arquitectónicas destacadas"
+    };
+
+    private static string GetImagePending(string lang) => lang switch
+    {
+        "en" => "Image pending approval", "de" => "Bild muss noch freigegeben werden", _ => "Imagen pendiente de aprobación"
+    };
+
+    private static string GetPrevious(string lang) => lang switch
+    {
+        "en" => "Previous image", "de" => "Vorheriges Bild", _ => "Imagen anterior"
+    };
+
+    private static string GetNext(string lang) => lang switch
+    {
+        "en" => "Next image", "de" => "Nächstes Bild", _ => "Imagen siguiente"
+    };
+}

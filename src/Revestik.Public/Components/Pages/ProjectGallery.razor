@@ -1,0 +1,34 @@
+<div class="featured-projects-grid">
+    @foreach (var project in PublicProjectCatalog.GetExamples(Language))
+    {
+        <article class="featured-project">
+            <a class="featured-project-link" href="@(SiteLinks.Path(Language, 1) + "/" + project.Slug)" aria-label="@project.Title">
+                <div class="featured-project-image" role="img" aria-label="@project.ImageLabel">
+                    <span class="featured-project-image-icon" aria-hidden="true">&#9633;</span>
+                    <span class="featured-project-image-label">@ImagePending</span>
+                </div>
+                <div class="featured-project-description">
+                    <p class="featured-project-category">@project.Category</p>
+                    <h3>@project.Title</h3>
+                    <p>@project.Description</p>
+                </div>
+            </a>
+            <PublicZoomAction Language="@Language"
+                              Gallery="@($"project-previews-{Language}")"
+                              ImageLabel="@project.ImageLabel"
+                              PlaceholderNote="@ImagePending" />
+        </article>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Language { get; set; } = "es";
+
+    private string ImagePending => Language switch
+    {
+        "en" => "Image pending approval",
+        "de" => "Bild muss noch freigegeben werden",
+        _ => "Imagen pendiente de aprobación"
+    };
+}

@@ -1,0 +1,95 @@
+@page "/es/proyectos/{Slug}"
+@page "/en/projects/{Slug}"
+@page "/de/projekte/{Slug}"
+@inject NavigationManager Navigation
+@{
+    var lang = Locale.FromUri(Navigation.Uri);
+    var project = PublicProjectCatalog.Find(lang, Slug);
+    var seo = PublicSeo.GetProject(lang, Slug);
+}
+<PageTitle>@(seo?.Title ?? GetText(lang, "Proyecto no disponible | REVESTIK", "Project unavailable | REVESTIK", "Projekt nicht verfügbar | REVESTIK"))</PageTitle>
+<HeadContent>
+    @if (seo is not null)
+    {
+        <meta name="description" content="@seo.Description" />
+    }
+    <meta name="robots" content="noindex,follow" />
+</HeadContent>
+<main id="main" class="subpage project-detail">
+    <div class="subpage-inner">
+        @if (project is not null)
+        {
+            <nav class="project-detail-breadcrumb" aria-label="@GetText(lang, "Ruta de navegación", "Breadcrumb", "Brotkrumennavigation")">
+                <a href="@SiteLinks.Path(lang, 1)">@GetText(lang, "Proyectos", "Projects", "Projekte")</a>
+                <span aria-hidden="true">/</span>
+                <span aria-current="page">@project.Title</span>
+            </nav>
+            <header class="project-detail-heading">
+                <p class="project-detail-category">@project.Category</p>
+                <h1>@project.Title</h1>
+                <p class="project-detail-lead">@project.Description</p>
+            </header>
+
+            <section class="project-detail-photos" aria-label="@GetText(lang, "Galería fotográfica del proyecto", "Project photo gallery", "Projektfotogalerie")">
+                @for (var i = 0; i < project.GalleryLabels.Length; i++)
+                {
+                    var label = project.GalleryLabels[i];
+                    <button type="button"
+                            class="project-detail-photo public-photo-trigger @(i == 0 ? "project-detail-photo-main" : "")"
+                            data-public-image
+                            data-gallery="@project.Slug"
+                            data-image-label="@label"
+                            data-placeholder-note="@GetText(lang, "Fotografía pendiente de aprobación", "Photograph pending approval", "Foto noch nicht freigegeben")"
+                            aria-haspopup="dialog"
+                            aria-label="@GetText(lang, $"Ampliar: {label}", $"Enlarge: {label}", $"Vergrößern: {label}")">
+                        <span aria-hidden="true" class="project-detail-photo-mark">&#9633;</span>
+                        <span aria-hidden="true" class="project-detail-photo-caption">@GetText(lang, "Fotografía pendiente de aprobación", "Photograph pending approval", "Foto noch nicht freigegeben")</span>
+                        <span aria-hidden="true" class="public-photo-zoom">&#x2922;</span>
+                    </button>
+                }
+            </section>
+
+            <div class="project-detail-information">
+                <section aria-labelledby="project-overview-title">
+                    <h2 id="project-overview-title">@GetText(lang, "Sobre este proyecto", "About this project", "Über dieses Projekt")</h2>
+                    <p>@project.Overview</p>
+                </section>
+                <div class="project-detail-facts">
+                    <section aria-labelledby="project-features-title">
+                        <h2 id="project-features-title">@GetText(lang, "Características", "Features", "Merkmale")</h2>
+                        <p>@project.FeaturesNote</p>
+                    </section>
+                    <section aria-labelledby="project-materials-title">
+                        <h2 id="project-materials-title">@GetText(lang, "Materiales y acabados", "Materials and finishes", "Materialien und Oberflächen")</h2>
+                        <p>@project.MaterialsNote</p>
+                    </section>
+                </div>
+            </div>
+
+            <aside class="project-detail-contact" aria-label="@GetText(lang, "Asesoría en acabados", "Finishes consultation", "Beratung zu Oberflächen")">
+                <div>
+                    <h2>@GetText(lang, "¿Tenés un proyecto en mente?", "Planning a project?", "Planen Sie ein Projekt?")</h2>
+                    <p>@GetText(lang, "Conversemos sobre materiales y acabados para tus espacios.", "Let's discuss materials and finishes for your spaces.", "Sprechen wir über Materialien und Oberflächen für Ihre Räume.")</p>
+                </div>
+                <a class="project-detail-contact-link" href="@SiteLinks.Path(lang, 5)">@GetText(lang, "Solicitar asesoría", "Request advice", "Beratung anfragen") <span aria-hidden="true">&#8594;</span></a>
+            </aside>
+        }
+        else
+        {
+            <h1>@GetText(lang, "Proyecto no disponible", "Project unavailable", "Projekt nicht verfügbar")</h1>
+            <p>@GetText(lang, "No encontramos un proyecto público con esta dirección.", "No public project was found at this address.", "Unter dieser Adresse wurde kein öffentliches Projekt gefunden.")</p>
+        }
+        <a class="back-home" href="@SiteLinks.Path(lang, 1)">@GetText(lang, "Volver a proyectos", "Back to projects", "Zurück zu Projekten") <span aria-hidden="true">&#8594;</span></a>
+    </div>
+</main>
+
+@code {
+    [Parameter] public string Slug { get; set; } = string.Empty;
+
+    private static string GetText(string language, string es, string en, string de) => language switch
+    {
+        "en" => en,
+        "de" => de,
+        _ => es
+    };
+}

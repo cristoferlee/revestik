@@ -1,0 +1,326 @@
+@page "/settings/public-site"
+@using System.Net.Http
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Revestik.Client.Services.PublicCatalog
+@attribute [Authorize(Roles = "Administrator")]
+@inject PublicCatalogAdminApi Catalog
+
+<PageTitle>Sitio web público | Revestik</PageTitle>
+<section class="public-catalog-admin">
+  <header class="public-catalog-admin__header">
+    <a href="/settings">← Configuración</a>
+    <h1>Sitio web público</h1>
+    <p>Administrá categorías, productos, fotografías y contenido comercial. Independiente del inventario interno.</p>
+  </header>
+  @if (!string.IsNullOrWhiteSpace(error)) { <p role="alert" class="public-catalog-admin__error">@error</p> }
+  @if (!string.IsNullOrWhiteSpace(notice)) { <p role="status" class="public-catalog-admin__notice">@notice</p> }
+  <nav class="public-catalog-admin__tabs" aria-label="Administración del sitio">
+    <button type="button" class="@(tab=="categories"?"selected":"")" @onclick="ShowCategories">Categorías y Hero</button>
+    <button type="button" class="@(tab=="subcategories"?"selected":"")" @onclick="ShowSubcategories">Subcategorías</button>
+    <button type="button" class="@(tab=="products"?"selected":"")" @onclick="ShowProducts">Productos públicos</button>
+  </nav>
+  @if (busy) { <p role="status">Procesando…</p> }
+  @if (tab=="categories")
+  {
+    <div class="public-catalog-admin__toolbar"><h2>Categorías públicas</h2><button type="button" @onclick="NewCategory">Nueva categoría</button></div>
+    @foreach (var item in categories)
+    {
+      <article class="public-catalog-admin__item">
+        <div><strong>@item.NameEs</strong><small>@item.Slug · @(item.IsActive?"Activa":"Inactiva")</small></div>
+        <button type="button" @onclick="() => EditCategory(item)">Editar</button>
+        <button type="button" @onclick="() => OpenCategoryImages(item)">Hero y fotografías</button>
+      </article>
+    }
+    @if (categoryForm is not null)
+    {
+      <section class="public-catalog-admin__editor" aria-labelledby="category-editor-title">
+        <h3 id="category-editor-title">@(categoryForm.Id==0?"Nueva categoría":"Editar categoría")</h3>
+        <div class="public-catalog-admin__fields">
+          <label>Identificador URL<input @bind="categoryForm.Slug" maxlength="160" /></label>
+          <label>Nombre ES<input @bind="categoryForm.NameEs" maxlength="150" /></label>
+          <label>Nombre EN<input @bind="categoryForm.NameEn" maxlength="150" /></label>
+          <label>Nombre DE<input @bind="categoryForm.NameDe" maxlength="150" /></label>
+          <label>Descripción ES<textarea @bind="categoryForm.DescriptionEs"></textarea></label>
+          <label>Descripción EN<textarea @bind="categoryForm.DescriptionEn"></textarea></label>
+          <label>Descripción DE<textarea @bind="categoryForm.DescriptionDe"></textarea></label>
+          <label>Título Hero ES<input @bind="categoryForm.HeroTitleEs" /></label>
+          <label>Título Hero EN<input @bind="categoryForm.HeroTitleEn" /></label>
+          <label>Título Hero DE<input @bind="categoryForm.HeroTitleDe" /></label>
+          <label>Texto Hero ES<textarea @bind="categoryForm.HeroDescriptionEs"></textarea></label>
+          <label>Texto Hero EN<textarea @bind="categoryForm.HeroDescriptionEn"></textarea></label>
+          <label>Texto Hero DE<textarea @bind="categoryForm.HeroDescriptionDe"></textarea></label>
+          <label>Orden<input type="number" min="0" @bind="categoryForm.DisplayOrder" /></label>
+          <label class="public-catalog-admin__check"><input type="checkbox" @bind="categoryForm.IsActive" /> Activa</label>
+        </div>
+        <div class="public-catalog-admin__actions"><button type="button" disabled="@busy" @onclick="SaveCategory">Guardar categoría</button><button type="button" @onclick="() => categoryForm=null">Cancelar</button></div>
+      </section>
+    }
+    @if (categoryImageOwner is not null)
+    {
+      <section class="public-catalog-admin__editor" aria-labelledby="category-image-title">
+        <h3 id="category-image-title">Imágenes de @categoryImageOwner.NameEs</h3>
+        <p>Subí primero un fallback estático antes de subir un Hero GIF. No hay carrusel automático.</p>
+        <div class="public-catalog-admin__fields">
+          <label>Uso de fotografía
+            <select @bind="categoryImageRole">
+              <option value="CategoryHeroFallback">Alternativa estática Hero</option>
+              <option value="CategoryHeroPrimary">Hero principal (permite GIF)</option>
+              <option value="CategoryGallery">Fotografía de ambiente</option>
+            </select>
+          </label>
+          <label>Fallback para GIF
+            <select @bind="categoryFallbackId">
+              <option value="0">Seleccionar imagen estática</option>
+              @foreach (var i in categoryImages.Where(x=>x.Role=="CategoryHeroFallback" && x.ContentType!="image/gif")) { <option value="@i.Id">Imagen @i.Id</option> }
+            </select>
+          </label>
+          <label>Texto alternativo ES<input @bind="categoryAlt" maxlength="300" /></label>
+          <label>Fotografía <InputFile OnChange="UploadCategoryImage" accept=".png,.jpg,.jpeg,.webp,.gif" disabled="@busy" /></label>
+        </div>
+        <div class="public-catalog-admin__image-grid">
+          @foreach (var image in categoryImages.OrderBy(x=>x.DisplayOrder))
+          {
+            <article class="public-catalog-admin__image">
+              <img src="@Catalog.ImageUri(image.Id)" alt="@(image.AltEs ?? image.Role)" loading="lazy" />
+              <p>@image.Role · @image.ContentType</p>
+              <label>Orden<input type="number" min="0" @bind="image.DisplayOrder" /></label>
+              <label>Alt ES<input @bind="image.AltEs" /></label>
+              <label>Alt EN<input @bind="image.AltEn" /></label>
+              <label>Alt DE<input @bind="image.AltDe" /></label>
+              <button type="button" disabled="@busy" @onclick="() => SaveImage(image)">Guardar imagen</button>
+              <button type="button" disabled="@busy" @onclick="() => ConfirmImageDelete(image)">Eliminar</button>
+            </article>
+          }
+        </div>
+        <button type="button" @onclick="() => categoryImageOwner=null">Cerrar</button>
+      </section>
+    }
+  }
+  else if (tab=="subcategories")
+  {
+    <div class="public-catalog-admin__toolbar"><h2>Subcategorías</h2><button type="button" @onclick="NewSubcategory">Nueva subcategoría</button></div>
+    @foreach (var item in subcategories)
+    {
+      <article class="public-catalog-admin__item"><div><strong>@item.NameEs</strong><small>@item.Slug · @(categories.FirstOrDefault(c=>c.Id==item.CategoryId)?.NameEs ?? "Categoría no encontrada")</small></div><button type="button" @onclick="() => EditSubcategory(item)">Editar</button></article>
+    }
+    @if (subcategoryForm is not null)
+    {
+      <section class="public-catalog-admin__editor"><h3>@(subcategoryForm.Id==0?"Nueva subcategoría":"Editar subcategoría")</h3>
+        <div class="public-catalog-admin__fields">
+          <label>Categoría<select @bind="subcategoryForm.CategoryId"><option value="0">Seleccionar</option>@foreach(var category in categories){<option value="@category.Id">@category.NameEs</option>}</select></label>
+          <label>Slug<input @bind="subcategoryForm.Slug" /></label>
+          <label>Nombre ES<input @bind="subcategoryForm.NameEs" /></label>
+          <label>Nombre EN<input @bind="subcategoryForm.NameEn" /></label>
+          <label>Nombre DE<input @bind="subcategoryForm.NameDe" /></label>
+          <label>Descripción ES<textarea @bind="subcategoryForm.DescriptionEs"></textarea></label>
+          <label>Descripción EN<textarea @bind="subcategoryForm.DescriptionEn"></textarea></label>
+          <label>Descripción DE<textarea @bind="subcategoryForm.DescriptionDe"></textarea></label>
+          <label>Orden<input type="number" min="0" @bind="subcategoryForm.DisplayOrder" /></label>
+          <label class="public-catalog-admin__check"><input type="checkbox" @bind="subcategoryForm.IsActive" /> Activa</label>
+        </div>
+        <div class="public-catalog-admin__actions"><button type="button" disabled="@busy" @onclick="SaveSubcategory">Guardar</button><button type="button" @onclick="() => subcategoryForm=null">Cancelar</button></div>
+      </section>
+    }
+  }
+  else
+  {
+    <div class="public-catalog-admin__toolbar"><h2>Productos públicos</h2><button type="button" @onclick="NewProduct">Nuevo producto</button></div>
+    @foreach (var item in products)
+    {
+      <article class="public-catalog-admin__item"><div><strong>@item.Slug</strong><small>@(item.IsPublished?"Publicado":"No publicado")</small></div><button type="button" @onclick="() => EditProduct(item.Id)">Administrar</button></article>
+    }
+    @if (productForm is not null)
+    {
+      <section class="public-catalog-admin__editor">
+        <h3>@(productForm.Id==0?"Crear y publicar":"Editar producto")</h3>
+        <div class="public-catalog-admin__fields">
+          <label>Slug<input @bind="productForm.Slug" maxlength="160" /></label>
+          <label>Marca (opcional)<input @bind="productForm.Brand" maxlength="150" /></label>
+          <label>Precio (opcional)<input type="number" min="0" step="0.01" @bind="productForm.Price" /></label>
+          <label>Moneda<select @bind="productForm.Currency"><option value="">Sin precio</option><option value="CRC">CRC</option><option value="USD">USD</option></select></label>
+          <label>Unidad de venta<input @bind="productForm.SalesUnit" maxlength="40" placeholder="m², pieza, caja" /></label>
+          <label>Orden<input type="number" min="0" @bind="productForm.DisplayOrder" /></label>
+        </div>
+        <fieldset class="public-catalog-admin__options"><legend>Subcategorías</legend>
+          @foreach(var sub in subcategories.Where(s=>s.IsActive && categories.Any(c=>c.Id==s.CategoryId&&c.IsActive)))
+          {
+            <label><input type="checkbox" checked="@productForm.SubcategoryIds.Contains(sub.Id)" @onchange="e => SetSubcategory(sub.Id,e.Value is true)" /> @sub.NameEs (@categories.First(c=>c.Id==sub.CategoryId).NameEs)</label>
+          }
+        </fieldset>
+        @foreach (var text in productForm.Translations)
+        {
+          <fieldset class="public-catalog-admin__translation"><legend>@text.LanguageCode.ToUpperInvariant() @(text.LanguageCode=="es"?"· obligatorio":"· opcional")</legend>
+            <label>Nombre<input @bind="text.Name" maxlength="200" /></label>
+            <label>Descripción<textarea @bind="text.Description" maxlength="4000"></textarea></label>
+            <label>Título SEO<input @bind="text.SeoTitle" maxlength="180" /></label>
+            <label>Descripción SEO<textarea @bind="text.SeoDescription" maxlength="320"></textarea></label>
+          </fieldset>
+        }
+        @if (productForm.Id==0)
+        {
+          <section><h4>Fotos antes de publicar</h4><p>Una portada obligatoria, hasta 5 imágenes en total. La confirmación conserva el formulario.</p>
+            <div class="public-catalog-admin__fields">
+              <label>Tipo de imagen<select @bind="productImageRole"><option value="ProductCover">Portada</option><option value="ProductGallery">Galería</option></select></label>
+              <label>Texto alternativo ES<input @bind="productImageAlt" maxlength="300" /></label>
+              <label>Agregar imagen<InputFile OnChange="StageProductImage" accept=".png,.jpg,.jpeg,.webp" disabled="@busy" /></label>
+            </div>
+            @foreach(var image in pendingImages)
+            {
+              <article class="public-catalog-admin__item"><span>@image.Role · Orden @image.DisplayOrder</span><button type="button" @onclick="() => DiscardPending(image)">Quitar</button></article>
+            }
+          </section>
+        }
+        else
+        {
+          <section><h4>Fotos del producto</h4><p>Para eliminar una portada, primero despublicá el producto.</p>
+            <div class="public-catalog-admin__fields">
+              <label>Tipo<select @bind="productImageRole"><option value="ProductCover">Portada</option><option value="ProductGallery">Galería</option></select></label>
+              <label>Texto alternativo ES<input @bind="productImageAlt" maxlength="300" /></label>
+              <label>Adjuntar imagen<InputFile OnChange="UploadExistingProductImage" accept=".png,.jpg,.jpeg,.webp" disabled="@busy" /></label>
+            </div>
+            <div class="public-catalog-admin__image-grid">
+              @foreach(var image in productForm.Images.OrderBy(x=>x.DisplayOrder))
+              {
+                <article class="public-catalog-admin__image"><img src="@Catalog.ImageUri(image.Id)" alt="@(image.AltEs ?? image.Role)" loading="lazy" /><p>@image.Role</p>
+                  <label>Orden<input type="number" min="0" @bind="image.DisplayOrder" /></label><label>Alt ES<input @bind="image.AltEs" /></label><label>Alt EN<input @bind="image.AltEn" /></label><label>Alt DE<input @bind="image.AltDe" /></label>
+                  <button type="button" @onclick="() => SaveImage(image)">Guardar imagen</button><button type="button" @onclick="() => ConfirmImageDelete(image)">Eliminar</button>
+                </article>
+              }
+            </div>
+          </section>
+        }
+        <div class="public-catalog-admin__actions"><button type="button" disabled="@busy" @onclick="PrepareProductSave">@(productForm.Id==0?"Revisar publicación":"Revisar cambios")</button>
+          @if(productForm.Id!=0){<button type="button" disabled="@busy" @onclick="TogglePublication">@(productForm.IsPublished?"Despublicar":"Publicar")</button>}
+          <button type="button" @onclick="CancelProduct">Cerrar</button>
+        </div>
+      </section>
+    }
+  }
+  @if (confirmSaveProduct && productForm is not null)
+  {
+    <div class="public-catalog-admin__modal-bg"><section class="public-catalog-admin__modal" role="dialog" aria-modal="true" aria-labelledby="confirm-public-title">
+      <h2 id="confirm-public-title">@(productForm.Id==0?"Confirmar publicación":"Confirmar edición")</h2><p>Revisá los datos. ¿Deseás continuar? Si cancelás, el formulario conservará todos los valores.</p>
+      <div class="public-catalog-admin__actions"><button type="button" disabled="@busy" @onclick="SaveProduct">Sí, continuar</button><button type="button" @onclick="() => confirmSaveProduct=false">Volver al formulario</button></div>
+    </section></div>
+  }
+  @if (deleteImageCandidate is not null)
+  {
+    <div class="public-catalog-admin__modal-bg"><section class="public-catalog-admin__modal" role="dialog" aria-modal="true" aria-labelledby="delete-image-title">
+      <h2 id="delete-image-title">Eliminar fotografía</h2><p>Esta acción no puede deshacerse. Las imágenes utilizadas por un Hero GIF y las portadas de productos publicados están protegidas.</p>
+      <div class="public-catalog-admin__actions"><button type="button" disabled="@busy" @onclick="DeleteConfirmedImage">Eliminar</button><button type="button" @onclick="() => deleteImageCandidate=null">Cancelar</button></div>
+    </section></div>
+  }
+</section>
+
+@code {
+  private bool busy;
+  private string? error,notice;
+  private string tab="categories";
+  private List<AdminCategory> categories=[];
+  private List<AdminSubcategory> subcategories=[];
+  private List<AdminProductSummary> products=[];
+  private AdminCategory? categoryForm,categoryImageOwner;
+  private AdminSubcategory? subcategoryForm;
+  private AdminProduct? productForm;
+  private List<AdminImage> categoryImages=[];
+  private List<AdminStageAttachment> pendingImages=[];
+  private bool confirmSaveProduct;
+  private AdminImage? deleteImageCandidate;
+  private string categoryImageRole="CategoryHeroPrimary",productImageRole="ProductCover",categoryAlt="",productImageAlt="";
+  private int categoryFallbackId;
+
+  protected override async Task OnInitializedAsync()=>await Reload();
+  private void ShowCategories()=>ChangeTab("categories");
+  private void ShowSubcategories()=>ChangeTab("subcategories");
+  private void ShowProducts()=>ChangeTab("products");
+  private void ChangeTab(string value){tab=value;error=null;notice=null;categoryForm=null;subcategoryForm=null;categoryImageOwner=null;productForm=null;}
+  private async Task Execute(Func<Task> operation,string message="Cambios guardados.")
+  {
+    if(busy)return;
+    busy=true;error=null;notice=null;
+    try { await operation();notice=message; }
+    catch(Exception ex) when(ex is HttpRequestException or InvalidOperationException or TaskCanceledException){error=ex.Message;}
+    finally {busy=false;}
+  }
+  private async Task Reload()
+  {
+    await Execute(async ()=>{categories=await Catalog.Categories();subcategories=await Catalog.Subcategories();products=await Catalog.Products();},"Datos actualizados.");
+  }
+  private void NewCategory()=>categoryForm=new();
+  private void EditCategory(AdminCategory item)=>categoryForm=new(){Id=item.Id,Slug=item.Slug,NameEs=item.NameEs,NameEn=item.NameEn,NameDe=item.NameDe,DescriptionEs=item.DescriptionEs,DescriptionEn=item.DescriptionEn,DescriptionDe=item.DescriptionDe,HeroTitleEs=item.HeroTitleEs,HeroTitleEn=item.HeroTitleEn,HeroTitleDe=item.HeroTitleDe,HeroDescriptionEs=item.HeroDescriptionEs,HeroDescriptionEn=item.HeroDescriptionEn,HeroDescriptionDe=item.HeroDescriptionDe,DisplayOrder=item.DisplayOrder,IsActive=item.IsActive,RowVersion=item.RowVersion};
+  private async Task SaveCategory()=>await Execute(async ()=>{if(categoryForm is null)return;await Catalog.SaveCategory(categoryForm);categoryForm=null;categories=await Catalog.Categories();});
+  private void NewSubcategory()=>subcategoryForm=new();
+  private void EditSubcategory(AdminSubcategory item)=>subcategoryForm=new(){Id=item.Id,CategoryId=item.CategoryId,Slug=item.Slug,NameEs=item.NameEs,NameEn=item.NameEn,NameDe=item.NameDe,DescriptionEs=item.DescriptionEs,DescriptionEn=item.DescriptionEn,DescriptionDe=item.DescriptionDe,DisplayOrder=item.DisplayOrder,IsActive=item.IsActive,RowVersion=item.RowVersion};
+  private async Task SaveSubcategory()=>await Execute(async ()=>{if(subcategoryForm is null)return;await Catalog.SaveSubcategory(subcategoryForm);subcategoryForm=null;subcategories=await Catalog.Subcategories();});
+  private void NewProduct(){productForm=new(){Translations=[new(){LanguageCode="es"},new(){LanguageCode="en"},new(){LanguageCode="de"}]};pendingImages=[];confirmSaveProduct=false;}
+  private async Task EditProduct(int id)=>await Execute(async ()=>{productForm=await Catalog.Product(id);foreach(var lang in new[]{"es","en","de"})if(!productForm.Translations.Any(t=>t.LanguageCode==lang))productForm.Translations.Add(new(){LanguageCode=lang});pendingImages=[];});
+  private void SetSubcategory(int id,bool enabled){if(productForm is null)return;if(enabled&&!productForm.SubcategoryIds.Contains(id))productForm.SubcategoryIds.Add(id);if(!enabled)productForm.SubcategoryIds.Remove(id);}
+  private async Task StageProductImage(InputFileChangeEventArgs args)=>await Execute(async ()=>{
+    if(productForm is null || productForm.Id!=0)return;
+    if(pendingImages.Count>=5)throw new InvalidOperationException("Máximo cinco imágenes por producto.");
+    if(productImageRole=="ProductCover"&&pendingImages.Any(i=>i.Role=="ProductCover"))throw new InvalidOperationException("Solo una portada por producto.");
+    var pending=await Catalog.Stage(args.File,productImageRole);
+    pendingImages.Add(new(){Token=pending.Token,Role=productImageRole,DisplayOrder=pendingImages.Count,AltEs=productImageAlt});
+  },"Fotografía preparada. Se publicará únicamente al confirmar el producto.");
+  private async Task DiscardPending(AdminStageAttachment pending)=>await Execute(async ()=>{await Catalog.Discard(pending.Token);pendingImages.Remove(pending);},"Fotografía descartada.");
+  private void PrepareProductSave()
+  {
+    error=null;if(productForm is null)return;
+    if(string.IsNullOrWhiteSpace(productForm.Slug)||productForm.SubcategoryIds.Count==0||string.IsNullOrWhiteSpace(productForm.Translations.FirstOrDefault(t=>t.LanguageCode=="es")?.Name)||string.IsNullOrWhiteSpace(productForm.Translations.FirstOrDefault(t=>t.LanguageCode=="es")?.Description)){error="Completá slug, subcategorías y nombre y descripción en español.";return;}
+    if(productForm.Id==0&&(pendingImages.Count is <1 or >5 || pendingImages.Count(i=>i.Role=="ProductCover")!=1)){error="Para publicar necesitás una portada y como máximo cinco imágenes.";return;}
+    confirmSaveProduct=true;
+  }
+  private async Task SaveProduct()=>await Execute(async ()=>{
+    if(productForm is null)return;
+    var request=productForm.Write();
+    if (string.IsNullOrWhiteSpace(request.Currency)) request.Currency=null;
+    request.Translations=request.Translations.Where(t=>t.LanguageCode=="es"||!string.IsNullOrWhiteSpace(t.Name)).ToList();
+    if(productForm.Id==0){request.PendingImages=pendingImages;await Catalog.CreateProduct(request);pendingImages=[];}
+    else {await Catalog.UpdateProduct(productForm.Id,request);}
+    productForm=null;confirmSaveProduct=false;products=await Catalog.Products();
+  },"Producto guardado.");
+  private async Task TogglePublication()=>await Execute(async ()=>{
+    if(productForm is null || productForm.Id==0)return;
+    var result=await Catalog.Publish(productForm.Id,productForm.Version,!productForm.IsPublished);
+    productForm.IsPublished=result.IsPublished;productForm.Version=result.Version;products=await Catalog.Products();
+  },"Estado de publicación actualizado.");
+  private async Task CancelProduct()
+  {
+    foreach(var image in pendingImages.ToArray())try{await Catalog.Discard(image.Token);}catch(HttpRequestException){}catch(InvalidOperationException){}
+    pendingImages=[];productForm=null;confirmSaveProduct=false;
+  }
+  private async Task UploadExistingProductImage(InputFileChangeEventArgs args)=>await Execute(async ()=>{
+    if(productForm is null||productForm.Id==0)return;
+    if(productForm.Images.Count>=5)throw new InvalidOperationException("Máximo cinco fotografías.");
+    var staged=await Catalog.Stage(args.File,productImageRole);
+    try{
+      await Catalog.AttachProduct(productForm.Id,new(){Token=staged.Token,Role=productImageRole,ParentVersion=productForm.Version,DisplayOrder=productForm.Images.Count,AltEs=productImageAlt});
+      productForm=await Catalog.Product(productForm.Id);
+    }catch{try{await Catalog.Discard(staged.Token);}catch{}throw;}
+  },"Fotografía agregada.");
+  private async Task OpenCategoryImages(AdminCategory category)=>await Execute(async ()=>{
+    categoryImageOwner=category;categoryImages=await Catalog.Read<List<AdminImage>>($"api/admin/public-catalog/categories/{category.Id}/images");
+  },"Fotografías cargadas.");
+  private async Task UploadCategoryImage(InputFileChangeEventArgs args)=>await Execute(async ()=>{
+    if(categoryImageOwner is null)return;
+    var staged=await Catalog.Stage(args.File,categoryImageRole);
+    try{
+      await Catalog.AttachCategory(categoryImageOwner.Id,new(){Token=staged.Token,Role=categoryImageRole,ParentVersion=categoryImageOwner.VersionFromRow(),DisplayOrder=categoryImages.Count,AltEs=categoryAlt,FallbackImageId=categoryImageRole=="CategoryHeroPrimary"&&staged.ContentType=="image/gif"&&categoryFallbackId>0?categoryFallbackId:null});
+      categories=await Catalog.Categories();categoryImageOwner=categories.Single(c=>c.Id==categoryImageOwner.Id);
+      categoryImages=await Catalog.Read<List<AdminImage>>($"api/admin/public-catalog/categories/{categoryImageOwner.Id}/images");
+    }catch{try{await Catalog.Discard(staged.Token);}catch{}throw;}
+  },"Imagen de categoría agregada.");
+  private async Task SaveImage(AdminImage image)=>await Execute(async ()=>{
+    await Catalog.SaveImage(image);
+    if(productForm is not null&&productForm.Id!=0)productForm=await Catalog.Product(productForm.Id);
+    if(categoryImageOwner is not null){categoryImages=await Catalog.Read<List<AdminImage>>($"api/admin/public-catalog/categories/{categoryImageOwner.Id}/images");categories=await Catalog.Categories();categoryImageOwner=categories.Single(c=>c.Id==categoryImageOwner.Id);}
+  });
+  private void ConfirmImageDelete(AdminImage image)=>deleteImageCandidate=image;
+  private async Task DeleteConfirmedImage()=>await Execute(async ()=>{
+    if(deleteImageCandidate is null)return;
+    await Catalog.DeleteImage(deleteImageCandidate);deleteImageCandidate=null;
+    if(productForm is not null&&productForm.Id!=0)productForm=await Catalog.Product(productForm.Id);
+    if(categoryImageOwner is not null){categoryImages=await Catalog.Read<List<AdminImage>>($"api/admin/public-catalog/categories/{categoryImageOwner.Id}/images");categories=await Catalog.Categories();categoryImageOwner=categories.Single(c=>c.Id==categoryImageOwner.Id);}
+  },"Fotografía eliminada.");
+}

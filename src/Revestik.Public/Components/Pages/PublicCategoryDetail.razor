@@ -1,0 +1,100 @@
+@page "/es/acabados/categoria/{Slug}"
+@page "/en/finishes/category/{Slug}"
+@page "/de/oberflaechen/kategorie/{Slug}"
+@using Revestik.Public.Services
+@inject PublicCatalogReader Catalog
+@inject NavigationManager Navigation
+
+<PageTitle>@(Category?.Category.Name(Lang) ?? "Categoría") | REVESTIK</PageTitle>
+<HeadContent>
+  @if (Category is not null) { <meta name="description" content="@(Category.Category.Description(Lang))" /> }
+  <meta name="robots" content="noindex,follow" />
+</HeadContent>
+<main id="main" class="subpage catalog-page">
+  <div class="subpage-inner">
+    <a class="back-home" href="@SiteLinks.Path(Lang,2)">← @Locale.Get(Lang).Nav[2]</a>
+    @if (Error)
+    {
+      <h1>@L("Catálogo no disponible", "Catalog unavailable", "Katalog nicht verfügbar")</h1>
+    }
+    else if (Category is null)
+    {
+      <h1>@L("Categoría no encontrada", "Category not found", "Kategorie nicht gefunden")</h1>
+    }
+    else
+    {
+      var hero = Category.Images.FirstOrDefault(x=>x.Role=="CategoryHeroPrimary");
+      <section class="catalog-category-hero" aria-labelledby="category-heading">
+        @if (hero is not null)
+        {
+          <picture>
+            @if (hero.ContentType=="image/gif" && hero.FallbackImageId is int fallback)
+            {
+              <source media="(prefers-reduced-motion: reduce)" srcset="@($"/media/catalog/{fallback}")" />
+            }
+            <img src="@($"/media/catalog/{hero.Id}")" alt="@(HeroAlt(hero) ?? Category.Category.Name(Lang))" width="1400" height="620" fetchpriority="high" />
+          </picture>
+        }
+        <div class="catalog-category-hero-copy"><h1 id="category-heading">@(Category.Category.HeroTitle(Lang) ?? Category.Category.Name(Lang))</h1><p>@(Category.Category.HeroDescription(Lang) ?? Category.Category.Description(Lang))</p></div>
+      </section>
+      @if (Category.Images.Any(x=>x.Role=="CategoryGallery"))
+      {
+        <section aria-label="@L("Ambientes", "Spaces", "Räume")" class="catalog-gallery">
+          @foreach (var image in Category.Images.Where(x=>x.Role=="CategoryGallery").OrderBy(x=>x.DisplayOrder))
+          {
+            <button type="button" class="catalog-gallery-photo public-photo-trigger" data-public-image data-gallery="@Category.Category.Slug"
+                    data-full-src="@($"/media/catalog/{image.Id}")" data-image-label="@(HeroAlt(image) ?? Category.Category.Name(Lang))" aria-haspopup="dialog">
+              <img src="@($"/media/catalog/{image.Id}")" alt="@(HeroAlt(image) ?? Category.Category.Name(Lang))" width="700" height="525" loading="lazy" /><span class="public-photo-zoom" aria-hidden="true">&#x2922;</span>
+            </button>
+          }
+        </section>
+      }
+      <h2>@L("Productos", "Products", "Produkte")</h2>
+      <nav class="catalog-categories" aria-label="@L("Subcategorías", "Subcategories", "Unterkategorien")">
+        <a class="catalog-filter" href="@CategoryUrl()">@L("Todas", "All", "Alle")</a>
+        @foreach(var sub in Category.Subcategories)
+        {
+          <a class="catalog-filter" href="@(CategoryUrl()+"?subcategoryId="+sub.Id)">@sub.Name(Lang)</a>
+        }
+      </nav>
+      <div class="catalog-grid">
+        @foreach (var product in Products.Items)
+        {
+          <article class="catalog-card"><a href="@($"{SiteLinks.Path(Lang,2)}/{product.Slug}")">
+              @if(product.CoverImageId is int cover){<img src="@($"/media/catalog/{cover}")" alt="@(product.Text(Lang)?.Name ?? product.Slug)" loading="lazy" width="720" height="540" />}
+              <div class="catalog-card-copy"><h3>@(product.Text(Lang)?.Name ?? product.Slug)</h3></div>
+            </a></article>
+        }
+      </div>
+      @if(Products.Items.Count==0){<p>@L("Todavía no hay productos publicados.","No products published yet.","Noch keine Produkte veröffentlicht.")</p>}
+      @if(Products.Total>12)
+      {
+        <nav class="catalog-pagination" aria-label="@L("Páginas", "Pages", "Seiten")">
+          @if(CurrentPage>1){<a href="@PageUrl(CurrentPage-1)">← @L("Anterior", "Previous", "Zurück")</a>}
+          <span>@CurrentPage / @((Products.Total+11)/12)</span>
+          @if(CurrentPage*12<Products.Total){<a href="@PageUrl(CurrentPage+1)">@L("Siguiente", "Next", "Weiter") →</a>}
+        </nav>
+      }
+    }
+  </div>
+</main>
+@code {
+  [Parameter] public string Slug {get;set;}="";
+  [SupplyParameterFromQuery(Name="subcategoryId")] public int? SubcategoryId {get;set;}
+  [SupplyParameterFromQuery(Name="page")] public int? Page {get;set;}
+  private int CurrentPage=>Math.Max(1,Page??1);
+  private string CategoryUrl()=>SiteLinks.Path(Lang,2)+"/"+(Lang=="en"?"category":Lang=="de"?"kategorie":"categoria")+"/"+Slug;
+  private string PageUrl(int number)=>CategoryUrl()+"?page="+number+(SubcategoryId.HasValue?"&subcategoryId="+SubcategoryId:"");
+  private CategoryDetailDto? Category;
+  private ProductPageDto Products=new();
+  private bool Error;
+  private string Lang=>Locale.FromUri(Navigation.Uri);
+  private string L(string es,string en,string de)=>Lang switch{"en"=>en,"de"=>de,_=>es};
+  private string? HeroAlt(ImageDto image)=>Lang switch{"en"=>image.AltEn??image.AltEs,"de"=>image.AltDe??image.AltEs,_=>image.AltEs};
+  protected override async Task OnParametersSetAsync()
+  {
+    try{Category=await Catalog.Category(Slug);Products=Category is not null?await Catalog.Products(CurrentPage,Category.Category.Id,SubcategoryId,null):new();Error=false;}
+    catch(HttpRequestException){Error=true;}
+    catch(TaskCanceledException){Error=true;}
+  }
+}

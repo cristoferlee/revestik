@@ -3387,6 +3387,113 @@ namespace Revestik.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogImage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AltDe")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("AltEn")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("AltEs")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int?>("CategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FallbackImageId")
+                        .HasColumnType("int");
+
+                    b.Property<long>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FallbackImageId");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.HasIndex("CategoryId", "DisplayOrder");
+
+                    b.HasIndex("CategoryId", "Role")
+                        .IsUnique()
+                        .HasFilter("[CategoryId] IS NOT NULL AND [Role] IN ('CategoryHeroPrimary', 'CategoryHeroFallback')");
+
+                    b.HasIndex("ProductId", "DisplayOrder");
+
+                    b.HasIndex("ProductId", "Role")
+                        .IsUnique()
+                        .HasFilter("[ProductId] IS NOT NULL AND [Role] = 'ProductCover'");
+
+                    b.ToTable("PublicCatalogImages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PublicCatalogImages_ContentType", "[ContentType] IN ('image/jpeg','image/png','image/webp') OR ([ContentType] = 'image/gif' AND [Role] = 'CategoryHeroPrimary')");
+
+                            t.HasCheckConstraint("CK_PublicCatalogImages_Dimensions", "[Width] > 0 AND [Height] > 0 AND [Width] <= 8192 AND [Height] <= 8192");
+
+                            t.HasCheckConstraint("CK_PublicCatalogImages_DisplayOrder", "[DisplayOrder] >= 0");
+
+                            t.HasCheckConstraint("CK_PublicCatalogImages_FallbackRole", "[FallbackImageId] IS NULL OR [Role] = 'CategoryHeroPrimary'");
+
+                            t.HasCheckConstraint("CK_PublicCatalogImages_FileSize", "[FileSizeBytes] > 0 AND [FileSizeBytes] <= 5242880");
+
+                            t.HasCheckConstraint("CK_PublicCatalogImages_GifFallback", "[ContentType] <> 'image/gif' OR [FallbackImageId] IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_PublicCatalogImages_Owner", "([ProductId] IS NOT NULL AND [CategoryId] IS NULL) OR ([ProductId] IS NULL AND [CategoryId] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_PublicCatalogImages_ValidRole", "([ProductId] IS NOT NULL AND [Role] IN ('ProductCover','ProductGallery')) OR ([CategoryId] IS NOT NULL AND [Role] IN ('CategoryHeroPrimary','CategoryHeroFallback','CategoryGallery'))");
+                        });
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogProduct", b =>
                 {
                     b.Property<int>("Id")
@@ -5087,6 +5194,30 @@ namespace Revestik.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("ProjectTask");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogImage", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.PublicCatalog.PublicCatalogCategory", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Revestik.Api.Models.PublicCatalog.PublicCatalogImage", "FallbackImage")
+                        .WithMany()
+                        .HasForeignKey("FallbackImageId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Revestik.Api.Models.PublicCatalog.PublicCatalogProduct", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Category");
+
+                    b.Navigation("FallbackImage");
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCatalogProductSubcategory", b =>

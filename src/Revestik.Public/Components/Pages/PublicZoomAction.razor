@@ -1,0 +1,26 @@
+@* A separate photo action preserves the parent card navigation. Used by Home and Projects. *@
+<button type="button"
+        class="public-zoom-action"
+        data-public-image
+        data-gallery="@Gallery"
+        data-image-label="@ImageLabel"
+        data-placeholder-note="@PlaceholderNote"
+        aria-haspopup="dialog"
+        aria-label="@GetZoomLabel(Language, ImageLabel)"
+        title="@GetZoomLabel(Language, ImageLabel)">
+    <span aria-hidden="true">&#x2922;</span>
+</button>
+
+@code {
+    [Parameter, EditorRequired] public string Language { get; set; } = "es";
+    [Parameter, EditorRequired] public string Gallery { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string ImageLabel { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string PlaceholderNote { get; set; } = string.Empty;
+
+    private static string GetZoomLabel(string language, string label) => language switch
+    {
+        "en" => $"Enlarge photograph: {label}",
+        "de" => $"Foto vergrößern: {label}",
+        _ => $"Ampliar fotografía: {label}"
+    };
+}

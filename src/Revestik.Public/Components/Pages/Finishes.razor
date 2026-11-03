@@ -1,0 +1,93 @@
+@page "/es/acabados"
+@page "/en/finishes"
+@page "/de/oberflaechen"
+@using Revestik.Public.Services
+@inject PublicCatalogReader Catalog
+@inject NavigationManager Navigation
+
+<PageTitle>@PublicSeo.Get(Lang, 2).Title</PageTitle>
+<HeadContent>
+  <meta name="description" content="@PublicSeo.Get(Lang, 2).Description" />
+  <meta name="robots" content="noindex,follow" />
+</HeadContent>
+<main id="main" class="subpage catalog-page">
+  <div class="subpage-inner">
+    <p class="eyebrow">REVESTIK · COSTA RICA</p>
+    <h1>@PublicSeo.Get(Lang, 2).Heading</h1>
+    <p>@PublicSeo.Get(Lang, 2).Description</p>
+    @if (Error)
+    {
+      <p role="alert">@L("El catálogo no está disponible temporalmente.", "The catalog is temporarily unavailable.", "Der Katalog ist vorübergehend nicht verfügbar.")</p>
+    }
+    else
+    {
+      <nav class="catalog-categories" aria-label="@L("Categorías", "Categories", "Kategorien")">
+        <a class="catalog-filter" href="@SiteLinks.Path(Lang, 2)">@L("Todas", "All", "Alle")</a>
+        @foreach (var category in Categories)
+        {
+          <a class="catalog-filter" href="@($"{SiteLinks.Path(Lang, 2)}/{(Lang == "en" ? "category" : Lang == "de" ? "kategorie" : "categoria")}/{category.Slug}")">@category.Name(Lang)</a>
+        }
+      </nav>
+      <form action="@SiteLinks.Path(Lang,2)" method="get" class="catalog-search">
+        @if (CategoryId.HasValue) { <input type="hidden" name="categoryId" value="@CategoryId" /> }
+        <label for="catalog-q">@L("Buscar productos", "Search products", "Produkte suchen")</label>
+        <input id="catalog-q" name="search" value="@Search" maxlength="100" />
+        <button type="submit">@L("Buscar", "Search", "Suchen")</button>
+      </form>
+      @if (Products.Items.Count == 0)
+      {
+        <p>@L("Todavía no hay productos publicados con estos filtros.", "No published products match these filters.", "Keine veröffentlichten Produkte entsprechen diesen Filtern.")</p>
+      }
+      <div class="catalog-grid">
+        @foreach (var product in Products.Items)
+        {
+          <article class="catalog-card">
+            <a href="@($"{SiteLinks.Path(Lang, 2)}/{product.Slug}")">
+              @if (product.CoverImageId is int imageId)
+              {
+                <img src="@($"/media/catalog/{imageId}")" alt="@(product.Text(Lang)?.Name ?? product.Slug)" loading="lazy" width="720" height="540" />
+              }
+              <div class="catalog-card-copy">
+                <h2>@(product.Text(Lang)?.Name ?? product.Slug)</h2>
+                @if (!string.IsNullOrWhiteSpace(product.Brand)) { <p>@product.Brand</p> }
+                @if (product.Price is decimal price) { <p>@price.ToString("N2") @product.Currency / @product.SalesUnit</p> }
+              </div>
+            </a>
+          </article>
+        }
+      </div>
+      @if (Products.Total > 12)
+      {
+        <nav class="catalog-pagination" aria-label="@L("Páginas", "Pages", "Seiten")">
+          @if (CurrentPage > 1) { <a href="@PageUrl(CurrentPage-1)">← @L("Anterior", "Previous", "Zurück")</a> }
+          <span>@CurrentPage / @((Products.Total + 11) / 12)</span>
+          @if (CurrentPage * 12 < Products.Total) { <a href="@PageUrl(CurrentPage+1)">@L("Siguiente", "Next", "Weiter") →</a> }
+        </nav>
+      }
+    }
+  </div>
+</main>
+
+@code {
+  [SupplyParameterFromQuery(Name="categoryId")] public int? CategoryId { get; set; }
+  [SupplyParameterFromQuery(Name="search")] public string? Search { get; set; }
+  [SupplyParameterFromQuery(Name="page")] public int? Page { get; set; }
+  private List<CategoryDto> Categories = [];
+  private ProductPageDto Products = new();
+  private bool Error;
+  private string Lang => Locale.FromUri(Navigation.Uri);
+  private string L(string es, string en, string de) => Lang switch { "en" => en, "de" => de, _ => es };
+  private int CurrentPage => Math.Max(1, Page ?? 1);
+  private string PageUrl(int page) => $"{SiteLinks.Path(Lang,2)}?page={page}" + (CategoryId.HasValue ? $"&categoryId={CategoryId}" : "") + (string.IsNullOrWhiteSpace(Search) ? "" : $"&search={Uri.EscapeDataString(Search)}");
+  protected override async Task OnParametersSetAsync()
+  {
+    try
+    {
+      Categories = await Catalog.Categories();
+      Products = await Catalog.Products(CurrentPage, CategoryId, null, Search);
+      Error = false;
+    }
+    catch (HttpRequestException) { Error = true; }
+    catch (TaskCanceledException) { Error = true; }
+  }
+}

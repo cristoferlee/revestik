@@ -1,0 +1,51 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@{
+    var lang = Locale.FromUri(Navigation.Uri);
+    var t = Locale.Get(lang);
+    var activePage = SiteLinks.PageFromUri(Navigation.Uri);
+}
+<a class="skip-link" href="#main">@t.Skip</a>
+<header class="site-header">
+    <div class="header-shell">
+        <a class="brand" href="@SiteLinks.Path(lang, 0)" aria-label="REVESTIK — @t.Nav[0]">
+            <img class="corporate-logo corporate-logo-header" width="420" height="160" src="/assets/revestik-sidebar-logo.png" alt="REVESTIK" />
+        </a>
+        <button class="menu-toggle" type="button" aria-controls="primary-nav" aria-expanded="false" data-menu-toggle>
+            <span>@t.Menu</span><span aria-hidden="true">☰</span>
+        </button>
+        <nav id="primary-nav" class="primary-nav" aria-label="@t.Navigation">
+            @for (var i = 0; i < 5; i++)
+            {
+                var page = i;
+                <a href="@SiteLinks.Path(lang, page)" aria-current="@(activePage == page ? "page" : null)">@t.Nav[page]</a>
+            }
+        </nav>
+        <div class="header-tools">
+            <nav class="languages" aria-label="@t.Language">
+                @foreach (var language in new[] { "es", "en", "de" })
+                {
+                    <a href="@SiteLinks.LanguagePath(language, Navigation.Uri)" lang="@language" aria-current="@(lang == language ? "true" : null)">@language.ToUpperInvariant()</a>
+                }
+            </nav>
+            <a class="header-cta" href="@SiteLinks.Path(lang, 5)">@t.Inquiry</a>
+        </div>
+    </div>
+</header>
+@Body
+<footer class="site-footer">
+    <div class="footer-inner">
+        <div class="footer-brand">
+            <strong class="footer-wordmark">REVESTIK</strong>
+        </div>
+        <div class="footer-columns">
+            <nav aria-label="@t.FooterExplore">
+                <h2>@t.FooterExplore</h2>
+                @for (var i=1; i<5; i++) { var page = i; <a href="@SiteLinks.Path(lang,page)">@t.Nav[page]</a> }
+            </nav>
+            <div class="footer-contact"><h2>@t.FooterContact</h2><a href="@SiteLinks.Path(lang,5)">@t.Nav[5]</a><span>@t.Email</span><span>@t.Phone</span><span>@t.Coverage</span><span>@t.Hours</span></div>
+            <div class="footer-legal"><h2>@t.FooterLegal</h2><p>@t.LegalPending</p></div>
+        </div>
+        <div class="footer-bottom"><small>© @DateTime.UtcNow.Year REVESTIK</small><small>Costa Rica</small></div>
+    </div>
+</footer>

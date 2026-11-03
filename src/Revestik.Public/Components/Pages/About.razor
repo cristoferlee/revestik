@@ -1,0 +1,22 @@
+@page "/es/nosotros"
+@page "/en/about"
+@page "/de/ueber-uns"
+@inject NavigationManager Navigation
+@{
+    var lang = Locale.FromUri(Navigation.Uri);
+    var t = Locale.Get(lang);
+    var seo = PublicSeo.Get(lang, 4);
+}
+<PageTitle>@seo.Title</PageTitle>
+<HeadContent>
+    <meta name="description" content="@seo.Description" />
+    <meta name="robots" content="noindex,follow" />
+</HeadContent>
+<main id="main" class="subpage">
+  <div class="subpage-inner">
+    <p class="eyebrow">REVESTIK &middot; COSTA RICA</p>
+    <h1>@seo.Heading</h1>
+    <p>@t.Pending</p>
+    <a class="back-home" href="@SiteLinks.Path(lang, 0)">← @t.Nav[0]</a>
+  </div>
+</main>

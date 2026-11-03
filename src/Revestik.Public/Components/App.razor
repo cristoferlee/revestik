@@ -1,0 +1,52 @@
+@inject NavigationManager Navigation
+@inject IConfiguration Configuration
+@{
+    // Do not advertise canonical URLs for local/pre-release routes.
+    // Only enable once a verified HTTPS public base URL is configured.
+    var publicBase = SiteLinks.ValidatedPublicBaseUrl(Configuration["PublicSite:BaseUrl"]);
+    var knownRoute = SiteLinks.IsKnownPublicRoute(Navigation.Uri);
+    var currentPath = new Uri(Navigation.Uri).AbsolutePath;
+    var language = Locale.FromUri(Navigation.Uri);
+}
+<!DOCTYPE html>
+<html lang="@Locale.FromUri(Navigation.Uri)">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <link rel="icon" type="image/svg+xml" href="/assets/revestik-rk.svg" />
+    <link rel="stylesheet" href="/css/public.css" />
+    <link rel="stylesheet" href="/css/catalog.css" />
+    @if (publicBase is not null && knownRoute)
+    {
+        <link rel="canonical" href="@(publicBase + currentPath)" />
+        @foreach (var alternate in new[] { "es", "en", "de" })
+        {
+            <link rel="alternate" hreflang="@alternate" href="@(publicBase + SiteLinks.LanguagePath(alternate, Navigation.Uri))" />
+        }
+        <link rel="alternate" hreflang="x-default" href="@(publicBase + SiteLinks.LanguagePath("es", Navigation.Uri))" />
+    }
+    <HeadOutlet />
+</head>
+<body>
+    <Routes />
+    @* Global SSR-safe image viewer. Javascript enhances explicitly opted-in photos only. *@
+    <dialog id="public-image-viewer" class="public-image-viewer" aria-label="Image viewer">
+        <div class="public-image-viewer-shell">
+            <button class="public-image-viewer-close public-glass-control" type="button" data-viewer-close aria-label="Close image viewer" title="Close">&times;</button>
+            <div class="public-image-viewer-stage" data-viewer-stage></div>
+            <div class="public-image-viewer-toolbar">
+                <button class="public-glass-control" type="button" data-viewer-prev aria-label="Previous photograph">&#8592;</button>
+                <div class="public-image-viewer-caption" aria-live="polite">
+                    <span data-viewer-title></span>
+                    <span class="public-image-viewer-count" data-viewer-count></span>
+                </div>
+                <button class="public-glass-control" type="button" data-viewer-next aria-label="Next photograph">&#8594;</button>
+            </div>
+        </div>
+    </dialog>
+    <script src="/js/public-nav.js" defer></script>
+    <script src="/js/public-hero.js" defer></script>
+    <script src="/js/public-image-viewer.js" defer></script>
+</body>
+</html>

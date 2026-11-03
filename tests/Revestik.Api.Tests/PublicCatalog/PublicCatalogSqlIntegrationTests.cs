@@ -35,7 +35,7 @@ public sealed class PublicCatalogSqlIntegrationTests(SqlServerIntegrationTestFix
     };
 
     [Fact]
-    public async Task MigrationCreatesFiveCatalogTables()
+    public async Task MigrationCreatesSixCatalogTables()
     {
         await using var db = fixture.CreateDbContext();
         var applied = await db.Database.GetAppliedMigrationsAsync();
@@ -45,8 +45,9 @@ public sealed class PublicCatalogSqlIntegrationTests(SqlServerIntegrationTestFix
             "SELECT [name] AS [Value] FROM sys.tables WHERE [name] LIKE 'PublicCatalog%'")
             .ToListAsync();
 
-        Assert.Equal(5, tables.Count);
+        Assert.Equal(6, tables.Count);
         Assert.Contains("PublicCatalogCategories", tables);
+        Assert.Contains("PublicCatalogImages", tables);
         Assert.Contains("PublicCatalogSubcategories", tables);
         Assert.Contains("PublicCatalogProducts", tables);
         Assert.Contains("PublicCatalogProductSubcategories", tables);

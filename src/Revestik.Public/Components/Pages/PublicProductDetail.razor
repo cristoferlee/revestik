@@ -1,0 +1,63 @@
+@page "/es/acabados/{Slug}"
+@page "/en/finishes/{Slug}"
+@page "/de/oberflaechen/{Slug}"
+@using Revestik.Public.Services
+@inject PublicCatalogReader Catalog
+@inject NavigationManager Navigation
+
+<PageTitle>@(Product?.Text(Lang)?.SeoTitle ?? Product?.Text(Lang)?.Name ?? "Producto no disponible | REVESTIK")</PageTitle>
+<HeadContent>
+  @if (Product is not null)
+  {
+    <meta name="description" content="@(Product.Text(Lang)?.SeoDescription ?? Product.Text(Lang)?.Description)" />
+  }
+  <meta name="robots" content="noindex,follow" />
+</HeadContent>
+<main id="main" class="subpage catalog-page">
+  <div class="subpage-inner">
+    <nav class="project-detail-breadcrumb"><a href="@SiteLinks.Path(Lang,2)">@Locale.Get(Lang).Nav[2]</a> / <span aria-current="page">@(Product?.Text(Lang)?.Name ?? Slug)</span></nav>
+    @if (Error)
+    {
+      <h1>@L("Producto no disponible", "Product unavailable", "Produkt nicht verfügbar")</h1>
+      <p role="alert">@L("No se pudo consultar el catálogo.", "Unable to load the catalog.", "Katalog konnte nicht geladen werden.")</p>
+    }
+    else if (Product is null)
+    {
+      <h1>@L("Producto no encontrado", "Product not found", "Produkt nicht gefunden")</h1>
+    }
+    else
+    {
+      <h1>@(Product.Text(Lang)?.Name ?? Product.Slug)</h1>
+      @if (!string.IsNullOrWhiteSpace(Product.Brand)) { <p>@Product.Brand</p> }
+      <div class="catalog-gallery" aria-label="@L("Galería del producto", "Product gallery", "Produktgalerie")">
+        @foreach (var photo in Product.Images.OrderByDescending(i => i.Role == "ProductCover").ThenBy(i => i.DisplayOrder))
+        {
+          <button type="button" class="catalog-gallery-photo public-photo-trigger" data-public-image data-gallery="@Product.Slug"
+                  data-full-src="@($"/media/catalog/{photo.Id}")"
+                  data-image-label="@(Product.ImageAlt(photo,Lang) ?? Product.Text(Lang)?.Name ?? Product.Slug)"
+                  aria-haspopup="dialog" aria-label="@L("Ampliar fotografía", "Enlarge photo", "Foto vergrößern")">
+            <img src="@($"/media/catalog/{photo.Id}")" alt="@(Product.ImageAlt(photo,Lang) ?? Product.Text(Lang)?.Name ?? Product.Slug)" loading="@(photo.Role == "ProductCover" ? "eager" : "lazy")" width="1000" height="750" />
+            <span class="public-photo-zoom" aria-hidden="true">&#x2922;</span>
+          </button>
+        }
+      </div>
+      <p class="catalog-description">@(Product.Text(Lang)?.Description)</p>
+      @if (Product.Price is decimal price) { <p class="catalog-price">@price.ToString("N2") @Product.Currency / @Product.SalesUnit</p> }
+      <a class="back-home" href="@SiteLinks.Path(Lang,5)">@L("Consultar este producto", "Ask about this product", "Dieses Produkt anfragen") →</a>
+    }
+  </div>
+</main>
+
+@code {
+  [Parameter] public string Slug { get; set; } = "";
+  private ProductDto? Product;
+  private bool Error;
+  private string Lang => Locale.FromUri(Navigation.Uri);
+  private string L(string es, string en, string de) => Lang switch { "en" => en, "de" => de, _ => es };
+  protected override async Task OnParametersSetAsync()
+  {
+    try { Product = await Catalog.Product(Slug); Error = false; }
+    catch (HttpRequestException) { Error = true; }
+    catch (TaskCanceledException) { Error = true; }
+  }
+}
