@@ -262,3 +262,67 @@ For each completed item append: date; commit/ref (if any); scope/decision; factu
 On every continuation, start with: current phase; latest verified Git SHA and worktree state; current approved task only; checklist item IDs; new evidence; outstanding approvals; exact STOP point. Read this file plus `AGENTS.md` before proposing implementation.
 
 **Final reminder: a documented preference is NOT authorization to implement. Investigate first; keep code small, safe, maintainable and cost-conscious.**
+
+## 11. Update — 2026-11-02: Local homepage implementation, templates and AI direction
+
+> **Status:** PUBLIC-WEB-01 is under local implementation. The owner has approved HOME-01 design and confirmed successful smoke tests for HOME-01-REVIEW-FIX. Interior pages, content administration, contact intake, legal/privacy work, and final tests remain unfinished. **Do not deploy any public feature until the entire public website is complete, tested, and expressly approved.**
+>
+> **Evidence boundary:** Delivered as incremental ZIP patches applied to `C:\Projects\Revestik\src\Revestik.Public`. Their contents are not verified as committed to the GitHub default branch. Verify the local tree, `git status -sb`, and actual source before further changes. Owner-reported smoke tests must not be represented as independently executed tests.
+
+### 11.1 Locally approved milestones
+
+| Block | Owner-reported status | Scope |
+| --- | --- | --- |
+| HOME-01A / A.1–A.5 | Approved by local smoke tests | Separate .NET 10 SSR public project; ES/EN/DE navigation, white header and full REVESTIK wordmark, text-only footer branding, RK favicon. |
+| HOME-01B / B.1 / B.2 | Visually approved | Three architectural image placeholders; text and CTAs overlaid; **6-second autoplay**, previous/next, pause, reduced-motion considerations; compact ~440–500 px desktop hero. |
+| VISUAL-01 / VISUAL-02 | Approved | Audited existing Revestik.Client CSS tokens; consolidated public CSS instead of stacking overrides. |
+| HOME-01C | Approved | Three featured project placeholders and localized example copy. |
+| HOME-01D | Approved in local workflow | UI heading **“Nuestros productos”** (while retaining existing finish URLs for compatibility); five category placeholders; each featured project links to an individual example detail route. |
+| HOME-01E/F/G | Local smoke tests approved | Editorial Solutions, four brief benefits and final contact CTAs. |
+| HOME-01-REVIEW | Static audit performed | Multilingual SEO, carousel/mobile accessibility, fonts, links and actual performance require final checks. |
+| HOME-01-REVIEW-FIX | Owner explicitly confirmed successful smoke tests | Canonical/hreflang preparation without invalid localhost links; language switch preserves project slug; `noindex,follow` remains enabled during development. |
+
+Visual approval is **not** a security, accessibility, legal or production sign-off. No public deployment or production changes have been authorized.
+
+### 11.2 Superseding visual decisions
+
+- Keep the **white/translucent horizontal public navbar** and full wordmark. RK is for favicon/loader, not public navbar branding. Reserve charcoal-blue `#18222D` mainly for footer; do not import the internal dark sidebar aesthetic.
+- Reuse existing brand and UI tokens: logo gold `#FFBD59`, amber `#F59E0B`, darker hover/accent `#D97706`, text `#1F2937`, background `#F3F4F6`, surface `#FFFFFF`, border `#E5E7EB`. Apply amber/gold sparingly to buttons, borders and details, not saturated panels.
+- Avoid excessive dashboard-style cards: favor spacious architectural editorial sections and actual photographs. Cards are justified for project/product previews, with discreet borders and little shadow.
+- **Decision 12-B is superseded:** the owner approved a three-slide **autoplay** hero at 6-second intervals, with manual navigation and a pause control. Ensure keyboard support, screen-reader clarity and reduced-motion behavior at final verification.
+- Consolidate CSS definitions at their canonical location; eliminate obsolete rules rather than appending conflicting overrides, `!important` or extra cascading files.
+- Preserve a single H1, meaningful section headings, semantic HTML, mobile responsiveness and human-reviewed ES/EN/DE copy.
+
+### 11.3 Content, project routes and async boundary
+
+- All current images and text for projects and products are **placeholders**, not assertions of actual REVESTIK work or products. Replace only with approved, licensed, accurate content before launch.
+- Every featured project tile opens its **own public detail page**, with a future gallery, description, verified characteristics, permitted general location and materials. Preserve its slug across ES/EN/DE language switching.
+- “Nuestros productos” is a curated three-to-five-category visual presentation, **not** a mass catalog, checkout, real-time prices or live internal stock.
+- Future async content reads must expose **only independently approved and published public data**. Never directly expose internal customer projects, CRM, inventory, financial information or private media. Draft and unpublished content must remain inaccessible to anonymous visitors.
+- Do not implement fake async endpoints or speculative database infrastructure before an approved WEB-CONTENT-01 investigation/plan.
+
+### 11.4 Video inspiration: constrained templates and private AI editing
+
+The owner shared a video showing an e-commerce website editor with visual templates, product management and AI content tooling. It serves as **inspiration for the private editing workflow**, not as a mandate to build a marketplace or clone a third-party platform.
+
+- **WEB-CONTENT-01:** inside authenticated `app.revestikcr.com`, initially `Administrator`-only. Edit hero images/slides, localized text, published project detail/photos, curated product sections and approved section order. Provide draft/preview/review/publish flow and reasonable versioning. The anonymous site contains **no edit controls**.
+- **Curated template variants:** a few accessible, brand-locked arrangements for projects, products and later seasonal styling. No unrestricted drag-and-drop builder, arbitrary HTML/CSS/JS injection or AI-generated executable changes.
+- **AI-CONTENT-01 (separately scoped):** optional server-side assistant proposing project/product descriptions, ES/EN/DE drafts and SEO titles/descriptions. Outputs are untrusted drafts; Administrator reviews/edits/approves before publication. Never fabricate specifications, real projects, prices or testimonials; protect secrets and customer information and enforce usage budgets.
+- Workflow: `Administrator → draft/template → optional AI proposal → human review and preview → explicit publish → anonymous read-only published content`.
+- **Timing reconciliation:** A protected content editor/publication path is planned **before** the owner's all-at-once public launch, but the full private AI Studio remains listed as post-V1 in original decision #53 until a separately approved scope changes that decision. Do **not** silently mark AI as implemented or mandatory for launch. The public AI chatbot remains a later phase.
+
+### 11.5 Next authorized workflow and launch gate
+
+1. `PUBLIC-PROJECTS-01` — INVESTIGATE actual local project index and detail pages, reuse existing routes, define public content fields and privacy-safe async publication contract.
+2. Complete curated product detail pages, Solutions, About, Contact and accurate localized legal/privacy/cookie pages.
+3. Implement bounded public contact intake, antispam validation, `Administrator`-only inbox, message notifications and retention controls.
+4. Develop approved WEB-CONTENT-01 with authenticated editing, version/preview/publish and public read-only content delivery.
+5. Complete SEO including sitemap/robots/canonical/hreflang/Open Graph, keyboard/screen-reader checks and actual Core Web Vitals testing with optimized **real** images.
+6. Final full local regression, privacy/security/legal/media-usage review and explicit complete-site acceptance.
+7. **Only after steps 1–6** consider a separate, explicit deployment authorization. No partial public deployment, DNS/Azure changes or indexing now. Git commits/pushes also require separate authorization.
+
+### 11.6 Engineering and handoff guardrails
+
+Follow **INVESTIGATE → PLAN → APPROVE → IMPLEMENT → VERIFY → STOP**. Preserve unrelated local files, internal business logic and secrets. No overlapping CSS override layers. Use small maintainable code, responsive semantic HTML, accessible controls and genuinely verified facts. Owner-facing communication in Spanish; repository-facing documentation in English. Report owner smoke-test evidence separately from agent-executed verification.
+
+**Current STOP:** Documentation synchronization; next development task is `PUBLIC-PROJECTS-01` investigation. Do not infer that local ZIP implementations were committed or deployed.
