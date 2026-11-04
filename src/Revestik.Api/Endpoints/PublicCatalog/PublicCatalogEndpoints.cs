@@ -40,6 +40,7 @@ public static class PublicCatalogEndpoints
         admin.MapGet("/products/{id:int}",AdminProduct);
         admin.MapPost("/products",CreateProduct).AddEndpointFilter<AntiforgeryValidationFilter>();
         admin.MapPut("/products/{id:int}",UpdateProduct).AddEndpointFilter<AntiforgeryValidationFilter>();
+        admin.MapPut("/products/{id:int}/content",UpdateProductContent).AddEndpointFilter<AntiforgeryValidationFilter>();
         admin.MapPost("/products/{id:int}/publish",PublishProduct).AddEndpointFilter<AntiforgeryValidationFilter>();
         admin.MapPost("/products/{id:int}/unpublish",UnpublishProduct).AddEndpointFilter<AntiforgeryValidationFilter>();
         admin.MapPost("/images/stage",StageImage).DisableAntiforgery().AddEndpointFilter<AntiforgeryValidationFilter>()
@@ -142,9 +143,24 @@ public static class PublicCatalogEndpoints
     private static async Task<IResult> AdminProducts(RevestikDbContext db,int? page,int? pageSize,string? search,CancellationToken ct)
     {
         int p=Math.Clamp(page??1,1,100000),size=Math.Clamp(pageSize??20,1,50);
-        var q=db.PublicCatalogProducts.AsNoTracking().AsQueryable();
+        var q=db.PublicCatalogProducts.AsNoTracking().Where(x => !x.IsArchived);
         if(!string.IsNullOrWhiteSpace(search))q=q.Where(x=>x.Slug.Contains(search));
-        return Results.Ok(new{Total=await q.CountAsync(ct),Items=await q.OrderBy(x=>x.Id).Skip((p-1)*size).Take(size).Select(x=>new{x.Id,x.Slug,x.IsPublished,x.IsArchived,x.Price,x.Currency,x.SalesUnit}).ToListAsync(ct)});
+        return Results.Ok(new
+        {
+            Total = await q.CountAsync(ct),
+            Items = await q.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Id)
+                .Skip((p - 1) * size).Take(size)
+                .Select(x => new
+                {
+                    x.Id, x.Slug, x.IsPublished, x.IsArchived, x.Brand, x.Price, x.Currency, x.SalesUnit,
+                    NameEs = x.Translations.Where(t => t.LanguageCode == "es").Select(t => t.Name).FirstOrDefault(),
+                    NameEn = x.Translations.Where(t => t.LanguageCode == "en").Select(t => t.Name).FirstOrDefault(),
+                    NameDe = x.Translations.Where(t => t.LanguageCode == "de").Select(t => t.Name).FirstOrDefault(),
+                    CoverImageId = db.Set<PublicCatalogImage>()
+                        .Where(i => i.ProductId == x.Id && i.Role == "ProductCover")
+                        .Select(i => (int?)i.Id).FirstOrDefault()
+                }).ToListAsync(ct)
+        });
     }
     private static async Task<IResult> AdminProduct(int id,RevestikDbContext db,CancellationToken ct)
     {
@@ -244,6 +260,123 @@ public static class PublicCatalogEndpoints
         try{await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);}catch(DbUpdateConcurrencyException){return Conflict("Product changed. Reload.");}catch(DbUpdateException){return Conflict("Product update conflicts with existing data.");}
         return Results.Ok(ProductDto(x,await db.Set<PublicCatalogImage>().AsNoTracking().Where(i=>i.ProductId==id).OrderBy(i=>i.DisplayOrder).ToListAsync(ct)));
     }
+    // Edits product content and its gallery in one confirmed operation. A staged upload
+    // is not published until all server validation and the SQL transaction succeed.
+    private static async Task<IResult> UpdateProductContent(
+        int id, ProductContentWrite request, RevestikDbContext db,
+        PublicCatalogMediaStorage storage, ClaimsPrincipal user, CancellationToken ct)
+    {
+        if (request.Product is not { } input || !ProductOk(input) ||
+            string.IsNullOrWhiteSpace(input.Version) ||
+            !await ValidSubcategories(input, db, ct))
+            return Bad("Invalid product fields or subcategories.");
+
+        var additions = request.PendingImages ?? [];
+        var changes = request.ExistingImages ?? [];
+        var removed = request.RemovedImageIds ?? [];
+        if (additions.Count > 5 || additions.Select(i => i.Token).Distinct().Count() != additions.Count ||
+            additions.Any(i => i.Role is not ("ProductCover" or "ProductGallery") ||
+                i.DisplayOrder < 0 || i.AltEs?.Length > 300 || i.AltEn?.Length > 300 || i.AltDe?.Length > 300) ||
+            removed.Count != removed.Distinct().Count() ||
+            changes.Select(i => i.Id).Distinct().Count() != changes.Count ||
+            changes.Any(i => i.DisplayOrder < 0 || string.IsNullOrWhiteSpace(i.Version) ||
+                i.AltEs?.Length > 300 || i.AltEn?.Length > 300 || i.AltDe?.Length > 300))
+            return Bad("Invalid gallery changes.");
+
+        // Check every temporary image before making any durable change.
+        var validated = new List<(ImageStageWrite Input, PublicCatalogValidatedMedia Media)>();
+        try
+        {
+            foreach (var image in additions)
+                validated.Add((image, await storage.InspectPendingAsync(image.Token, image.Role, ct)));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            return Bad("Staged image is missing or invalid.");
+        }
+
+        var committed = new List<string>();
+        var discarded = new List<string>();
+        var succeeded = false;
+        IResult result;
+        try
+        {
+            await using (var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct))
+            {
+                var product = await ProductIncludes(db).SingleOrDefaultAsync(x => x.Id == id && !x.IsArchived, ct);
+                if (product is null) return Results.NotFound();
+                if (!Version(input.Version, product.RowVersion)) return Conflict("Product changed. Reload.");
+
+                var current = await db.Set<PublicCatalogImage>().Where(i => i.ProductId == id).ToListAsync(ct);
+                if (changes.Count != current.Count ||
+                    changes.Any(change => !current.Any(i => i.Id == change.Id && Version(change.Version, i.RowVersion))) ||
+                    removed.Any(imageId => !current.Any(i => i.Id == imageId)))
+                    return Conflict("Gallery changed. Reload before saving.");
+
+                var surviving = current.Where(i => !removed.Contains(i.Id)).ToList();
+                if (surviving.Count + additions.Count is < 1 or > 5 ||
+                    surviving.Count(i => i.Role == "ProductCover") + additions.Count(i => i.Role == "ProductCover") != 1)
+                    return Bad("A published product requires one cover and at most five images.");
+
+                foreach (var image in current)
+                {
+                    if (removed.Contains(image.Id))
+                    {
+                        discarded.Add(image.StorageKey);
+                        db.Set<PublicCatalogImage>().Remove(image);
+                        continue;
+                    }
+                    var update = changes.Single(c => c.Id == image.Id);
+                    image.DisplayOrder = update.DisplayOrder;
+                    image.AltEs = update.AltEs;
+                    image.AltEn = update.AltEn;
+                    image.AltDe = update.AltDe;
+                }
+
+                AssignProduct(product, input);
+                // SQL Server's unique filtered cover index requires the old cover
+                // to be deleted before inserting its replacement (same transaction).
+                if (removed.Any(imageId => current.Any(i => i.Id == imageId && i.Role == "ProductCover")))
+                    await db.SaveChangesAsync(ct);
+                foreach (var (pending, media) in validated)
+                {
+                    var key = await storage.CommitAsync(pending.Token, ct);
+                    committed.Add(key);
+                    db.Set<PublicCatalogImage>().Add(new PublicCatalogImage
+                    {
+                        ProductId = id, Role = pending.Role, StorageKey = key,
+                        ContentType = media.ContentType, Width = media.Width,
+                        Height = media.Height, FileSizeBytes = media.FileSizeBytes,
+                        DisplayOrder = pending.DisplayOrder, AltEs = pending.AltEs,
+                        AltEn = pending.AltEn, AltDe = pending.AltDe,
+                        CreatedAtUtc = DateTime.UtcNow
+                    });
+                }
+
+                SecurityAudit.Record(db, "PublicCatalogProductUpdated", "PublicCatalogProduct", id.ToString(), Actor(user));
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                succeeded = true;
+                result = Results.Ok(new { product.Id, product.Slug, product.IsPublished, Version = V(product.RowVersion) });
+            }
+        }
+        catch (DbUpdateConcurrencyException) { result = Conflict("Product or gallery changed. Reload."); }
+        catch (DbUpdateException) { result = Conflict("Product or gallery conflicts with existing data."); }
+        catch (IOException) { result = Results.Problem(title: "Media storage failed.", statusCode: 503); }
+        finally
+        {
+            if (!succeeded)
+                foreach (var key in committed) try { storage.DeleteActive(key); } catch (IOException) { }
+        }
+        if (succeeded)
+        {
+            foreach (var image in additions) try { storage.DeletePending(image.Token); } catch (IOException) { }
+            // The database is authoritative. Failed physical cleanup is retried by the media worker.
+            foreach (var key in discarded) try { storage.DeleteActive(key); } catch (IOException) { }
+        }
+        return result;
+    }
+
     private static async Task<IResult> PublishProduct(int id,VersionWrite r,RevestikDbContext db,ClaimsPrincipal user,CancellationToken ct)
     {
         await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.Serializable,ct);
@@ -434,6 +567,12 @@ public static class PublicCatalogEndpoints
     public sealed record TranslationWrite(string LanguageCode,string Name,string? Description,string? SeoTitle,string? SeoDescription);
     public sealed record ProductWrite(string Slug,string? Brand,decimal? Price,string? Currency,string? SalesUnit,int DisplayOrder,List<int> SubcategoryIds,List<TranslationWrite> Translations,string? Version,List<ImageStageWrite>? PendingImages);
     public sealed record ImageStageWrite(string Token,string Role,int DisplayOrder,string? AltEs,string? AltEn,string? AltDe);
+    public sealed record ProductContentWrite(
+        ProductWrite Product,
+        List<ImageStageWrite>? PendingImages,
+        List<ExistingImageWrite>? ExistingImages,
+        List<int>? RemovedImageIds);
+    public sealed record ExistingImageWrite(int Id, int DisplayOrder, string? AltEs, string? AltEn, string? AltDe, string Version);
     public sealed record VersionWrite(string Version);
     public sealed record ImageAttach(string Token,string Role,int DisplayOrder,string? AltEs,string? AltEn,string? AltDe,int? FallbackImageId,string ParentVersion);
     public sealed record ImageEdit(int DisplayOrder,string? AltEs,string? AltEn,string? AltDe,string Version);

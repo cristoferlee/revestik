@@ -4,6 +4,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Revestik.Shared\Revestik.Shared.csproj" />
+  </ItemGroup>
   <!-- Copy the exact approved source assets into the public web root BEFORE build/publish. -->
   <Target Name="CopyRevestikBrandAssets" BeforeTargets="Build;Publish">
     <MakeDir Directories="$(MSBuildProjectDirectory)/wwwroot/assets" />

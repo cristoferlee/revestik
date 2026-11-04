@@ -1,11 +1,24 @@
 using System.Net;
 using System.Net.Http.Json;
+using Revestik.Shared.PublicSite;
 
 namespace Revestik.Public.Services;
 
 // Public-only client. No cookies, admin credentials, or inventory references.
 public sealed class PublicCatalogReader(HttpClient http)
 {
+    public async Task<List<HomeSectionDto>> HomeSections(CancellationToken ct = default) =>
+        await http.GetFromJsonAsync<List<HomeSectionDto>>("api/public/site/home-sections", ct) ?? [];
+
+    public async Task<HttpResponseMessage> HomeSolutionsImage(CancellationToken ct = default) =>
+        await http.GetAsync("api/public/site/home-sections/solutions/media", HttpCompletionOption.ResponseHeadersRead, ct);
+
+    public async Task<List<HomeHeroSlideDto>> HomeHeroSlides(CancellationToken ct = default) =>
+        await http.GetFromJsonAsync<List<HomeHeroSlideDto>>("api/public/site/home-hero", ct) ?? [];
+
+    public async Task<HttpResponseMessage> HomeHeroImage(int slot, CancellationToken ct = default) =>
+        await http.GetAsync($"api/public/site/home-hero/media/{slot}", HttpCompletionOption.ResponseHeadersRead, ct);
+
     public async Task<List<CategoryDto>> Categories(CancellationToken ct = default) =>
         await http.GetFromJsonAsync<List<CategoryDto>>("api/public/catalog/categories", ct) ?? [];
 
@@ -119,4 +132,19 @@ public sealed class ImageDto
     public string? AltDe { get; set; }
     public int? FallbackImageId { get; set; }
     public string? Version { get; set; }
+}
+
+public sealed class HomeHeroSlideDto
+{
+    public int Slot { get; set; }
+    public string HeadingEs { get; set; } = "";
+    public string? HeadingEn { get; set; }
+    public string? HeadingDe { get; set; }
+    public string DescriptionEs { get; set; } = "";
+    public string? DescriptionEn { get; set; }
+    public string? DescriptionDe { get; set; }
+    public bool HasImage { get; set; }
+    public string Version { get; set; } = "";
+    public string Heading(string lang) => lang switch { "en" => HeadingEn ?? HeadingEs, "de" => HeadingDe ?? HeadingEs, _ => HeadingEs };
+    public string Description(string lang) => lang switch { "en" => DescriptionEn ?? DescriptionEs, "de" => DescriptionDe ?? DescriptionEs, _ => DescriptionEs };
 }

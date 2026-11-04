@@ -9,11 +9,7 @@ builder.Services.AddHttpClient<PublicCatalogReader>(client =>
     // This points to the existing Revestik.Api; never authenticate as an administrator.
     var url = builder.Configuration["PublicCatalog:ApiBaseUrl"];
     if (string.IsNullOrWhiteSpace(url))
-    {
-        if (!builder.Environment.IsDevelopment())
-            throw new InvalidOperationException("PublicCatalog:ApiBaseUrl is required outside development.");
-        url = "https://localhost:7081/";
-    }
+        throw new InvalidOperationException("PublicCatalog:ApiBaseUrl must be configured for the public site.");
     if (!Uri.TryCreate(url, UriKind.Absolute, out var address) ||
         address.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(address.Query) ||
         !string.IsNullOrEmpty(address.Fragment) || address.AbsolutePath != "/")
@@ -67,6 +63,40 @@ app.MapGet("/media/catalog/{id:int}", async (int id, PublicCatalogReader catalog
         // Media upload contract caps originals at 5 MB. Buffer to avoid disposing
         // the upstream HTTP response before Kestrel completes its own response.
         var bytes = await result.Content.ReadAsByteArrayAsync(ct);
+        if (bytes.Length is <= 0 or > 5242880) return Results.StatusCode(502);
+        return Results.File(bytes, type);
+    }
+    catch (HttpRequestException) { return Results.StatusCode(503); }
+    catch (TaskCanceledException) { return Results.StatusCode(503); }
+}).AllowAnonymous();
+// The public SSR site proxies only published Home images, without admin cookies.
+app.MapGet("/media/home-hero/{slot:int}", async (int slot, PublicCatalogReader catalog, CancellationToken ct) =>
+{
+    if (slot is < 1 or > 3) return Results.NotFound();
+    try
+    {
+        using var response = await catalog.HomeHeroImage(slot, ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return Results.NotFound();
+        if (!response.IsSuccessStatusCode) return Results.StatusCode(503);
+        var type = response.Content.Headers.ContentType?.MediaType;
+        if (type is not ("image/jpeg" or "image/png" or "image/webp")) return Results.StatusCode(502);
+        var bytes = await response.Content.ReadAsByteArrayAsync(ct);
+        if (bytes.Length is <= 0 or > 5242880) return Results.StatusCode(502);
+        return Results.File(bytes, type);
+    }
+    catch (HttpRequestException) { return Results.StatusCode(503); }
+    catch (TaskCanceledException) { return Results.StatusCode(503); }
+}).AllowAnonymous();
+app.MapGet("/media/home-solutions", async (PublicCatalogReader catalog, CancellationToken ct) =>
+{
+    try
+    {
+        using var response = await catalog.HomeSolutionsImage(ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return Results.NotFound();
+        if (!response.IsSuccessStatusCode) return Results.StatusCode(503);
+        var type = response.Content.Headers.ContentType?.MediaType;
+        if (type is not ("image/jpeg" or "image/png" or "image/webp")) return Results.StatusCode(502);
+        var bytes = await response.Content.ReadAsByteArrayAsync(ct);
         if (bytes.Length is <= 0 or > 5242880) return Results.StatusCode(502);
         return Results.File(bytes, type);
     }

@@ -1,7 +1,7 @@
 # REVESTIK — PUBLIC-WEB-01 Master Checkpoint
 
-> **Status:** INVESTIGATE — product decisions captured; technical/legal/content verification pending. **Not an approved implementation plan.**
-> **Date:** 2026-11-02
+> **Status:** PUBLIC-EDITOR-01B+C and PUBLIC-HOME-02A+B verified functionally in local development; PUBLIC-EDITOR-01D/E pending. Historical earlier sections retain decisions as they were recorded; the latest section supersedes older status statements.
+> **Updated:** 2026-11-04
 > **Repository:** https://github.com/cristoferlee/revestik
 > **Local workspace:** `C:\Projects\Revestik`
 > **Public website:** `https://revestikcr.com` (planned)
@@ -561,3 +561,61 @@ Acceptance requirements to propose and obtain approval for:
 > **La seguridad es prioritaria:** solo un Administrator que accede desde la app interna puede editar; NO trasladar el token de administrador al dominio público. Compará editor visual alojado en origen administrativo (reutilizando tarjetas/componentes de la web) vs sesión acotada e independiente en el dominio público mediante handoff de uso único, con protección CSRF, cookies seguras, revocación de rol/sesión, auditoría y pruebas de acceso no autorizado. **No elijas arquitectura ni programes antes de investigar código y presentar opciones con riesgos/costos.**
 >
 > Estado local: API real `https://localhost:7126`, WASM devserver `https://localhost:7081`, sitio SSR `http://localhost:5000`. `/api/public/catalog/...` devolvió JSON 200 en 7126. `PublicCatalog__ApiBaseUrl=https://localhost:7126/` antes de iniciar `Revestik.Public` corrigió el error JSON; producto `porcelanato-roble-test` visible en `/es/acabados`. No se completaron todos los smoke tests de idiomas/galería/despublicación. Presentá primero INVESTIGATE del estado real, propuesta UX de escritorio/móvil, arquitectura de seguridad recomendada, alcance por bloques y criterios de aceptación. Esperá mi aprobación antes de implementar.
+
+
+---
+
+## 14. Public visual editor implementation and next-block checkpoint — 2026-11-04
+
+### 14.1 Evidence, status, and provenance
+
+- Owner-reported source baseline prior to the local changes: `main` and `origin/main` at `d738b5aa2ddbc5820b9a011cfdd2cf305cc86f83` (`feat(public-web): integrate public catalog and update UX checkpoint`). Later code is currently **uncommitted in the local worktree**, not yet verified on GitHub. Verify both HEAD and working-tree state before resuming.
+- Working versions have been applied locally from focused integration ZIPs: `PUBLIC-CATALOG-UX-01A`, `ACABADOS-01`, `PUBLIC-EDITOR-01B+C`, `PUBLIC-HOME-02A+B`, subsequent Razor / EF model corrections and `PUBLIC-HOME-02_InlineEditorFix01`.
+- Owner reported **1,136 successful, 0 failed, 0 skipped** tests, lasting **551.2 seconds**, with overall build/test command succeeding in 586.4 seconds, before the last UI-only inline-editor correction. Owner subsequently reported the inline-editor smoke test works as intended. Run build/tests after further structural changes and before final publication/commit claims.
+- `dotnet ef migrations has-pending-model-changes` succeeded after correcting SQL type metadata for `PublicHomeSections.ContentEs/ContentEn/ContentDe` to `nvarchar(max)` with the 6000-character model validation retained. A previous migration listing showed `20261104120000_AddPublicHomeHeroSlides` applied and `20261104180000_AddPublicHomeSections` pending; **the owner has not provided a subsequent migration-list confirmation in this chat**. Do not assume the latter is applied to any target database merely because tests passed; verify local migration state explicitly.
+- Public Home, local preview, and editing functions were reported working by the owner. This is **not** evidence of a production deployment, production database update or production public-site launch. No production deploy has been authorized.
+
+### 14.2 Approved editorial and terminology decisions
+
+- **Portada** means a page's large visual hero/intro banner (not the representative photo of a product).
+- **Imagen principal** means the product's representative photo; **imágenes adicionales** are the product gallery. Product images retain server-side `ProductCover`/`ProductGallery` roles unless a justified technical change is approved. Gallery order is automatically derived from image addition order; no manual order field for ordinary editors.
+- Public-site configuration currently offers **Editar sitio web público** and **Categorías y subcategorías**. Category/subcategory maintenance stays in the existing administrative UI, not in a new separate site builder.
+- Editor access is inside authenticated `Revestik.Client` (`app.revestikcr.com` in production), requiring Administrator. Public `Revestik.Public` remains SSR and anonymous. Use of a public read-only preview inside the admin editor must not give the public origin administrative cookies or tokens. Editing actions and persisted writes belong to the trusted API, with CSRF, authorization, validation, concurrency and audit.
+- Visible controls must sit next to or overlay the specific section they edit, **not in a separate grid below the page**. Expose controls only when a working backend exists; no fake edit actions.
+- Work **one public page at a time**, completing its presentation, editor, tests and acceptance before moving on; reuse approved visual components from previous pages while preserving their look and behavior. Shared Header, Footer, Portada style, cards and galleries should be factored only when real reuse supports it; do not create generic frameworks preemptively.
+- No persisted drafts or editorial version-history system in this release. Edit one product at a time. Require explicit confirmation before save/publish; do not save the public product or images prematurely. Optional English/German translations remain in a secondary section, with a possible LLM assistance feature deferred. Nontechnical SEO fields should default from product name/description; preserve stable existing published URLs.
+- Selling units for public products should reuse the **active units catalog** already administered in the enterprise application (e.g. m², Cj, Und). Public taxonomy is separate from the inventory category taxonomy and must not couple public products to internal inventory, FIFO, pricing or project data.
+
+### 14.3 Implemented modules and user-reported acceptance
+
+1. **PUBLIC-CATALOG-UX-01A / ACABADOS-01:** Configuration hub and protected product editor, gray `+ Agregar nuevo producto` card, create/edit/publish/unpublish, photo attachments, image-main/gallery simplification, automatic ordering, active units selector, generated initial URL, optional translations and defaults for SEO, confirmation and comprehensible validation messages. Functional owner smoke succeeded. These features do not mean the *entire Acabados public page* is finished.
+2. **PUBLIC-EDITOR-01B+C:** Visual editor hosted inside the administrative Client, with a read-only representation of the **real** public Home page (not a separately reimplemented Header/Footer); edit the three fixed Home hero slots using existing public rendering and protected API storage. Home hero migration `20261104120000_AddPublicHomeHeroSlides` is present in the local worktree.
+3. **PUBLIC-HOME-02A+B:** Editor for Home hero images/titles/descriptions and sections covering published-product selection, Solutions, Why REVESTIK and Contact, with optional translations, explicit confirmation, concurrency and persisted server-side data. Public Home uses existing content defaults if a section has not yet been customized. Home section migration `20261104180000_AddPublicHomeSections` is present; verify local database state. No public Projects CMS is implied; demonstration/static projects still need their own future investigation.
+4. **InlineEditorFix01:** Buttons appear directly in the Home preview at the corresponding sections. The owner reported the result works and approved the smoke test. Editing controls remain outside the public anonymous view. Client integration uses `./js/public-site-editor-bridge.js`; the public side uses `/js/public-editor-preview.js`. Both are JavaScript presentation/communication assets, not authentication mechanisms.
+
+### 14.4 Organization / naming normalization approved before commit
+
+- Canonical public/client browser asset directory: **`wwwroot/js` (lowercase)**. A local `git status` on Windows reported the new bridge script under `src/Revestik.Client/wwwroot/Js/public-site-editor-bridge.js`; verify the physical directory name and normalize it to lowercase **without duplicating the file**, preserving the import `./js/public-site-editor-bridge.js`. Case sensitivity matters for Linux deployment. Use a two-step temporary directory rename if Windows ignores a case-only rename. Confirm no other files share the original directory before moving it.
+- Keep `PublicSiteHub.razor`, `PublicSiteVisualEditor.razor`, `PublicCatalogEditor.razor`, `PublicHomeHeroSlide`, `PublicHomeSection`, and their existing endpoint/contract groupings. They are already descriptive. `HomeHeroAdminApi` and `HomeSectionAdminApi` are acceptable existing service names; do **not** rename only for cosmetic symmetry in a stable block.
+- Preserve migration names and files already used/applied (`20261104120000_AddPublicHomeHeroSlides` and `20261104180000_AddPublicHomeSections`), even where their generated layout differs from older migrations. Never hand-edit applied migration logic just to normalize naming. Resolve actual EF model drift with targeted diagnostics, not warning suppression.
+- An old provisional `docs/PUBLIC-WEB-01-CHECKPOINT-UPDATE-2026-11-03.md` remains an untracked local file. Preserve it; consolidate relevant current decisions into **this** master checkpoint, but do not stage the provisional document or remove it without the owner's approval.
+- Do not commit backup files such as `GmailIntegrationService.cs.gmail-quota01.bak`, `Home.razor.before-home01efg.bak` or `public.css.before-*.bak`. Leave these untracked local files untouched.
+- Review the modified `src/Revestik.Client/wwwroot/appsettings.Development.json` and untracked `src/Revestik.Public/appsettings.Development.json` for sensitive/local-only data **before staging**. A working local override for public server-to-API communication is `PublicCatalog__ApiBaseUrl=https://localhost:7126/`; do not ship a local development override as a production configuration.
+
+### 14.5 Current local smoke environment
+
+- `Revestik.Api` HTTPS: `https://localhost:7126`, Google OAuth/Identity on the existing API flow; do not change registered callback ports casually.
+- `Revestik.Client` HTTPS: `https://localhost:7081`, admin editor under `/settings/public-site/editor` and product-editor path `/settings/public-site/editor/acabados`.
+- `Revestik.Public` HTTP: `http://localhost:5000`, with `ASPNETCORE_ENVIRONMENT=Development`, `DOTNET_ENVIRONMENT=Development` and `PublicCatalog__ApiBaseUrl=https://localhost:7126/`; without that setting the public SSR application may start as Production and fail on Home rendering. Avoid broad CORS/cookie/HTTPS policy changes to fix local configuration errors.
+- Local developer confirmed SQL connection values for development: `localhost\SQLEXPRESS`, database `RevestikDb`, Windows authentication; prior command output had PowerShell parsing issues. Before a new local migration, confirm **effective** connection and ensure no env override points at Azure. Never migrate production without explicit approval.
+
+### 14.6 Remaining blocks and strict release procedure
+
+- **PUBLIC-EDITOR-01D** next: integrate the existing public Acabados listing and product detail editor into the same visual shell. Overlay action buttons at real products/sections; reuse existing add/edit workflows, visual CSS and privacy/auth rules. Avoid rebuilding the catalog, changing public taxonomy or modifying the public Home design. The Acabados page-specific Hero and full page presentation remain separate approved work; do not misreport the entire Acabados page as closed.
+- **PUBLIC-EDITOR-01E** afterward: consolidate actually shared UI/CSS and review accessibility, SEO, mobile, performance, image integrity, public/admin separation, role and CSRF protection, EF/migrations consistency and full regression. Confirm no admin affordances or scripts allow privileged operations on anonymous pages. Preserve Home and public SSR behavior.
+- Work strictly **INVESTIGATE → PLAN → APPROVE → IMPLEMENT → VERIFY → STOP**. One bounded ZIP of complete files with repository-relative paths per approved block; no installers, README, backup files, credentials, `bin`, `obj` or extra top-level wrapper directory. Owner extracts using PowerShell into `C:\Projects\Revestik` and runs build/tests/smoke. If a ZIP extraction is interrupted, recover from a safe staged copy and preserve the local working tree; never use `git reset --hard`, `git clean` or broad `git restore`.
+- Before Git commit/push: check `git diff --check`, file names/casing, current migration state, actual staged file list, source-code secrets and all untracked artifacts; stage explicit allowlisted paths only. `git add .` is **not** authorized. Commit/push require final approval. No Azure production public-site deployment or production SQL update has been authorized.
+
+### 14.7 New-chat continuation
+
+Read the complete checkpoint including §14, `AGENTS.md` and the architecture/security documents. Verify `main` SHA and local modifications before changing any file. Continue with **PUBLIC-EDITOR-01D — INVESTIGATE** first, then produce a scoped PLAN; do not invent editable public Projects data or change unrelated pages. Preserve user-approved Home and Acabados editor work, Google OAuth, the preview security boundary and the 1,136-test baseline. Treat user-reported acceptance separately from independently executed tests. Continue Spanish communication and provide complete relative-path ZIPs only for explicitly approved implementation work.

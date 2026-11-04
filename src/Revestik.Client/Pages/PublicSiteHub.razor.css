@@ -1,0 +1,14 @@
+
+.public-site-hub{max-width:1150px;margin:auto;padding:1.5rem 1.2rem 4rem;color:#1f2937}
+.public-site-back{color:#926019;text-decoration:none;font-weight:600}
+.public-site-hub header{margin:2rem 0}.public-site-hub h1{font-size:clamp(1.8rem,3.4vw,2.7rem);margin:.2rem 0 .65rem}
+.public-site-hub header>p:last-child,.public-site-hub-note{color:#66717e;line-height:1.65;max-width:66ch}
+.public-site-eyebrow{font-size:.77rem;letter-spacing:.17em;font-weight:700;color:#946521}
+.public-site-hub-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.25rem}
+.public-site-hub-card{display:flex;flex-direction:column;gap:1rem;padding:1.7rem;border:1px solid #e5e7eb;border-radius:16px;background:#fff;color:#1f2937;text-decoration:none;min-height:240px;box-shadow:0 8px 30px #19243109}
+.public-site-hub-card--featured{border-color:#d8b579;background:#fffcf7}
+.public-site-hub-card strong{font-size:1.24rem}.public-site-hub-card>span:not(.public-site-hub-link):not(.public-site-hub-icon){color:#637080;line-height:1.55}
+.public-site-hub-icon{font-size:1.75rem;color:#ac7928}.public-site-hub-link{font-weight:700;color:#80550e;margin-top:auto}
+.public-site-hub-card:hover,.public-site-hub-card:focus-visible{border-color:#b98130;box-shadow:0 8px 25px #19243120}
+.public-site-hub-card:focus-visible{outline:3px solid #e1a245;outline-offset:3px}
+.public-site-hub-note{margin-top:1.8rem}@media(max-width:650px){.public-site-hub-grid{grid-template-columns:1fr}.public-site-hub-card{min-height:200px}}

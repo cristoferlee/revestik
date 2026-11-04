@@ -48,6 +48,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--focus); outline
 .home-hero .hero-viewport { position: absolute; inset: 0; z-index: -2; overflow: hidden; background: #363a3a; }
 .home-hero .hero-slide { position: absolute; inset: 0; opacity: 0; visibility: hidden; transition: opacity .9s ease, visibility .9s ease; }
 .home-hero .hero-slide.is-active { opacity: 1; visibility: visible; }
+.home-hero .hero-media-photo { display: block; width: 100%; height: 100%; object-fit: cover; }
 .home-hero .hero-media-placeholder { display: flex; height: 100%; flex-direction: column; justify-content: center; align-items: flex-end; gap: 12px; padding: clamp(36px,7vw,110px); padding-bottom: 120px; text-align: right; background: linear-gradient(135deg,#383b37,#555952); }
 .home-hero .hero-slide:nth-child(2) .hero-media-placeholder { background: linear-gradient(125deg,#353b3b,#5a605c); }
 .home-hero .hero-slide:nth-child(3) .hero-media-placeholder { background: linear-gradient(125deg,#323538,#575d62); }
@@ -364,3 +365,7 @@ body.public-viewer-open { overflow: hidden; }
   .home-hero .hero-slide, .home-hero .hero-progress-segment, .public-photo-trigger { transition: none; }
   .public-photo-trigger:hover { transform: none; }
 }
+
+/* HOME-02: Keep a saved Solutions photograph within the established media frame. */
+.home-solutions-media>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.home-solutions-media>.public-photo-zoom{z-index:1}

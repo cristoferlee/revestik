@@ -87,6 +87,8 @@ builder.Services.AddScoped<ISupplierApiService, SupplierApiService>();
 builder.Services.AddScoped<IProductApiService, ProductApiService>();
 builder.Services.AddScoped<IInventoryCatalogApiService, InventoryCatalogApiService>();
 builder.Services.AddScoped<PublicCatalogAdminApi>();
+builder.Services.AddScoped<HomeHeroAdminApi>();
+builder.Services.AddScoped<HomeSectionAdminApi>();
 builder.Services.AddScoped<IInventoryApiService, InventoryApiService>();
 builder.Services.AddScoped<IPhysicalCountApiService, PhysicalCountApiService>();
 builder.Services.AddScoped<IInventoryCostApiService, InventoryCostApiService>();

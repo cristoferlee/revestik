@@ -9,6 +9,8 @@
     const toggle = gallery.querySelector('[data-hero-pause]');
     const status = gallery.querySelector('[data-hero-status]');
     const pauseIcon = gallery.querySelector('[data-hero-pause-icon]');
+    const heading = gallery.querySelector('[data-hero-heading]');
+    const copy = gallery.querySelector('[data-hero-copy]');
     if (slides.length < 2 || !previous || !next || !toggle || !status) return;
 
     let active = 0;
@@ -23,6 +25,8 @@
       });
       indicators.forEach((indicator, index) => indicator.classList.toggle('is-active', index === active));
       status.textContent = `${String(active + 1).padStart(2, '0')} / ${String(slides.length).padStart(2, '0')}`;
+      if (heading) heading.textContent = slides[active].dataset.heroTitle || '';
+      if (copy) copy.textContent = slides[active].dataset.heroDescription || '';
     };
     const updatePause = () => {
       const label = userPaused ? toggle.dataset.playLabel : toggle.dataset.pauseLabel;

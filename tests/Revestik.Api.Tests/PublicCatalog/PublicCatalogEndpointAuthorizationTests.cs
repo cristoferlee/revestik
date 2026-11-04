@@ -48,4 +48,36 @@ public sealed class PublicCatalogEndpointAuthorizationTests
         var response=await client.GetAsync("/api/public/catalog/categories");
         Assert.Equal(HttpStatusCode.OK,response.StatusCode);
     }
+    [Fact]
+    public async Task VisualEditorProductsRequireAuthentication()
+    {
+        using var factory = new RevestikWebApplicationFactory("Development");
+        using var client = factory.CreateClient();
+        var response = await client.GetAsync("/api/admin/public-catalog/products?page=1&pageSize=24");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task VisualEditorProductsForbidNonAdministrator()
+    {
+        using var factory = new RevestikWebApplicationFactory("Development");
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add(TestAuthenticationHandler.UserHeaderName, "catalog-tester");
+        client.DefaultRequestHeaders.Add(TestAuthenticationHandler.RoleHeaderName, "Sales");
+        var response = await client.GetAsync("/api/admin/public-catalog/products?page=1&pageSize=24");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ConfirmedContentMutationRejectsRequestWithoutCsrf()
+    {
+        using var factory = new RevestikWebApplicationFactory("Development");
+        using var client = factory.CreateClient();
+        client.BaseAddress = new Uri("https://localhost");
+        client.DefaultRequestHeaders.Add(TestAuthenticationHandler.UserHeaderName, "catalog-admin");
+        using var content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
+        var response = await client.PutAsync("/api/admin/public-catalog/products/1/content", content);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
 }

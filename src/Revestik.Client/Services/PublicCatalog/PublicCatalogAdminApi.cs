@@ -8,6 +8,7 @@ namespace Revestik.Client.Services.PublicCatalog;
 // Uses the existing cookie + CSRF HttpClient registered in Revestik.Client/Program.cs.
 public sealed class PublicCatalogAdminApi(HttpClient http)
 {
+    public string StagedImageUri(string token) => new Uri(http.BaseAddress ?? throw new InvalidOperationException("API base URL missing."), $"api/admin/public-catalog/images/staged/{Uri.EscapeDataString(token)}").ToString();
     public string ImageUri(int id) => new Uri(http.BaseAddress ?? throw new InvalidOperationException("API base URL missing."), $"api/admin/public-catalog/images/{id}/content").ToString();
     public Task<List<AdminCategory>> Categories() => Read<List<AdminCategory>>("api/admin/public-catalog/categories");
     public Task<List<AdminSubcategory>> Subcategories() => Read<List<AdminSubcategory>>("api/admin/public-catalog/subcategories");
@@ -16,6 +17,17 @@ public sealed class PublicCatalogAdminApi(HttpClient http)
         var page = await Read<AdminProductPage>("api/admin/public-catalog/products?page=1&pageSize=50");
         return page.Items;
     }
+    public Task<AdminProductPage> ProductPage(int page) => Read<AdminProductPage>($"api/admin/public-catalog/products?page={Math.Max(1, page)}&pageSize=24");
+    public Task<ProductOperationResult> SaveContent(int id, AdminProductWrite product, List<AdminStageAttachment> pending,
+        List<AdminImage> existing, IEnumerable<int> removed) =>
+        Send<ProductOperationResult>(HttpMethod.Put, $"api/admin/public-catalog/products/{id}/content",
+            new
+            {
+                Product = product,
+                PendingImages = pending,
+                ExistingImages = existing.Select(x => new { x.Id, x.DisplayOrder, x.AltEs, x.AltEn, x.AltDe, x.Version }),
+                RemovedImageIds = removed.ToArray()
+            });
     public Task<AdminProduct> Product(int id) => Read<AdminProduct>($"api/admin/public-catalog/products/{id}");
 
     public Task<AdminCategory> SaveCategory(AdminCategory c) => c.Id == 0
@@ -37,6 +49,8 @@ public sealed class PublicCatalogAdminApi(HttpClient http)
         multipart.Add(stream,"file",file.Name);
         multipart.Add(new StringContent(role),"role");
         using var response=await http.PostAsync("api/admin/public-catalog/images/stage",multipart);
+        if (response.StatusCode == HttpStatusCode.BadRequest)
+            throw new InvalidOperationException("No se pudo procesar la imagen. Comprobá que sea un archivo JPG, PNG o WebP válido, de máximo 5 MB.");
         await Check(response);
         return await response.Content.ReadFromJsonAsync<StagedImage>() ?? throw new InvalidOperationException("El servidor no devolvió un identificador de imagen.");
     }
@@ -121,7 +135,27 @@ public sealed class AdminSubcategory
     public string VersionFromRow()=>RowVersion is {Length:>0}?Convert.ToBase64String(RowVersion):Version;
 }
 public sealed class AdminProductPage { public List<AdminProductSummary> Items {get;set;}=[]; public int Total {get;set;} }
-public sealed class AdminProductSummary { public int Id {get;set;} public string Slug {get;set;}="";public bool IsPublished {get;set;} }
+public sealed class AdminProductSummary
+{
+    public int Id {get;set;}
+    public string Slug {get;set;}="";
+    public bool IsPublished {get;set;}
+    public bool IsArchived {get;set;}
+    public string? NameEs {get;set;}
+    public string? NameEn {get;set;}
+    public string? NameDe {get;set;}
+    public string? Brand {get;set;}
+    public decimal? Price {get;set;}
+    public string? Currency {get;set;}
+    public string? SalesUnit {get;set;}
+    public int? CoverImageId {get;set;}
+    public string Name(string language) => language switch
+    {
+        "en" => NameEn ?? NameEs ?? Slug,
+        "de" => NameDe ?? NameEs ?? Slug,
+        _ => NameEs ?? Slug
+    };
+}
 public sealed class AdminProduct
 {
     public int Id {get;set;}

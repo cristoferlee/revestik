@@ -3,6 +3,7 @@
 @page "/de"
 @inject NavigationManager Navigation
 @using Revestik.Public.Services
+@using Revestik.Shared.PublicSite
 @inject PublicCatalogReader Catalog
 @{
     var lang = Locale.FromUri(Navigation.Uri);
@@ -21,12 +22,23 @@
             @for (var i = 0; i < slides.Length; i++)
             {
                 var index = i;
-                <div class="hero-slide @(index == 0 ? "is-active" : null)" data-hero-slide aria-hidden="@(index == 0 ? "false" : "true")">
-                    <div class="hero-media-placeholder" role="img" aria-label="@slides[index]">
-                        <span class="placeholder-marker" aria-hidden="true">@((index + 1).ToString("00"))</span>
-                        <span class="placeholder-label">@slides[index]</span>
-                        <span class="placeholder-note">@GetImagePending(lang)</span>
-                    </div>
+                var saved = HomeSlides.FirstOrDefault(x => x.Slot == index + 1);
+                <div class="hero-slide @(index == 0 ? "is-active" : null)" data-hero-slide
+                     data-hero-title="@(saved?.Heading(lang) ?? seo.Heading)"
+                     data-hero-description="@(saved?.Description(lang) ?? seo.Description)"
+                     aria-hidden="@(index == 0 ? "false" : "true")">
+                    @if (saved?.HasImage == true)
+                    {
+                        <img class="hero-media-photo" src="@($"/media/home-hero/{index + 1}?v={Uri.EscapeDataString(saved.Version)}")" alt="" aria-hidden="true" width="1920" height="1080" fetchpriority="@(index == 0 ? "high" : "auto")" />
+                    }
+                    else
+                    {
+                        <div class="hero-media-placeholder" role="img" aria-label="@slides[index]">
+                            <span class="placeholder-marker" aria-hidden="true">@((index + 1).ToString("00"))</span>
+                            <span class="placeholder-label">@slides[index]</span>
+                            <span class="placeholder-note">@GetImagePending(lang)</span>
+                        </div>
+                    }
                 </div>
             }
         </div>
@@ -34,8 +46,8 @@
         <div class="home-hero-shell">
             <div class="home-hero-copy">
                 <p class="eyebrow">REVESTIK &middot; COSTA RICA</p>
-                <h1 id="home-title">@seo.Heading</h1>
-                <p class="home-hero-description">@seo.Description</p>
+                <h1 id="home-title" data-hero-heading>@(HomeSlides.FirstOrDefault(x => x.Slot == 1)?.Heading(lang) ?? seo.Heading)</h1>
+                <p class="home-hero-description" data-hero-copy>@(HomeSlides.FirstOrDefault(x => x.Slot == 1)?.Description(lang) ?? seo.Description)</p>
                 <div class="hero-actions">
                     <a class="hero-action-primary" href="@SiteLinks.Path(lang, 2)">@t.Nav[2]</a>
                     <a class="hero-action-secondary" href="@SiteLinks.Path(lang, 5)">@t.Inquiry</a>
@@ -73,8 +85,12 @@
             <div class="featured-products-header">
                 <div>
                     <span class="section-index" aria-hidden="true">02</span>
-                    <p class="featured-products-eyebrow">@GetProductsHeading(lang)</p>
-                    <h2 id="featured-products-title">@GetProductsSubheading(lang)</h2>
+                    <p class="featured-products-eyebrow">@SectionValue("products", lang, "eyebrow", GetProductsHeading(lang))</p>
+                    <h2 id="featured-products-title">@SectionValue("products", lang, "title", GetProductsSubheading(lang))</h2>
+                    @if (Section("products") is not null)
+                    {
+                        <p>@SectionValue("products", lang, "description", "")</p>
+                    }
                 </div>
                 <a class="featured-projects-all" href="@SiteLinks.Path(lang, 2)">@GetAllProducts(lang) <span aria-hidden="true">&#8594;</span></a>
             </div>
@@ -101,32 +117,40 @@
         </section>
         <section class="home-solutions" aria-labelledby="home-solutions-title">
             <div class="home-solutions-copy">
-                <p class="home-section-eyebrow">@GetSolutionsEyebrow(lang)</p>
-                <h2 id="home-solutions-title">@GetSolutionsTitle(lang)</h2>
-                <p>@GetSolutionsText(lang)</p>
+                <p class="home-section-eyebrow">@SectionValue("solutions", lang, "eyebrow", GetSolutionsEyebrow(lang))</p>
+                <h2 id="home-solutions-title">@SectionValue("solutions", lang, "title", GetSolutionsTitle(lang))</h2>
+                <p>@SectionValue("solutions", lang, "description", GetSolutionsText(lang))</p>
                 <a class="home-text-link" href="@SiteLinks.Path(lang, 3)">@GetSolutionsLink(lang) <span aria-hidden="true">&#8594;</span></a>
             </div>
             <button type="button"
                     class="home-solutions-media public-photo-trigger"
                     data-public-image
                     data-gallery="@($"home-solutions-{lang}")"
-                    data-image-label="@GetSolutionsImageLabel(lang)"
+                    data-image-label="@(HasSolutionsImage ? GetActualSolutionsImageLabel(lang) : GetSolutionsImageLabel(lang))"
+                    data-full-src="@(HasSolutionsImage ? $"/media/home-solutions?v={Uri.EscapeDataString(SolutionsImageVersion)}" : null)"
                     data-placeholder-note="@GetImagePending(lang)"
                     aria-haspopup="dialog"
                     aria-label="@GetSolutionsExpandLabel(lang)">
-                <span aria-hidden="true" class="home-solutions-image-icon">&#9633;</span>
-                <span aria-hidden="true">@GetImagePending(lang)</span>
+                @if (HasSolutionsImage)
+                {
+                    <img src="@($"/media/home-solutions?v={Uri.EscapeDataString(SolutionsImageVersion)}")" alt="@GetActualSolutionsImageLabel(lang)" loading="lazy" width="880" height="660" />
+                }
+                else
+                {
+                    <span aria-hidden="true" class="home-solutions-image-icon">&#9633;</span>
+                    <span aria-hidden="true">@GetImagePending(lang)</span>
+                }
                 <span aria-hidden="true" class="public-photo-zoom">&#x2922;</span>
             </button>
         </section>
         <section class="home-advantages" aria-labelledby="home-advantages-title">
             <div class="home-advantages-heading">
-                <p class="home-section-eyebrow">@GetWhyEyebrow(lang)</p>
-                <h2 id="home-advantages-title">@GetWhyTitle(lang)</h2>
-                <p>@GetWhyIntroduction(lang)</p>
+                <p class="home-section-eyebrow">@SectionValue("advantages", lang, "eyebrow", GetWhyEyebrow(lang))</p>
+                <h2 id="home-advantages-title">@SectionValue("advantages", lang, "title", GetWhyTitle(lang))</h2>
+                <p>@SectionValue("advantages", lang, "description", GetWhyIntroduction(lang))</p>
             </div>
             <div class="home-advantages-grid">
-                @foreach (var advantage in GetAdvantages(lang))
+                @foreach (var advantage in AdvantageCards(lang))
                 {
                     <div class="home-advantage">
                         <span class="home-advantage-rule" aria-hidden="true"></span>
@@ -140,9 +164,9 @@
     <section class="home-contact-cta" aria-labelledby="home-contact-cta-title">
         <div class="home-contact-cta-inner">
             <div>
-                <p class="home-section-eyebrow">@GetContactEyebrow(lang)</p>
-                <h2 id="home-contact-cta-title">@GetContactTitle(lang)</h2>
-                <p>@GetContactText(lang)</p>
+                <p class="home-section-eyebrow">@SectionValue("contact", lang, "eyebrow", GetContactEyebrow(lang))</p>
+                <h2 id="home-contact-cta-title">@SectionValue("contact", lang, "title", GetContactTitle(lang))</h2>
+                <p>@SectionValue("contact", lang, "description", GetContactText(lang))</p>
             </div>
             <div class="home-contact-actions">
                 <a class="home-contact-primary" href="@SiteLinks.Path(lang, 5)">@t.Inquiry</a>
@@ -154,12 +178,66 @@
 
 @code {
     private List<ProductDto> FeaturedProducts = [];
+    private List<HomeHeroSlideDto> HomeSlides = [];
+    private List<HomeSectionDto> HomeSections = [];
+    private HomeSectionDto? Section(string key) => HomeSections.FirstOrDefault(x => x.Key == key);
+    private bool HasSolutionsImage => Section("solutions")?.HasImage == true;
+    private string SolutionsImageVersion => Section("solutions")?.Version ?? "";
+    private string SectionValue(string key, string lang, string field, string fallback)
+    {
+        var section = Section(key);
+        if (section is null) return fallback;
+        var localized = section.Text(lang);
+        string? Get(HomeSectionCopy content) => field switch
+        {
+            "eyebrow" => content.Eyebrow,
+            "title" => content.Title,
+            "description" => content.Description,
+            _ => null
+        };
+        var value = Get(localized);
+        if (string.IsNullOrWhiteSpace(value)) value = Get(section.Es);
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
+    private Advantage[] AdvantageCards(string lang)
+    {
+        var section = Section("advantages");
+        var cards = section?.Text(lang).Cards;
+        if (cards is not { Count: 4 } || cards.Any(c => string.IsNullOrWhiteSpace(c.Title) || string.IsNullOrWhiteSpace(c.Description)))
+            cards = section?.Es.Cards;
+        if (cards is not { Count: 4 } || cards.Any(c => string.IsNullOrWhiteSpace(c.Title) || string.IsNullOrWhiteSpace(c.Description)))
+            return GetAdvantages(lang);
+        return cards.Select(c => new Advantage(c.Title, c.Description)).ToArray();
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        try { FeaturedProducts = (await Catalog.Products(1, null, null, null)).Items.Take(5).ToList(); }
-        catch (HttpRequestException) { FeaturedProducts = []; }
-        catch (TaskCanceledException) { FeaturedProducts = []; }
+        try { HomeSlides = await Catalog.HomeHeroSlides(); }
+        catch (HttpRequestException) { HomeSlides = []; }
+        catch (TaskCanceledException) { HomeSlides = []; }
+        try { HomeSections = await Catalog.HomeSections(); }
+        catch (HttpRequestException) { HomeSections = []; }
+        catch (TaskCanceledException) { HomeSections = []; }
+        var selected = Section("products")?.FeaturedSlugs;
+        if (selected is { Count: > 0 })
+        {
+            foreach (var slug in selected.Take(5))
+            {
+                try
+                {
+                    var product = await Catalog.Product(slug);
+                    if (product is not null) FeaturedProducts.Add(product);
+                }
+                catch (HttpRequestException) { /* Missing products are not displayed. */ }
+                catch (TaskCanceledException) { /* Missing products are not displayed. */ }
+            }
+        }
+        else
+        {
+            try { FeaturedProducts = (await Catalog.Products(1, null, null, null)).Items.Take(5).ToList(); }
+            catch (HttpRequestException) { FeaturedProducts = []; }
+            catch (TaskCanceledException) { FeaturedProducts = []; }
+        }
     }
 
     private sealed record Advantage(string Title, string Description);
@@ -188,6 +266,12 @@
         "en" => "Enlarge REVESTIK solutions photograph",
         "de" => "Foto der REVESTIK-Lösungen vergrößern",
         _ => "Ampliar fotografía de Soluciones REVESTIK"
+    };
+    private static string GetActualSolutionsImageLabel(string lang) => lang switch
+    {
+        "en" => "REVESTIK construction finishes and materials photograph",
+        "de" => "Foto von Materialien und Oberflächen von REVESTIK",
+        _ => "Fotografía de materiales y acabados REVESTIK"
     };
     private static string GetSolutionsImageLabel(string lang) => lang switch
     {

@@ -32,6 +32,8 @@ public sealed class RevestikDbContext(DbContextOptions<RevestikDbContext> option
     public DbSet<ElectronicDocumentCategory> ElectronicDocumentCategories => Set<ElectronicDocumentCategory>();
     public DbSet<ElectronicDocumentClassificationRule> ElectronicDocumentClassificationRules => Set<ElectronicDocumentClassificationRule>();
     public DbSet<ElectronicDocumentCabysClassificationRule> ElectronicDocumentCabysClassificationRules => Set<ElectronicDocumentCabysClassificationRule>();
+    public DbSet<PublicHomeHeroSlide> PublicHomeHeroSlides => Set<PublicHomeHeroSlide>();
+    public DbSet<PublicHomeSection> PublicHomeSections => Set<PublicHomeSection>();
     public DbSet<PublicCatalogCategory> PublicCatalogCategories => Set<PublicCatalogCategory>();
     public DbSet<PublicCatalogSubcategory> PublicCatalogSubcategories => Set<PublicCatalogSubcategory>();
     public DbSet<PublicCatalogProduct> PublicCatalogProducts => Set<PublicCatalogProduct>();

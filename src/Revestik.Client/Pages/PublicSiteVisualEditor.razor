@@ -1,0 +1,585 @@
+@page "/settings/public-site/editor"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.Extensions.Configuration
+@using Microsoft.JSInterop
+@using Revestik.Client.Services.PublicCatalog
+@using Revestik.Shared.PublicSite
+@attribute [Authorize(Roles = "Administrator")]
+@implements IAsyncDisposable
+@inject HomeHeroAdminApi HomeHero
+@inject HomeSectionAdminApi HomeSections
+@inject PublicCatalogAdminApi CatalogMedia
+@inject IConfiguration Configuration
+@inject IJSRuntime JS
+
+<PageTitle>Editor del sitio público | Revestik</PageTitle>
+<NavigationLock ConfirmExternalNavigation="@(editing is not null || editingSection is not null)" />
+<main class="public-editor">
+    <header class="public-editor__toolbar">
+        <div>
+            <a href="/settings/public-site">← Sitio web público</a>
+            <h1>Editar sitio web público</h1>
+            <p>Estás viendo el sitio público real. Solo los controles señalados permiten modificar contenido.</p>
+        </div>
+        <span class="public-editor__role">Administrador · Inicio</span>
+    </header>
+
+    @if (error is not null)
+    {
+        <p class="public-editor__alert" role="alert">@error</p>
+    }
+    @if (notice is not null)
+    {
+        <p class="public-editor__notice" role="status">@notice</p>
+    }
+
+    <div class="public-editor__navigation">
+        <strong>Secciones</strong>
+        <span aria-current="page">Inicio</span>
+        <a href="/settings/public-site/editor/acabados">Acabados · Productos</a>
+        <span class="public-editor__muted" title="Disponible en una futura entrega">Proyectos · Solo vista</span>
+        <span class="public-editor__muted" title="Disponible en una futura entrega">Soluciones · Solo vista</span>
+        <label for="preview-language">Idioma de previsualización</label>
+        <select id="preview-language" @bind="language">
+            <option value="es">Español</option>
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+        </select>
+    </div>
+
+    <section class="public-editor__stage" aria-label="Vista previa del sitio público">
+        <div class="public-editor__stage-header">
+            <span><strong>Inicio</strong> · Vista pública de solo lectura</span>
+            <a href="@PreviewUrl" target="_blank" rel="noopener noreferrer">Abrir sitio público</a>
+        </div>
+        <div class="public-editor__browser">
+            <iframe @ref="previewFrame" src="@PreviewUrl" title="Vista previa de REVESTIK en @language" loading="eager"></iframe>
+        </div>
+        <p class="public-editor__hint">Desplazate por Inicio y seleccioná <strong>Editar</strong> junto a la sección correspondiente. Proyectos destacados, Header y Footer permanecen en modo de consulta.</p>
+    </section>
+
+    @if (editingSection is not null && sectionForm is not null)
+    {
+        <div class="public-editor__backdrop" role="presentation">
+            <section class="public-editor__dialog" role="dialog" aria-modal="true" aria-labelledby="home-section-dialog-title">
+                <header class="public-editor__dialog-header">
+                    <div><p>Inicio · Contenido editable</p><h2 id="home-section-dialog-title">@SectionTitle(editingSection)</h2></div>
+                    <button type="button" disabled="@busy" @onclick="Cancel" aria-label="Cancelar edición">×</button>
+                </header>
+                @if (error is not null)
+                {
+                    <p class="public-editor__alert" role="alert">@error</p>
+                }
+                @if (confirmSave)
+                {
+                    <div class="public-editor__dialog-body">
+                        <h3>¿Guardar los cambios de @SectionTitle(editingSection)?</h3>
+                        <p>El contenido se publicará inmediatamente al confirmar. No se guardan borradores.</p>
+                        <div class="public-editor__actions">
+                            <button type="button" disabled="@busy" @onclick="() => confirmSave = false">Volver a editar</button>
+                            <button type="button" class="public-editor__primary" disabled="@busy" @onclick="SaveSectionConfirmed">Confirmar y guardar</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="public-editor__dialog-body">
+                        <p>Los textos en español son obligatorios. Inglés y alemán son opcionales.</p>
+                        <label>Etiqueta de la sección<input maxlength="90" @bind="sectionForm.Es.Eyebrow" /></label>
+                        <label>Título<input maxlength="180" @bind="sectionForm.Es.Title" /></label>
+                        <label>Descripción<textarea maxlength="1000" rows="3" @bind="sectionForm.Es.Description"></textarea></label>
+                        @if (editingSection == "advantages")
+                        {
+                            <h3>Tarjetas informativas</h3>
+                            @for (var i = 0; i < sectionForm.Es.Cards.Count; i++)
+                            {
+                                var card = sectionForm.Es.Cards[i];
+                                <fieldset>
+                                    <legend>Tarjeta @(i + 1)</legend>
+                                    <label>Título<input maxlength="180" @bind="card.Title" /></label>
+                                    <label>Descripción<textarea maxlength="500" rows="2" @bind="card.Description"></textarea></label>
+                                </fieldset>
+                            }
+                        }
+                        <details>
+                            <summary>Traducciones opcionales</summary>
+                            <p>Si no completás estas traducciones, el sitio utilizará el texto en español.</p>
+                            <h3>Inglés</h3>
+                            <label>Etiqueta<input maxlength="90" @bind="sectionEn.Eyebrow" /></label>
+                            <label>Título<input maxlength="180" @bind="sectionEn.Title" /></label>
+                            <label>Descripción<textarea maxlength="1000" rows="3" @bind="sectionEn.Description"></textarea></label>
+                            <h3>Alemán</h3>
+                            <label>Etiqueta<input maxlength="90" @bind="sectionDe.Eyebrow" /></label>
+                            <label>Título<input maxlength="180" @bind="sectionDe.Title" /></label>
+                            <label>Descripción<textarea maxlength="1000" rows="3" @bind="sectionDe.Description"></textarea></label>
+                            @if (editingSection == "advantages")
+                            {
+                                <h3>Tarjetas en inglés (opcional)</h3>
+                                @for (var i = 0; i < sectionEn.Cards.Count; i++)
+                                {
+                                    var card = sectionEn.Cards[i];
+                                    <fieldset>
+                                        <legend>Card @(i + 1)</legend>
+                                        <label>Title<input maxlength="180" @bind="card.Title" /></label>
+                                        <label>Description<textarea maxlength="500" rows="2" @bind="card.Description"></textarea></label>
+                                    </fieldset>
+                                }
+                                <h3>Tarjetas en alemán (opcional)</h3>
+                                @for (var i = 0; i < sectionDe.Cards.Count; i++)
+                                {
+                                    var card = sectionDe.Cards[i];
+                                    <fieldset>
+                                        <legend>Karte @(i + 1)</legend>
+                                        <label>Titel<input maxlength="180" @bind="card.Title" /></label>
+                                        <label>Beschreibung<textarea maxlength="500" rows="2" @bind="card.Description"></textarea></label>
+                                    </fieldset>
+                                }
+                            }
+                        </details>
+                        @if (editingSection == "solutions")
+                        {
+                            <fieldset>
+                                <legend>Fotografía de Soluciones</legend>
+                                @if (pendingToken is not null)
+                                {
+                                    <img src="@CatalogMedia.StagedImageUri(pendingToken)" alt="Nueva fotografía sin publicar" />
+                                    <p>@pendingName · Sin publicar</p>
+                                }
+                                else if (sectionForm.HasImage && !removeImage)
+                                {
+                                    <img src="@HomeSections.SolutionsImageUri(sectionForm.Version)" alt="Fotografía actual de Soluciones" />
+                                }
+                                else { <p>Sin fotografía guardada.</p> }
+                                <label>Seleccionar JPG, PNG o WebP (máximo 5 MB)
+                                    <InputFile OnChange="ChooseImage" accept="image/jpeg,image/png,image/webp" disabled="@busy" />
+                                </label>
+                                @if (sectionForm.HasImage && pendingToken is null)
+                                {
+                                    <label class="public-editor__check"><input type="checkbox" @bind="removeImage" /> Quitar fotografía actual</label>
+                                }
+                            </fieldset>
+                        }
+                        @if (editingSection == "products")
+                        {
+                            <fieldset>
+                                <legend>Productos destacados (máximo cinco)</legend>
+                                <p>Seleccioná productos publicados existentes. Si no seleccionás ninguno, se mostrarán los primeros disponibles.</p>
+                                @foreach (var product in availableProducts)
+                                {
+                                    var slug = product.Slug;
+                                    <label class="public-editor__check">
+                                        <input type="checkbox" checked="@sectionForm.FeaturedSlugs.Contains(slug)"
+                                               @onchange="e => ToggleFeatured(slug, e.Value is true)" />
+                                        <span>@(string.IsNullOrWhiteSpace(product.NameEs) ? slug : product.NameEs) <small>(@slug)</small></span>
+                                    </label>
+                                }
+                                @if (availableProducts.Count == 0)
+                                {
+                                    <p>No hay productos publicados disponibles.</p>
+                                }
+                            </fieldset>
+                        }
+                        <div class="public-editor__actions">
+                            <button type="button" disabled="@busy" @onclick="Cancel">Cancelar</button>
+                            <button class="public-editor__primary" type="button" disabled="@busy" @onclick="ReviewSection">Revisar y guardar</button>
+                        </div>
+                    </div>
+                }
+            </section>
+        </div>
+    }
+
+    @if (editing is not null)
+    {
+        <div class="public-editor__backdrop" role="presentation">
+            <section class="public-editor__dialog" role="dialog" aria-modal="true" aria-labelledby="home-hero-dialog-title">
+                <header class="public-editor__dialog-header">
+                    <div>
+                        <p>Portada de Inicio</p>
+                        <h2 id="home-hero-dialog-title">Editar diapositiva @editing.Slot</h2>
+                    </div>
+                    <button type="button" disabled="@busy" @onclick="Cancel" aria-label="Cancelar edición">×</button>
+                </header>
+                @if (error is not null)
+                {
+                    <p class="public-editor__alert" role="alert">@error</p>
+                }
+                @if (confirmSave)
+                {
+                    <div class="public-editor__dialog-body">
+                        <h3>¿Guardar cambios?</h3>
+                        <p>La diapositiva se actualizará en el sitio público al confirmar. No se crearán borradores.</p>
+                        <div class="public-editor__actions">
+                            <button type="button" disabled="@busy" @onclick="() => confirmSave = false">Volver a editar</button>
+                            <button class="public-editor__primary" type="button" disabled="@busy" @onclick="SaveConfirmed">Confirmar y guardar</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="public-editor__dialog-body">
+                        <p>Los textos en español son obligatorios. Inglés y alemán son opcionales.</p>
+                        <label>Título en español
+                            <input maxlength="180" @bind="editing.HeadingEs" />
+                        </label>
+                        <label>Descripción en español
+                            <textarea maxlength="1000" rows="4" @bind="editing.DescriptionEs"></textarea>
+                        </label>
+                        <details>
+                            <summary>Traducciones opcionales</summary>
+                            <label>Título en inglés<input maxlength="180" @bind="editing.HeadingEn" /></label>
+                            <label>Descripción en inglés<textarea maxlength="1000" rows="3" @bind="editing.DescriptionEn"></textarea></label>
+                            <label>Título en alemán<input maxlength="180" @bind="editing.HeadingDe" /></label>
+                            <label>Descripción en alemán<textarea maxlength="1000" rows="3" @bind="editing.DescriptionDe"></textarea></label>
+                        </details>
+                        <fieldset>
+                            <legend>Imagen de la diapositiva</legend>
+                            @if (pendingToken is not null)
+                            {
+                                <img src="@CatalogMedia.StagedImageUri(pendingToken)" alt="Imagen nueva, sin publicar" />
+                                <p>@pendingName · Pendiente de confirmar</p>
+                            }
+                            else if (editing.HasImage && !removeImage)
+                            {
+                                <img src="@HomeHero.ImageUri(editing.Slot)" alt="Imagen actual de la diapositiva" />
+                            }
+                            else
+                            {
+                                <p>Sin fotografía. El sitio mostrará el marcador original.</p>
+                            }
+                            <label>Seleccionar imagen JPG, PNG o WebP (máximo 5 MB)
+                                <InputFile OnChange="ChooseImage" accept="image/jpeg,image/png,image/webp" disabled="@busy" />
+                            </label>
+                            @if (editing.HasImage && pendingToken is null)
+                            {
+                                <label class="public-editor__check"><input type="checkbox" @bind="removeImage" /> Quitar fotografía actual</label>
+                            }
+                        </fieldset>
+                        <div class="public-editor__actions">
+                            <button type="button" disabled="@busy" @onclick="Cancel">Cancelar</button>
+                            <button class="public-editor__primary" type="button" disabled="@busy" @onclick="ReviewSave">Revisar y guardar</button>
+                        </div>
+                    </div>
+                }
+            </section>
+        </div>
+    }
+</main>
+
+@code {
+    private static readonly (string Key, string Label, string Description)[] SectionEntries =
+    [
+        ("products", "Productos destacados", "Elegir productos publicados y editar los títulos de la sección"),
+        ("solutions", "Soluciones", "Editar textos e imagen"),
+        ("advantages", "¿Por qué REVESTIK?", "Editar los textos y las cuatro tarjetas"),
+        ("contact", "Contacto", "Editar la invitación al contacto")
+    ];
+    private readonly List<HomeHeroSlideEditorModel> slides = [];
+    private readonly List<HomeSectionDto> sections = [];
+    private readonly List<AdminProductSummary> availableProducts = [];
+    private HomeSectionDto? sectionForm;
+    private string? editingSection;
+    private HomeSectionCopy sectionEn = new(), sectionDe = new();
+    private static string SectionTitle(string key) => SectionEntries.First(e => e.Key == key).Label;
+    private HomeHeroSlideEditorModel? editing;
+    private string language = "es";
+    private string? pendingToken, pendingName, error, notice;
+    private bool busy, confirmSave, removeImage;
+    private int reloadNumber;
+    private ElementReference previewFrame;
+    private IJSObjectReference? previewModule;
+    private IJSObjectReference? previewConnection;
+    private DotNetObjectReference<PublicSiteVisualEditor>? previewCallback;
+    private readonly string previewToken = Guid.NewGuid().ToString("N");
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            previewModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/public-site-editor-bridge.js");
+            previewCallback = DotNetObjectReference.Create(this);
+            previewConnection = await previewModule.InvokeAsync<IJSObjectReference>(
+                "connect", previewFrame, previewCallback, previewToken, new Uri(PreviewUrl).GetLeftPart(UriPartial.Authority));
+        }
+        catch (JSException)
+        {
+            error = "No se pudieron activar los controles visuales. Actualizá el editor.";
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnPreviewEdit(string action)
+    {
+        if (busy || editing is not null || editingSection is not null) return;
+        if (action.StartsWith("hero:", StringComparison.Ordinal) &&
+            int.TryParse(action.AsSpan(5), out var slot) && slot is >= 1 and <= 3)
+            StartEdit(slot);
+        else if (SectionEntries.Any(entry => entry.Key == action))
+            await StartSection(action);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private string PreviewUrl
+    {
+        get
+        {
+            var configured = Configuration["PublicSitePreviewBaseUrl"] ?? "https://revestikcr.com";
+            if (!Uri.TryCreate(configured, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttps && !(uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)))
+                return "about:blank";
+            return $"{uri.GetLeftPart(UriPartial.Authority)}/{language}?editorPreview={reloadNumber}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await Reload();
+
+    private async Task Reload()
+    {
+        try
+        {
+            slides.Clear();
+            slides.AddRange(await HomeHero.Slides());
+            sections.Clear();
+            sections.AddRange(await HomeSections.Sections());
+            error = null;
+        }
+        catch (Exception e) when (e is HttpRequestException or InvalidOperationException or TaskCanceledException)
+        {
+            error = "No se pudieron cargar las portadas. Comprobá que la API esté disponible.";
+        }
+    }
+
+    private async Task StartSection(string key)
+    {
+        if (busy || editing is not null || editingSection is not null ||
+            !SectionEntries.Any(e => e.Key == key)) return;
+        error = null;
+        notice = null;
+        confirmSave = false;
+        removeImage = false;
+        pendingToken = null;
+        pendingName = null;
+        sectionForm = sections.FirstOrDefault(x => x.Key == key)?.Clone() ?? new HomeSectionDto
+        {
+            Key = key, Es = HomeSectionDefaults.Spanish(key)
+        };
+        if (key == "advantages" && sectionForm.Es.Cards.Count == 0)
+            sectionForm.Es.Cards = HomeSectionDefaults.Spanish(key).Cards;
+        sectionEn = sectionForm.En?.Clone() ?? new();
+        sectionDe = sectionForm.De?.Clone() ?? new();
+        if (key == "advantages")
+        {
+            while (sectionEn.Cards.Count < 4) sectionEn.Cards.Add(new());
+            while (sectionDe.Cards.Count < 4) sectionDe.Cards.Add(new());
+        }
+        editingSection = key;
+        if (key == "products")
+        {
+            busy = true;
+            try
+            {
+                availableProducts.Clear();
+                for (var page = 1; page <= 20; page++)
+                {
+                    var result = await CatalogMedia.ProductPage(page);
+                    availableProducts.AddRange(result.Items.Where(p => p.IsPublished));
+                    if (page * 24 >= result.Total || result.Items.Count == 0) break;
+                }
+            }
+            catch (Exception e) when (e is HttpRequestException or InvalidOperationException or TaskCanceledException)
+            { error = "No se pudieron consultar los productos disponibles."; }
+            finally { busy = false; }
+        }
+    }
+
+    private void ToggleFeatured(string slug, bool selected)
+    {
+        if (sectionForm is null) return;
+        if (!selected) { sectionForm.FeaturedSlugs.Remove(slug); return; }
+        if (sectionForm.FeaturedSlugs.Contains(slug)) return;
+        if (sectionForm.FeaturedSlugs.Count >= 5)
+        {
+            error = "Podés destacar un máximo de cinco productos.";
+            return;
+        }
+        sectionForm.FeaturedSlugs.Add(slug);
+        error = null;
+    }
+
+    private void ReviewSection()
+    {
+        if (sectionForm is null || editingSection is null || busy) return;
+        if (string.IsNullOrWhiteSpace(sectionForm.Es.Title) ||
+            string.IsNullOrWhiteSpace(sectionForm.Es.Description) ||
+            (editingSection == "advantages" &&
+             (sectionForm.Es.Cards.Count != 4 || sectionForm.Es.Cards.Any(c =>
+              string.IsNullOrWhiteSpace(c.Title) || string.IsNullOrWhiteSpace(c.Description)))))
+        {
+            error = "Completá los textos obligatorios en español y las tarjetas de esta sección.";
+            return;
+        }
+        error = null;
+        confirmSave = true;
+    }
+
+    private async Task SaveSectionConfirmed()
+    {
+        if (sectionForm is null || editingSection is null || busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var key = editingSection;
+            var content = new HomeSectionWrite
+            {
+                Version = sectionForm.Version,
+                Es = sectionForm.Es,
+                En = string.IsNullOrWhiteSpace(sectionEn.Title) && sectionEn.Cards.All(c => string.IsNullOrWhiteSpace(c.Title) && string.IsNullOrWhiteSpace(c.Description)) ? null : sectionEn,
+                De = string.IsNullOrWhiteSpace(sectionDe.Title) && sectionDe.Cards.All(c => string.IsNullOrWhiteSpace(c.Title) && string.IsNullOrWhiteSpace(c.Description)) ? null : sectionDe,
+                FeaturedSlugs = sectionForm.FeaturedSlugs,
+                ImageToken = pendingToken,
+                RemoveImage = removeImage
+            };
+            await HomeSections.Save(key, content);
+            pendingToken = null;
+            pendingName = null;
+            sectionForm = null;
+            editingSection = null;
+            confirmSave = false;
+            removeImage = false;
+            reloadNumber++;
+            await Reload();
+            notice = $"{SectionTitle(key)} guardada. Recargá la vista previa si no aparece inmediatamente.";
+        }
+        catch (Exception e) when (e is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            error = e is InvalidOperationException ? e.Message : "No se pudo guardar la sección. Revisá la conexión.";
+            confirmSave = false;
+        }
+        finally { busy = false; }
+    }
+
+    private void StartEdit(int slot)
+    {
+        if (busy || editing is not null || slot is < 1 or > 3) return;
+        error = null;
+        notice = null;
+        confirmSave = false;
+        removeImage = false;
+        editing = slides.FirstOrDefault(x => x.Slot == slot)?.Clone() ?? new HomeHeroSlideEditorModel { Slot = slot };
+    }
+
+    private async Task ChooseImage(InputFileChangeEventArgs args)
+    {
+        if (busy || (editing is null && editingSection != "solutions")) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var file = args.File;
+            if (file.Size is <= 0 or > 5242880)
+                throw new InvalidOperationException("La imagen supera el límite de 5 MB.");
+            if (file.ContentType is not ("image/jpeg" or "image/png" or "image/webp"))
+                throw new InvalidOperationException("Seleccioná una imagen JPG, PNG o WebP.");
+            var staged = await CatalogMedia.Stage(file, "ProductCover");
+            if (pendingToken is not null)
+            {
+                try { await CatalogMedia.Discard(pendingToken); }
+                catch (HttpRequestException) { /* cleanup worker handles abandoned uploads */ }
+            }
+            pendingToken = staged.Token;
+            pendingName = file.Name;
+            removeImage = false;
+        }
+        catch (Exception e) when (e is InvalidOperationException or HttpRequestException or TaskCanceledException or IOException)
+        {
+            error = e is InvalidOperationException ? e.Message : "No se pudo cargar la imagen. Volvé a intentarlo.";
+        }
+        finally { busy = false; }
+    }
+
+    private void ReviewSave()
+    {
+        if (editing is null || busy) return;
+        if (string.IsNullOrWhiteSpace(editing.HeadingEs) || string.IsNullOrWhiteSpace(editing.DescriptionEs))
+        {
+            error = "Completá el título y la descripción en español antes de guardar.";
+            return;
+        }
+        error = null;
+        confirmSave = true;
+    }
+
+    private async Task SaveConfirmed()
+    {
+        if (editing is null || busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var slot = editing.Slot;
+            await HomeHero.Save(slot, editing, pendingToken, removeImage);
+            pendingToken = null;
+            pendingName = null;
+            editing = null;
+            editingSection = null;
+            sectionForm = null;
+            confirmSave = false;
+            removeImage = false;
+            reloadNumber++;
+            await Reload();
+            notice = $"Diapositiva {slot} guardada. El sitio público ya puede mostrar los cambios.";
+        }
+        catch (Exception e) when (e is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            error = e is InvalidOperationException ? e.Message : "No se pudo guardar la portada. Revisá la conexión.";
+            confirmSave = false;
+        }
+        finally { busy = false; }
+    }
+
+    private async Task Cancel()
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            if (pendingToken is not null)
+            {
+                try { await CatalogMedia.Discard(pendingToken); }
+                catch (Exception e) when (e is InvalidOperationException or HttpRequestException or TaskCanceledException) { /* cleanup worker */ }
+            }
+        }
+        finally
+        {
+            pendingToken = null;
+            pendingName = null;
+            editing = null;
+            editingSection = null;
+            sectionForm = null;
+            confirmSave = false;
+            removeImage = false;
+            busy = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (previewConnection is not null)
+        {
+            try { await previewConnection.InvokeVoidAsync("dispose"); }
+            catch (JSDisconnectedException) { }
+            await previewConnection.DisposeAsync();
+        }
+        previewCallback?.Dispose();
+        if (previewModule is not null) await previewModule.DisposeAsync();
+        if (pendingToken is not null)
+        {
+            try { await CatalogMedia.Discard(pendingToken); }
+            catch (Exception) { /* Pending files are pruned by the existing cleanup service. */ }
+        }
+    }
+}

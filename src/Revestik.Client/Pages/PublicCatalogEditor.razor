@@ -1,0 +1,499 @@
+@page "/settings/public-site/editor/acabados"
+@using System.Globalization
+@using System.Text
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Revestik.Client.Services.PublicCatalog
+@using Revestik.Client.Services.Products
+@using Revestik.Shared.Products
+@attribute [Authorize(Roles = "Administrator")]
+@implements IAsyncDisposable
+@inject PublicCatalogAdminApi Catalog
+@inject IInventoryCatalogApiService InventoryCatalog
+@inject NavigationManager Navigation
+
+<PageTitle>Editor de Acabados | Revestik</PageTitle>
+<NavigationLock ConfirmExternalNavigation="@(editing is not null)" OnBeforeInternalNavigation="BeforeNavigate" />
+<main class="catalog-visual-editor">
+    <header class="catalog-visual-toolbar">
+        <a href="/settings/public-site" class="catalog-visual-back">← Sitio web público</a>
+        <span class="catalog-visual-mode">● Modo editor · Solo Administrator</span>
+    </header>
+    <div class="catalog-visual-masthead">
+        <strong class="catalog-visual-wordmark">REVESTIK<span>.</span></strong>
+        <nav aria-label="Secciones del editor"><span aria-current="page">Acabados</span></nav>
+        <div class="catalog-visual-language" aria-label="Idioma de previsualización">
+            @foreach (var lang in new[] { "es", "en", "de" })
+            {
+                <button type="button" class="@(language == lang ? "selected" : "")" aria-pressed="@(language == lang)" @onclick="() => language = lang">@lang.ToUpperInvariant()</button>
+            }
+        </div>
+    </div>
+    @if (!string.IsNullOrEmpty(error)) { <p role="alert" class="catalog-visual-alert">@error</p> }
+    @if (!string.IsNullOrEmpty(message)) { <p role="status" class="catalog-visual-success">@message</p> }
+    @if (editing is null)
+    {
+        <section class="catalog-visual-gallery" aria-labelledby="catalog-editor-title">
+            <p class="catalog-visual-eyebrow">REVESTIK · COSTA RICA</p>
+            <h1 id="catalog-editor-title">@Heading</h1>
+            <p class="catalog-visual-intro">@Introduction</p>
+            <div class="catalog-visual-toolbar-secondary">
+                <span>Mostrando productos publicados y no publicados</span>
+                <a href="/settings/public-site/taxonomy">Administrar categorías y subcategorías</a>
+            </div>
+            @if (busy) { <p role="status">Cargando productos…</p> }
+            <div class="catalog-visual-grid">
+                @foreach (var product in products)
+                {
+                    <article class="catalog-visual-product" @key="product.Id">
+                        <div class="catalog-visual-image">
+                            @if (product.CoverImageId is int imageId)
+                            {
+                                <img src="@Catalog.ImageUri(imageId)" alt="@product.Name(language)" loading="lazy" width="720" height="540" />
+                            }
+                            else
+                            {
+                                <div class="catalog-visual-noimage" aria-label="Producto sin portada">Sin imagen principal</div>
+                            }
+                        </div>
+                        <div class="catalog-visual-product-copy">
+                            <h2>@product.Name(language)</h2>
+                            @if (!string.IsNullOrWhiteSpace(product.Brand)) { <p>@product.Brand</p> }
+                            @if (product.Price is decimal price) { <p>@price.ToString("N2") @product.Currency / @product.SalesUnit</p> }
+                            <span class="catalog-visual-status @(product.IsPublished ? "is-public" : "")">@(product.IsPublished ? "Publicado" : "No publicado")</span>
+                            <div class="catalog-visual-card-actions">
+                                <button type="button" disabled="@busy" @onclick="() => EditProduct(product.Id)">Editar</button>
+                                <button type="button" disabled="@busy" @onclick="() => AskPublication(product.Id, product.IsPublished)">@(product.IsPublished ? "Despublicar" : "Publicar")</button>
+                            </div>
+                        </div>
+                    </article>
+                }
+                <button type="button" class="catalog-visual-add" disabled="@busy" @onclick="NewProduct" aria-label="Agregar nuevo producto">
+                    <span class="catalog-visual-plus" aria-hidden="true">+</span>
+                    <strong>Agregar nuevo producto</strong>
+                </button>
+            </div>
+            @if (total > 24)
+            {
+                <nav class="catalog-visual-pager" aria-label="Paginación administrativa">
+                    <button type="button" disabled="@(busy || page <= 1)" @onclick="() => ChangePage(page - 1)">Anterior</button>
+                    <span>Página @(page) de @Math.Max(1, (total + 23) / 24)</span>
+                    <button type="button" disabled="@(busy || page * 24 >= total)" @onclick="() => ChangePage(page + 1)">Siguiente</button>
+                </nav>
+            }
+        </section>
+    }
+    else
+    {
+        <section class="catalog-visual-form" aria-labelledby="visual-form-title">
+            <div class="catalog-visual-form-head">
+                <div><p class="catalog-visual-eyebrow">CONTENIDO PÚBLICO</p><h1 id="visual-form-title">@(editing.Id == 0 ? "Agregar nuevo producto" : "Editar producto")</h1></div>
+                <span class="catalog-visual-status @(editing.IsPublished ? "is-public" : "")">@(editing.Id == 0 ? "Nuevo" : editing.IsPublished ? "Publicado" : "No publicado")</span>
+            </div>
+            <div class="catalog-visual-edit-columns">
+                <div class="catalog-visual-panel catalog-visual-media">
+                    <h2>Fotografías</h2>
+                    <p>Una imagen principal y hasta cuatro imágenes adicionales. JPG, PNG o WebP, máximo 5 MB por imagen.</p>
+                    <h3 class="catalog-visual-media-heading">Imagen principal</h3>
+                    <div class="catalog-visual-primary-image">
+                        @if (ActivePrincipal is AdminImage principal)
+                        {
+                            <img src="@Catalog.ImageUri(principal.Id)" alt="@(principal.AltEs ?? Es.Name)" />
+                            <label>Descripción de la imagen (opcional) <input maxlength="300" @bind="principal.AltEs" /></label>
+                            <details><summary>Otros idiomas</summary><label>EN <input maxlength="300" @bind="principal.AltEn" /></label><label>DE <input maxlength="300" @bind="principal.AltDe" /></label></details>
+                        }
+                        else if (StagedPrincipal is AdminStageAttachment pendingPrincipal)
+                        {
+                            <img src="@Catalog.StagedImageUri(pendingPrincipal.Token)" alt="@(pendingPrincipal.AltEs ?? Es.Name)" />
+                            <label>Descripción de la imagen (opcional) <input maxlength="300" @bind="pendingPrincipal.AltEs" /></label>
+                            <details><summary>Otros idiomas</summary><label>EN <input maxlength="300" @bind="pendingPrincipal.AltEn" /></label><label>DE <input maxlength="300" @bind="pendingPrincipal.AltDe" /></label></details>
+                        }
+                        else
+                        {
+                            <p class="catalog-visual-empty-photo">Todavía no has seleccionado la imagen principal.</p>
+                        }
+                        <label>Elegir o cambiar imagen principal
+                            <InputFile OnChange="StagePrincipalImage" accept=".png,.jpg,.jpeg,.webp" disabled="@busy" />
+                        </label>
+                    </div>
+                    <h3 class="catalog-visual-media-heading">Imágenes adicionales</h3>
+                    <p>Se muestran en el mismo orden en que las agregás.</p>
+                    <div class="catalog-visual-media-grid">
+                        @foreach (var photo in editing.Images.Where(i => i.Role == "ProductGallery" && !removedImageIds.Contains(i.Id)).OrderBy(i => i.DisplayOrder))
+                        {
+                            <article class="catalog-visual-media-item" @key="photo.Id">
+                                <img src="@Catalog.ImageUri(photo.Id)" alt="@(photo.AltEs ?? Es.Name)" loading="lazy" />
+                                <label>Descripción (opcional) <input maxlength="300" @bind="photo.AltEs" /></label>
+                                <details><summary>Otros idiomas</summary><label>EN <input maxlength="300" @bind="photo.AltEn" /></label><label>DE <input maxlength="300" @bind="photo.AltDe" /></label></details>
+                                <button type="button" class="catalog-visual-text-button" disabled="@busy" @onclick="() => MarkImageForRemoval(photo)">Quitar fotografía</button>
+                            </article>
+                        }
+                        @foreach (var photo in stagedImages.Where(i => i.Role == "ProductGallery"))
+                        {
+                            <article class="catalog-visual-media-item" @key="photo.Token">
+                                <img src="@Catalog.StagedImageUri(photo.Token)" alt="@(photo.AltEs ?? Es.Name)" loading="lazy" />
+                                <label>Descripción (opcional) <input maxlength="300" @bind="photo.AltEs" /></label>
+                                <details><summary>Otros idiomas</summary><label>EN <input maxlength="300" @bind="photo.AltEn" /></label><label>DE <input maxlength="300" @bind="photo.AltDe" /></label></details>
+                                <button type="button" class="catalog-visual-text-button" disabled="@busy" @onclick="() => RemoveStaged(photo)">Quitar fotografía</button>
+                            </article>
+                        }
+                    </div>
+                    <div class="catalog-visual-upload">
+                        <label>Agregar imagen adicional
+                            <InputFile OnChange="StageGalleryImage" accept=".png,.jpg,.jpeg,.webp" disabled="@(busy || GalleryCount >= 4)" />
+                        </label>
+                        <small>@GalleryCount de 4 imágenes adicionales.</small>
+                    </div>
+                </div>
+                <div class="catalog-visual-panel catalog-visual-fields">
+                    <h2>Información del producto</h2>
+                    <label>Nombre en español * <input maxlength="200" @bind="Es.Name" /></label>
+                    <label>Descripción en español * <textarea rows="5" maxlength="4000" @bind="Es.Description"></textarea></label>
+                    <label>Marca <input maxlength="150" @bind="editing.Brand" /></label>
+                    <fieldset class="catalog-visual-categories">
+                        <legend>Subcategorías *</legend>
+                        @foreach (var sub in subcategories.Where(s => s.IsActive && categories.Any(c => c.Id == s.CategoryId && c.IsActive)))
+                        {
+                            <label class="catalog-visual-check"><input type="checkbox" checked="@editing.SubcategoryIds.Contains(sub.Id)" @onchange="e => SetSubcategory(sub.Id, e.Value is true)" /> @sub.NameEs <small>· @categories.First(c => c.Id == sub.CategoryId).NameEs</small></label>
+                        }
+                    </fieldset>
+                    <div class="catalog-visual-field-row">
+                        <label>Precio (opcional) <input type="number" min="0" step="0.01" @bind="editing.Price" /></label>
+                        <label>Moneda <select @bind="editing.Currency"><option value="">Sin precio</option><option value="CRC">CRC</option><option value="USD">USD</option></select></label>
+                    </div>
+                    <label>Unidad de venta
+                        <select @bind="editing.SalesUnit">
+                            <option value="">Seleccioná una unidad</option>
+                            @if (!string.IsNullOrWhiteSpace(editing.SalesUnit) && !units.Any(u => u.Symbol == editing.SalesUnit))
+                            {
+                                <option value="@editing.SalesUnit">@editing.SalesUnit (unidad anterior)</option>
+                            }
+                            @foreach (var unit in units)
+                            {
+                                <option value="@unit.Symbol">@unit.Name (@unit.Symbol)</option>
+                            }
+                        </select>
+                    </label>
+                    <details class="catalog-visual-details">
+                        <summary>Traducciones · Inglés y alemán</summary>
+                        @foreach (var lang in new[] { "en", "de" })
+                        {
+                            var translation = Translation(lang);
+                            <fieldset><legend>@(lang == "en" ? "English" : "Deutsch")</legend><label>Nombre <input maxlength="200" @bind="translation.Name" /></label><label>Descripción <textarea maxlength="4000" @bind="translation.Description"></textarea></label></fieldset>
+                        }
+                    </details>
+                    <details class="catalog-visual-details">
+                        <summary>Opciones avanzadas</summary>
+                        <p>La dirección web se genera automáticamente a partir del nombre. Si el producto ya está publicado, se conserva para evitar romper enlaces existentes.</p>
+                        <label>Dirección web <input maxlength="160" @bind="editing.Slug" readonly="@(editing.Id != 0)" /></label>
+                        <p>El título y la descripción de búsqueda utilizan el nombre y la descripción del producto cuando no se indican valores específicos.</p>
+                    </details>
+                </div>
+            </div>
+            <div class="catalog-visual-bottom-actions">
+                <button type="button" class="catalog-visual-outline" disabled="@busy" @onclick="AskClose">Cancelar</button>
+                <button type="button" class="catalog-visual-primary" disabled="@busy" @onclick="ReviewSave">Revisar y guardar</button>
+            </div>
+        </section>
+    }
+    @if (confirmSave && editing is not null)
+    {
+        <div class="catalog-visual-modal-backdrop"><section class="catalog-visual-modal" role="dialog" aria-modal="true" aria-labelledby="visual-confirm-title">
+            <h2 id="visual-confirm-title">@(editing.Id == 0 ? "Confirmar publicación" : "Confirmar cambios")</h2>
+            <p><strong>@Es.Name</strong></p>
+            <p>@(editing.Id == 0 ? "Este producto se publicará inmediatamente." : editing.IsPublished ? "Los cambios serán visibles en la web pública después de guardar." : "El producto permanecerá sin publicar.")</p>
+            <p>Fotografías nuevas: @stagedImages.Count · Fotografías retiradas: @removedImageIds.Count</p>
+            <div class="catalog-visual-dialog-actions"><button type="button" disabled="@busy" @onclick="() => confirmSave = false">Volver</button><button type="button" class="catalog-visual-primary" disabled="@busy" @onclick="SaveProduct">Confirmar y guardar</button></div>
+        </section></div>
+    }
+    @if (publicationTarget is not null)
+    {
+        <div class="catalog-visual-modal-backdrop"><section class="catalog-visual-modal" role="dialog" aria-modal="true" aria-labelledby="publication-confirm-title">
+            <h2 id="publication-confirm-title">@(publicationTarget.IsPublished ? "Despublicar producto" : "Publicar producto")</h2>
+            <p>@publicationTarget.Name("es")</p>
+            <p>@(publicationTarget.IsPublished ? "El producto dejará de estar disponible para visitantes." : "El producto volverá a mostrarse públicamente si cumple los requisitos de publicación.")</p>
+            <div class="catalog-visual-dialog-actions"><button type="button" @onclick="() => publicationTarget = null" disabled="@busy">Cancelar</button><button type="button" class="catalog-visual-primary" disabled="@busy" @onclick="TogglePublication">Confirmar</button></div>
+        </section></div>
+    }
+    @if (confirmClose)
+    {
+        <div class="catalog-visual-modal-backdrop"><section class="catalog-visual-modal" role="dialog" aria-modal="true" aria-labelledby="close-confirm-title">
+            <h2 id="close-confirm-title">Descartar edición</h2><p>Los cambios que no guardaste se perderán.</p>
+            <div class="catalog-visual-dialog-actions"><button type="button" @onclick="KeepEditing">Seguir editando</button><button type="button" class="catalog-visual-primary" @onclick="CloseProduct">Descartar y salir</button></div>
+        </section></div>
+    }
+</main>
+
+@code {
+    private List<UnitOfMeasureResponse> units = [];
+    private List<AdminCategory> categories = [];
+    private List<AdminSubcategory> subcategories = [];
+    private List<AdminProductSummary> products = [];
+    private AdminProduct? editing;
+    private AdminProductSummary? publicationTarget;
+    private List<AdminStageAttachment> stagedImages = [];
+    private HashSet<int> removedImageIds = [];
+    private string language = "es";
+    private string? error;
+    private string? message;
+    private string? deferredNavigation;
+    private bool busy, confirmSave, confirmClose;
+    private int page = 1, total;
+    private AdminTranslation Es => Translation("es");
+    private AdminImage? ActivePrincipal => editing?.Images.FirstOrDefault(i => i.Role == "ProductCover" && !removedImageIds.Contains(i.Id));
+    private AdminStageAttachment? StagedPrincipal => stagedImages.FirstOrDefault(i => i.Role == "ProductCover");
+    private int GalleryCount => (editing?.Images.Count(i => i.Role == "ProductGallery" && !removedImageIds.Contains(i.Id)) ?? 0)
+        + stagedImages.Count(i => i.Role == "ProductGallery");
+    private string Heading => language switch { "en" => "Our products", "de" => "Unsere Produkte", _ => "Nuestros productos" };
+    private string Introduction => language switch { "en" => "Explore our curated finishes and construction materials.", "de" => "Entdecken Sie unsere Materialien und Oberflächen.", _ => "Explorá nuestra selección de acabados y materiales para construcción." };
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Run(Func<Task> operation, string? success = null)
+    {
+        if (busy) return;
+        busy = true; error = null; message = null;
+        try { await operation(); message = success; }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
+        { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task Load()
+    {
+        await Run(async () =>
+        {
+            categories = await Catalog.Categories();
+            subcategories = await Catalog.Subcategories();
+            units = (await InventoryCatalog.GetUnitsAsync(includeInactive: false))
+                .Where(u => u.IsActive).OrderBy(u => u.Name).ToList();
+            await LoadPage();
+        });
+    }
+
+    private async Task LoadPage()
+    {
+        var response = await Catalog.ProductPage(page);
+        products = response.Items;
+        total = response.Total;
+    }
+
+    private async Task ChangePage(int next)
+    {
+        if (next < 1 || next > Math.Max(1, (total + 23) / 24)) return;
+        await Run(async () => { page = next; await LoadPage(); });
+    }
+
+    private void NewProduct()
+    {
+        error = null; message = null; stagedImages = []; removedImageIds = [];
+        editing = new AdminProduct { Translations = [new() { LanguageCode = "es" }, new() { LanguageCode = "en" }, new() { LanguageCode = "de" }] };
+
+    }
+
+    private async Task EditProduct(int id)
+    {
+        await Run(async () =>
+        {
+            var product = await Catalog.Product(id);
+            foreach (var lang in new[] { "es", "en", "de" })
+                if (!product.Translations.Any(t => t.LanguageCode == lang))
+                    product.Translations.Add(new AdminTranslation { LanguageCode = lang });
+            editing = product;
+            stagedImages = [];
+            removedImageIds = [];
+
+        });
+    }
+
+    private AdminTranslation Translation(string lang) => editing!.Translations.First(t => t.LanguageCode == lang);
+
+    private void SetSubcategory(int id, bool selected)
+    {
+        if (editing is null) return;
+        if (selected && !editing.SubcategoryIds.Contains(id)) editing.SubcategoryIds.Add(id);
+        if (!selected) editing.SubcategoryIds.Remove(id);
+    }
+
+    private void MarkImageForRemoval(AdminImage image)
+    {
+        if (editing is null) return;
+        removedImageIds.Add(image.Id);
+
+    }
+
+    private async Task StagePrincipalImage(InputFileChangeEventArgs args) => await Run(async () =>
+    {
+        if (editing is null) return;
+        ValidateFile(args.File);
+        // Stage before replacing the previous selection: a rejected upload must not remove the original.
+        var uploaded = await Catalog.Stage(args.File, "ProductCover");
+        var previous = StagedPrincipal;
+        stagedImages.RemoveAll(i => i.Role == "ProductCover");
+        if (previous is not null)
+        {
+            try { await Catalog.Discard(previous.Token); }
+            catch (HttpRequestException) { /* expired staged files are pruned by the existing worker */ }
+            catch (InvalidOperationException) { /* do not block the valid newly staged photo */ }
+            catch (TaskCanceledException) { /* expiry cleanup is handled by the worker */ }
+        }
+        var existing = editing.Images.FirstOrDefault(i => i.Role == "ProductCover");
+        if (existing is not null) removedImageIds.Add(existing.Id);
+        stagedImages.Add(new AdminStageAttachment
+        {
+            Token = uploaded.Token, Role = "ProductCover", DisplayOrder = 0,
+            AltEs = Es.Name
+        });
+    }, "Imagen principal preparada. Se actualizará al confirmar el guardado.");
+
+    private async Task StageGalleryImage(InputFileChangeEventArgs args) => await Run(async () =>
+    {
+        if (editing is null) return;
+        if (GalleryCount >= 4) throw new InvalidOperationException("Podés agregar hasta cuatro imágenes adicionales.");
+        ValidateFile(args.File);
+        var uploaded = await Catalog.Stage(args.File, "ProductGallery");
+        stagedImages.Add(new AdminStageAttachment
+        {
+            Token = uploaded.Token, Role = "ProductGallery", DisplayOrder = GalleryCount + 1,
+            AltEs = Es.Name
+        });
+    }, "Imagen adicional preparada. Se guardará al confirmar.");
+
+    private static void ValidateFile(IBrowserFile file)
+    {
+        if (file.Size <= 0) throw new InvalidOperationException("Seleccioná una imagen válida.");
+        if (file.Size > 5 * 1024 * 1024) throw new InvalidOperationException("La imagen supera los 5 MB permitidos. Elegí una imagen más pequeña.");
+        var extension = Path.GetExtension(file.Name);
+        if (!new[] { ".jpg", ".jpeg", ".png", ".webp" }.Contains(extension, StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Formato no admitido. Utilizá JPG, PNG o WebP.");
+    }
+
+    private void NormalizePhotoOrder()
+    {
+        if (editing is null) return;
+        var order = 1;
+        foreach (var photo in editing.Images.Where(i => i.Role == "ProductGallery" && !removedImageIds.Contains(i.Id)).OrderBy(i => i.DisplayOrder))
+            photo.DisplayOrder = order++;
+        foreach (var photo in stagedImages.Where(i => i.Role == "ProductGallery"))
+            photo.DisplayOrder = order++;
+        foreach (var photo in editing.Images.Where(i => i.Role == "ProductCover"))
+            photo.DisplayOrder = 0;
+        foreach (var photo in stagedImages.Where(i => i.Role == "ProductCover"))
+            photo.DisplayOrder = 0;
+    }
+
+    private async Task RemoveStaged(AdminStageAttachment image) => await Run(async () =>
+    {
+        await Catalog.Discard(image.Token);
+        stagedImages.Remove(image);
+    });
+
+    private void ReviewSave()
+    {
+        if (editing is null) return;
+        error = null;
+        if (editing.Id == 0) editing.Slug = SlugFromName(Es.Name);
+        NormalizePhotoOrder();
+        var images = editing.Images.Where(i => !removedImageIds.Contains(i.Id)).ToList();
+        if (string.IsNullOrWhiteSpace(editing.Slug) || string.IsNullOrWhiteSpace(Es.Name) ||
+            string.IsNullOrWhiteSpace(Es.Description) || editing.SubcategoryIds.Count == 0)
+        { error = "Completá nombre, descripción en español y al menos una subcategoría."; return; }
+        if (images.Count + stagedImages.Count is < 1 or > 5 || images.Count(i => i.Role == "ProductCover") + stagedImages.Count(i => i.Role == "ProductCover") != 1)
+        { error = "El producto requiere una portada y como máximo cinco fotografías."; return; }
+        if (editing.Price.HasValue && (editing.Price < 0 || editing.Currency is not ("CRC" or "USD") || string.IsNullOrWhiteSpace(editing.SalesUnit)))
+        { error = "Si indicás un precio, seleccioná moneda y unidad de venta."; return; }
+        if (!editing.Price.HasValue) editing.Currency = null;
+        // Keep custom SEO data when editing an existing product; fill missing values only.
+        foreach (var translation in editing.Translations.Where(t => !string.IsNullOrWhiteSpace(t.Name)))
+        {
+            if (string.IsNullOrWhiteSpace(translation.SeoTitle))
+                translation.SeoTitle = translation.Name.Length <= 180 ? translation.Name : translation.Name[..180];
+            if (string.IsNullOrWhiteSpace(translation.SeoDescription) && !string.IsNullOrWhiteSpace(translation.Description))
+                translation.SeoDescription = translation.Description.Length <= 320 ? translation.Description : translation.Description[..320];
+        }
+        confirmSave = true;
+    }
+
+    private static string SlugFromName(string name)
+    {
+        var normalized = name.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+        var result = new StringBuilder();
+        foreach (var character in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark) continue;
+            if (character is >= 'a' and <= 'z' or >= '0' and <= '9') result.Append(character);
+            else if (result.Length > 0 && result[^1] != '-') result.Append('-');
+        }
+        var slug = result.ToString().Trim('-');
+        return slug.Length <= 160 ? slug : slug[..160].TrimEnd('-');
+    }
+
+    private async Task SaveProduct() => await Run(async () =>
+    {
+        if (editing is null) return;
+        var input = editing.Write();
+        input.Translations = input.Translations.Where(t => t.LanguageCode == "es" || !string.IsNullOrWhiteSpace(t.Name)).ToList();
+        if (editing.Id == 0)
+        {
+            input.PendingImages = stagedImages;
+            await Catalog.CreateProduct(input);
+        }
+        else
+        {
+            await Catalog.SaveContent(editing.Id, input, stagedImages, editing.Images, removedImageIds);
+        }
+        stagedImages = [];
+        removedImageIds = [];
+        editing = null;
+        confirmSave = false;
+        page = 1;
+        await LoadPage();
+    }, "Los cambios fueron guardados correctamente.");
+
+    private void AskPublication(int id, bool isPublished) => publicationTarget = products.FirstOrDefault(p => p.Id == id && p.IsPublished == isPublished);
+
+    private async Task TogglePublication() => await Run(async () =>
+    {
+        if (publicationTarget is null) return;
+        var current = await Catalog.Product(publicationTarget.Id);
+        await Catalog.Publish(current.Id, current.Version, !current.IsPublished);
+        publicationTarget = null;
+        await LoadPage();
+    }, "El estado de publicación fue actualizado.");
+
+    private void AskClose() { if (editing is not null) confirmClose = true; }
+
+    private void KeepEditing() { confirmClose = false; deferredNavigation = null; }
+
+    private void BeforeNavigate(LocationChangingContext context)
+    {
+        if (editing is null) return;
+        context.PreventNavigation();
+        deferredNavigation = context.TargetLocation;
+        confirmClose = true;
+    }
+
+    private async Task CloseProduct()
+    {
+        await DiscardStaged();
+        editing = null; confirmClose = false; confirmSave = false; removedImageIds = [];
+        error = null; message = null;
+        if (deferredNavigation is { } target)
+        {
+            deferredNavigation = null;
+            Navigation.NavigateTo(target);
+        }
+    }
+
+    private async Task DiscardStaged()
+    {
+        foreach (var item in stagedImages.ToArray())
+        {
+            try { await Catalog.Discard(item.Token); }
+            catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException) { /* pending files expire automatically */ }
+        }
+        stagedImages = [];
+    }
+
+    public async ValueTask DisposeAsync() => await DiscardStaged();
+}

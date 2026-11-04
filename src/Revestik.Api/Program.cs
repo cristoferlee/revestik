@@ -339,6 +339,8 @@ app.MapOperatingResultDashboardEndpoints();
 app.MapGmailIntegrationEndpoints();
 app.MapBankVoucherGmailIntegrationEndpoints();
 app.MapPublicCatalogEndpoints();
+app.MapPublicHomeHeroEndpoints();
+app.MapPublicHomeSectionEndpoints();
 app.MapProductEndpoints();
 app.MapInventoryCatalogEndpoints();
 app.MapInventoryEndpoints();

@@ -24,6 +24,13 @@ public sealed class PublicCatalogMediaCleanupWorker(
                 var db = scope.ServiceProvider.GetRequiredService<RevestikDbContext>();
                 var keys = await db.Set<PublicCatalogImage>().AsNoTracking()
                     .Select(i => i.StorageKey).ToListAsync(stoppingToken);
+                // Home Hero images share the existing file store. Never delete a referenced Home image.
+                keys.AddRange(await db.PublicHomeHeroSlides.AsNoTracking()
+                    .Where(x => x.ImageStorageKey != null)
+                    .Select(x => x.ImageStorageKey!).ToListAsync(stoppingToken));
+                var homeSectionKeys = await db.PublicHomeSections.AsNoTracking()
+                    .Where(x => x.ImageStorageKey != null).Select(x => x.ImageStorageKey!).ToListAsync(stoppingToken);
+                keys.AddRange(homeSectionKeys);
                 var orphans = storage.PruneActiveOrphans(keys.ToHashSet(StringComparer.Ordinal), TimeSpan.FromHours(24));
                 if (orphans != 0) logger.LogInformation("Pruned {Count} unreferenced public-catalog files.", orphans);
             }

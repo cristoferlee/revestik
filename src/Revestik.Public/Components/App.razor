@@ -48,5 +48,9 @@
     <script src="/js/public-nav.js" defer></script>
     <script src="/js/public-hero.js" defer></script>
     <script src="/js/public-image-viewer.js" defer></script>
+    @if (new Uri(Navigation.Uri).Query.Contains("editorPreview=", StringComparison.Ordinal))
+    {
+        <script src="/js/public-editor-preview.js" defer></script>
+    }
 </body>
 </html>

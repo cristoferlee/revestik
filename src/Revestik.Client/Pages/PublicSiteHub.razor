@@ -1,0 +1,28 @@
+@page "/settings/public-site"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Administrator")]
+
+<PageTitle>Sitio web público | Revestik</PageTitle>
+<main class="public-site-hub">
+    <a href="/settings" class="public-site-back">← Configuración</a>
+    <header>
+        <p class="public-site-eyebrow">REVESTIK · SITIO WEB</p>
+        <h1>Sitio web público</h1>
+        <p>Administrá el contenido que pueden ver tus visitantes, sin modificar el inventario empresarial.</p>
+    </header>
+    <div class="public-site-hub-grid">
+        <a href="/settings/public-site/editor" class="public-site-hub-card public-site-hub-card--featured">
+            <span class="public-site-hub-icon" aria-hidden="true">✎</span>
+            <strong>Editar sitio web público</strong>
+            <span>Visualizá el sitio real y editá la portada de Inicio desde los controles habilitados.</span>
+            <span class="public-site-hub-link">Abrir editor visual →</span>
+        </a>
+        <a href="/settings/public-site/taxonomy" class="public-site-hub-card">
+            <span class="public-site-hub-icon" aria-hidden="true">▦</span>
+            <strong>Categorías y subcategorías</strong>
+            <span>Creá y administrá la organización del catálogo, las portadas de categorías y sus fotografías.</span>
+            <span class="public-site-hub-link">Administrar categorías →</span>
+        </a>
+    </div>
+    <p class="public-site-hub-note">Solo las secciones con controles habilitados pueden modificarse. La edición de productos continúa disponible desde Acabados.</p>
+</main>
