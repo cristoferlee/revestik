@@ -24,6 +24,6 @@ public sealed class PublicCatalogImage
     public byte[] RowVersion { get; set; } = [];
 
     public PublicCatalogProduct? Product { get; set; }
-    public PublicCatalogCategory? Category { get; set; }
+    public Revestik.Api.Models.ProductCategory? Category { get; set; }
     public PublicCatalogImage? FallbackImage { get; set; }
 }

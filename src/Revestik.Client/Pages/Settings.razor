@@ -37,22 +37,22 @@
             </div>
         </div>
         <div class="settings-shortcut-grid">
-            <a class="settings-shortcut" href="/settings/company">
+            <a class="settings-shortcut" href="settings/company">
                 <span class="settings-shortcut-icon" aria-hidden="true">🏢</span>
                 <span class="settings-shortcut-body"><strong>Mi empresa</strong><span>Información comercial, dirección y logotipo.</span></span>
                 <span class="settings-shortcut-arrow" aria-hidden="true">&#8599;</span>
             </a>
-            <a class="settings-shortcut" href="/settings/document-pdf">
+            <a class="settings-shortcut" href="settings/document-pdf">
                 <span class="settings-shortcut-icon" aria-hidden="true">📄</span>
                 <span class="settings-shortcut-body"><strong>Documentos y PDF</strong><span>Presentación de cotizaciones y ventas.</span></span>
                 <span class="settings-shortcut-arrow" aria-hidden="true">&#8599;</span>
             </a>
-            <a class="settings-shortcut" href="/settings/users">
+            <a class="settings-shortcut" href="settings/users">
                 <span class="settings-shortcut-icon" aria-hidden="true">👥</span>
                 <span class="settings-shortcut-body"><strong>Usuarios y permisos</strong><span>Colaboradores, roles y accesos.</span></span>
                 <span class="settings-shortcut-arrow" aria-hidden="true">&#8599;</span>
             </a>
-            <a class="settings-shortcut" href="/settings/audit">
+            <a class="settings-shortcut" href="settings/audit">
                 <span class="settings-shortcut-icon" aria-hidden="true">🛡️</span>
                 <span class="settings-shortcut-body"><strong>Seguridad y auditoría</strong><span>Historial de accesos y cambios administrativos.</span></span>
                 <span class="settings-shortcut-arrow" aria-hidden="true">&#8599;</span>
@@ -68,12 +68,12 @@
             </div>
         </div>
         <div class="settings-shortcut-grid">
-            <a class="settings-shortcut" href="/settings/suppliers">
+            <a class="settings-shortcut" href="settings/suppliers">
                 <span class="settings-shortcut-icon" aria-hidden="true">🚚</span>
                 <span class="settings-shortcut-body"><strong>Proveedores</strong><span>Datos de proveedores para registrar compras.</span></span>
                 <span class="settings-shortcut-arrow" aria-hidden="true">&#8599;</span>
             </a>
-            <a class="settings-shortcut" href="/settings/product-pricing">
+            <a class="settings-shortcut" href="settings/product-pricing">
                 <span class="settings-shortcut-icon" aria-hidden="true">🏷️</span>
                 <span class="settings-shortcut-body"><strong>Precio por unidad</strong><span>Cómo se aplica el precio de cada producto.</span></span>
                 <span class="settings-shortcut-arrow" aria-hidden="true">&#8599;</span>
@@ -89,7 +89,7 @@
             </div>
         </div>
         <div class="settings-shortcut-grid">
-            <a class="settings-shortcut" href="/settings/public-site">
+            <a class="settings-shortcut" href="settings/public-site">
                 <span class="settings-shortcut-icon" aria-hidden="true">🌐</span>
                 <span class="settings-shortcut-body"><strong>Contenido del sitio web</strong><span>Editor visual, categorías y contenido público.</span></span>
                 <span class="settings-shortcut-arrow" aria-hidden="true">&#8599;</span>
@@ -100,18 +100,25 @@
     <section class="settings-group settings-catalog-group" aria-labelledby="settings-catalog-title">
         <div class="settings-group-title">
             <div>
-                <h2 id="settings-catalog-title">Catálogos de inventario</h2>
-                <p>Configurá categorías y unidades que se utilizan en el inventario.</p>
+                <h2 id="settings-catalog-title">Catálogos de productos</h2>
+                <p>Administrá las categorías, subcategorías y unidades compartidas.</p>
             </div>
         </div>
-    <details class="settings-card settings-disclosure">
-        <summary class="settings-section-heading">
+    <div class="settings-catalog-tabs" role="tablist" aria-label="Catálogos de productos">
+        <button id="catalog-tab-categories" type="button" role="tab" aria-controls="catalog-panel-categories" aria-selected="@(catalogTab == "categories")" class="@(catalogTab == "categories" ? "selected" : "")" @onclick="ShowCategoriesTab">Categorías</button>
+        <button id="catalog-tab-subcategories" type="button" role="tab" aria-controls="catalog-panel-subcategories" aria-selected="@(catalogTab == "subcategories")" class="@(catalogTab == "subcategories" ? "selected" : "")" @onclick="ShowSubcategoriesTab">Subcategorías</button>
+        <button id="catalog-tab-units" type="button" role="tab" aria-controls="catalog-panel-units" aria-selected="@(catalogTab == "units")" class="@(catalogTab == "units" ? "selected" : "")" @onclick="ShowUnitsTab">Unidades de medida</button>
+    </div>
+    @if (catalogTab == "categories")
+    {
+    <div class="settings-card settings-tab-panel" role="tabpanel" id="catalog-panel-categories" aria-labelledby="catalog-tab-categories">
+        <div class="settings-section-heading">
             <div>
                 <h2>Categorías de producto</h2>
                 <p>Estas categorías aparecen al crear o editar productos en Inventario.</p>
             </div>
-            <span class="settings-disclosure-arrow" aria-hidden="true">⌄</span>
-        </summary>
+
+        </div>
         <div class="settings-catalog-toolbar">
             <button type="button"
                     class="primary-button"
@@ -169,18 +176,61 @@
                 }
             </div>
         }
-    </details>
-
-    <details class="settings-card settings-disclosure">
-        <summary class="settings-section-heading">
+    </div>
+    }
+    else if (catalogTab == "subcategories")
+    {
+    <div class="settings-card settings-tab-panel" role="tabpanel" id="catalog-panel-subcategories" aria-labelledby="catalog-tab-subcategories">
+        <div class="settings-section-heading">
+            <div><h2>Subcategorías de productos</h2>
+                <p>Asigná cada subcategoría a una categoría principal. Se crean a medida que se necesitan.</p></div>
+        </div>
+        <div class="settings-catalog-toolbar">
+            <button type="button" class="primary-button" disabled="@isBusy" @onclick="OpenNewSubcategory">Nueva subcategoría</button>
+        </div>
+        @if (subcategories.Count == 0)
+        {
+            <p class="empty-state">Todavía no hay subcategorías compartidas.</p>
+        }
+        else
+        {
+            <div class="settings-list">
+                @foreach (var item in subcategories.OrderBy(x => x.CategoryName).ThenBy(x => x.Name))
+                {
+                    <article class="settings-row">
+                        <div><strong>@item.Name</strong>
+                            <span class="settings-symbol">@item.CategoryName</span>
+                            <span class="settings-status">@(item.IsActive ? "Activa" : "Inactiva")</span>
+                        </div>
+                        <div class="settings-actions">
+                            <button type="button" class="secondary-button" disabled="@isBusy" @onclick="() => OpenEditSubcategory(item)">Editar</button>
+                            @if (item.IsActive)
+                            {
+                                <button type="button" class="secondary-button danger-button" disabled="@isBusy" @onclick="() => DeactivateSubcategoryAsync(item)">Desactivar</button>
+                            }
+                            else
+                            {
+                                <button type="button" class="primary-button" disabled="@isBusy" @onclick="() => ReactivateSubcategoryAsync(item)">Reactivar</button>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </div>
+    }
+    else
+    {
+    <div class="settings-card settings-tab-panel" role="tabpanel" id="catalog-panel-units" aria-labelledby="catalog-tab-units">
+        <div class="settings-section-heading">
             <div>
                 <h2>Unidades de medida</h2>
                 <p>
                     Define cómo se cuenta físicamente un producto y si la unidad admite fracciones.
                 </p>
             </div>
-            <span class="settings-disclosure-arrow" aria-hidden="true">⌄</span>
-        </summary>
+
+        </div>
         <div class="settings-catalog-toolbar">
             <button type="button"
                     class="primary-button"
@@ -244,7 +294,8 @@
                 }
             </div>
         }
-    </details>
+    </div>
+    }
 
     </section>
 
@@ -291,6 +342,42 @@
                                 disabled="@isBusy">
                             @(isSaving ? "Guardando..." : "Guardar")
                         </button>
+                    </div>
+                </EditForm>
+            </section>
+        </div>
+    }
+
+    @if (isSubcategoryFormOpen)
+    {
+        <div class="settings-modal-backdrop" @onclick="CloseForms">
+            <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-subcategory-modal-title" @onclick:stopPropagation>
+                <div class="settings-section-heading"><div>
+                    <h2 id="settings-subcategory-modal-title">@(editingSubcategoryId.HasValue ? "Editar subcategoría" : "Nueva subcategoría")</h2>
+                </div></div>
+                <EditForm Model="subcategoryRequest" OnValidSubmit="SaveSubcategoryAsync">
+                    <DataAnnotationsValidator />
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label for="subcategory-category">Categoría principal</label>
+                            <InputSelect id="subcategory-category" @bind-Value="subcategoryRequest.CategoryId">
+                                <option value="0">Seleccionar categoría</option>
+                                @foreach (var category in categories.Where(x => x.IsActive || x.Id == subcategoryRequest.CategoryId))
+                                {
+                                    <option value="@category.Id">@category.Name</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => subcategoryRequest.CategoryId)" />
+                        </div>
+                        <div class="form-field">
+                            <label for="subcategory-name">Nombre</label>
+                            <InputText id="subcategory-name" @bind-Value="subcategoryRequest.Name" maxlength="100" />
+                            <ValidationMessage For="@(() => subcategoryRequest.Name)" />
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="secondary-button" disabled="@isBusy" @onclick="CloseForms">Cancelar</button>
+                        <button type="submit" class="primary-button" disabled="@isBusy">@(isSaving ? "Guardando..." : "Guardar")</button>
                     </div>
                 </EditForm>
             </section>
@@ -371,14 +458,20 @@
 @code {
     private IReadOnlyList<ProductCategoryResponse> categories = [];
     private IReadOnlyList<UnitOfMeasureResponse> units = [];
+    private IReadOnlyList<ProductSubcategoryResponse> subcategories = [];
+    private string catalogTab = "categories";
 
     private ProductCategoryUpsertRequest categoryRequest = new();
     private UnitOfMeasureUpsertRequest unitRequest = new();
+    private ProductSubcategoryUpsertRequest subcategoryRequest = new();
+    private string subcategoryVersion = string.Empty;
 
     private int? editingCategoryId;
     private int? editingUnitId;
+    private int? editingSubcategoryId;
     private bool isCategoryFormOpen;
     private bool isUnitFormOpen;
+    private bool isSubcategoryFormOpen;
     private bool isLoading;
     private bool isSaving;
 
@@ -401,6 +494,8 @@
         {
             categories = await CatalogApi.GetCategoriesAsync(includeInactive: true);
             units = await CatalogApi.GetUnitsAsync(includeInactive: true);
+            subcategories = await CatalogApi.GetSubcategoriesAsync(includeInactive: true);
+
         }
         catch (HttpRequestException exception)
         {
@@ -533,6 +628,107 @@
         {
             isSaving = false;
         }
+    }
+
+    private void ShowCategoriesTab() => SelectCatalogTab("categories");
+    private void ShowSubcategoriesTab() => SelectCatalogTab("subcategories");
+    private void ShowUnitsTab() => SelectCatalogTab("units");
+
+    private void SelectCatalogTab(string tab)
+    {
+        catalogTab = tab;
+        CloseForms();
+        ClearMessages();
+    }
+
+    private void OpenNewSubcategory()
+    {
+        ClearMessages();
+        editingSubcategoryId = null;
+        subcategoryVersion = string.Empty;
+        subcategoryRequest = new ProductSubcategoryUpsertRequest
+        {
+            CategoryId = categories.FirstOrDefault(x => x.IsActive)?.Id ?? 0
+        };
+        isSubcategoryFormOpen = true;
+    }
+
+    private void OpenEditSubcategory(ProductSubcategoryResponse item)
+    {
+        ClearMessages();
+        editingSubcategoryId = item.Id;
+        subcategoryVersion = item.Version;
+        subcategoryRequest = new ProductSubcategoryUpsertRequest
+        {
+            CategoryId = item.CategoryId, Name = item.Name, IsActive = item.IsActive
+        };
+        isSubcategoryFormOpen = true;
+    }
+
+    private async Task SaveSubcategoryAsync()
+    {
+        isSaving = true;
+        ClearMessages();
+        try
+        {
+            if (editingSubcategoryId.HasValue)
+            {
+                var item = await CatalogApi.UpdateSubcategoryAsync(editingSubcategoryId.Value,
+                    new ProductSubcategoryWriteRequest
+                    {
+                        CategoryId = subcategoryRequest.CategoryId,
+                        Name = subcategoryRequest.Name,
+                        IsActive = subcategoryRequest.IsActive,
+                        Version = subcategoryVersion
+                    });
+                if (item is null) { errorMessage = "La subcategoría ya no existe."; return; }
+                successMessage = $"Subcategoría {item.Name} actualizada.";
+            }
+            else
+            {
+                var item = await CatalogApi.CreateSubcategoryAsync(subcategoryRequest);
+                successMessage = $"Subcategoría {item.Name} creada.";
+            }
+            isSubcategoryFormOpen = false;
+            await LoadCatalogsAsync();
+        }
+        catch (HttpRequestException e) { errorMessage = $"No se pudo guardar la subcategoría. {e.Message}"; }
+        finally { isSaving = false; }
+    }
+
+    private async Task DeactivateSubcategoryAsync(ProductSubcategoryResponse item)
+    {
+        isSaving = true;
+        ClearMessages();
+        try
+        {
+            if (!await CatalogApi.DeactivateSubcategoryAsync(item.Id, item.Version))
+            { errorMessage = "La subcategoría ya no existe."; return; }
+            successMessage = $"Subcategoría {item.Name} desactivada.";
+            await LoadCatalogsAsync();
+        }
+        catch (HttpRequestException e) { errorMessage = e.Message; }
+        finally { isSaving = false; }
+    }
+
+    private async Task ReactivateSubcategoryAsync(ProductSubcategoryResponse item)
+    {
+        isSaving = true;
+        ClearMessages();
+        try
+        {
+            var updated = await CatalogApi.UpdateSubcategoryAsync(item.Id,
+                new ProductSubcategoryWriteRequest
+                {
+                    CategoryId = item.CategoryId, Name = item.Name,
+                    IsActive = true, Version = item.Version
+                });
+            if (updated is null) { errorMessage = "La subcategoría ya no existe."; return; }
+            successMessage = $"Subcategoría {item.Name} reactivada.";
+            await LoadCatalogsAsync();
+        }
+        catch (HttpRequestException e) { errorMessage = e.Message; }
+        finally { isSaving = false; }
     }
 
     private void OpenNewUnit()
@@ -671,6 +867,8 @@
 
         isCategoryFormOpen = false;
         isUnitFormOpen = false;
+        isSubcategoryFormOpen = false;
+        editingSubcategoryId = null;
         editingCategoryId = null;
         editingUnitId = null;
     }

@@ -58,17 +58,20 @@ public sealed class AuthenticationService(
 
         authenticationStateProvider.RefreshAuthenticationState();
         navigationManager.NavigateTo(
-            "/login",
+            "/administracion/login",
             forceLoad: false);
     }
     // Only allow local application paths to prevent redirects to external destinations.
     private static string NormalizeReturnPath(string? returnPath)
     {
+        // Only allow redirects inside the business application after OAuth.
         if (string.IsNullOrWhiteSpace(returnPath) ||
-            !returnPath.StartsWith('/') ||
-            returnPath.StartsWith("//"))
+            returnPath.StartsWith("//", StringComparison.Ordinal) ||
+            returnPath.Contains('\\') ||
+            !(returnPath.Equals("/administracion", StringComparison.OrdinalIgnoreCase) ||
+              returnPath.StartsWith("/administracion/", StringComparison.OrdinalIgnoreCase)))
         {
-            return "/";
+            return "/administracion/";
         }
 
         return returnPath;

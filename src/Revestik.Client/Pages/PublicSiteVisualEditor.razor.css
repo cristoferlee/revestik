@@ -20,3 +20,8 @@
 
 
 .public-editor__hint{padding:.9rem .2rem 0;color:#546271;font-size:.86rem;line-height:1.5;margin:0}
+
+/* The toolbar navigates the iframe; it never routes away from the administrator editor. */
+.public-editor__navigation button{appearance:none;background:transparent;border:0;border-bottom:2px solid transparent;color:#915d12;cursor:pointer;padding:.45rem .3rem;font:inherit}
+.public-editor__navigation button[aria-current=page]{font-weight:750;border-bottom-color:#de9d26;color:#1f2937}
+.public-editor__navigation button:disabled{opacity:.5;cursor:not-allowed}

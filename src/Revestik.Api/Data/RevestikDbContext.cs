@@ -34,13 +34,12 @@ public sealed class RevestikDbContext(DbContextOptions<RevestikDbContext> option
     public DbSet<ElectronicDocumentCabysClassificationRule> ElectronicDocumentCabysClassificationRules => Set<ElectronicDocumentCabysClassificationRule>();
     public DbSet<PublicHomeHeroSlide> PublicHomeHeroSlides => Set<PublicHomeHeroSlide>();
     public DbSet<PublicHomeSection> PublicHomeSections => Set<PublicHomeSection>();
-    public DbSet<PublicCatalogCategory> PublicCatalogCategories => Set<PublicCatalogCategory>();
-    public DbSet<PublicCatalogSubcategory> PublicCatalogSubcategories => Set<PublicCatalogSubcategory>();
     public DbSet<PublicCatalogProduct> PublicCatalogProducts => Set<PublicCatalogProduct>();
     public DbSet<PublicCatalogProductSubcategory> PublicCatalogProductSubcategories => Set<PublicCatalogProductSubcategory>();
     public DbSet<PublicCatalogProductTranslation> PublicCatalogProductTranslations => Set<PublicCatalogProductTranslation>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
+    public DbSet<ProductSubcategory> ProductSubcategories => Set<ProductSubcategory>();
     public DbSet<UnitOfMeasure> UnitsOfMeasure => Set<UnitOfMeasure>();
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
     public DbSet<InventoryCostLayer> InventoryCostLayers => Set<InventoryCostLayer>();

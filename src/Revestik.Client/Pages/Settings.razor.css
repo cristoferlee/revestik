@@ -401,3 +401,26 @@
 @media (prefers-reduced-motion: reduce) {
     .settings-disclosure-arrow { transition: none; }
 }
+
+/* PUBLIC-EDITOR-01D-B: responsive, keyboard-accessible shared catalog tabs. */
+.settings-catalog-tabs { display:flex; gap:8px; flex-wrap:wrap; border-bottom:1px solid #e4e8ed; padding:0 0 12px; }
+.settings-catalog-tabs button { border:1px solid #dee4ea; background:#fff; color:#344354; border-radius:10px; padding:11px 17px; font-weight:650; cursor:pointer; }
+.settings-catalog-tabs button.selected { background:#fff4e5; color:#804508; border-color:#e9b876; }
+.settings-catalog-tabs button:focus-visible { outline:3px solid #f59e0b; outline-offset:2px; }
+.settings-tab-panel { min-width:0; }
+.settings-tab-panel > .settings-section-heading { padding:20px 22px; }
+.settings-tab-panel .settings-row { padding:15px 22px; }
+@media(max-width:600px) { .settings-catalog-tabs { display:grid; grid-template-columns:1fr; } .settings-catalog-tabs button { text-align:left; } }
+
+/* Shared taxonomy correspondence: public presentation stays independent of inventory. */
+.settings-public-binding {
+    display: grid;
+    gap: 6px;
+    flex: 1 1 240px;
+    min-width: min(100%, 240px);
+    font-size: 0.82rem;
+}
+.settings-public-binding label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.settings-public-binding select { min-width: min(100%, 160px); max-width: 100%; padding: 6px; }
+.settings-public-binding small { color: #697782; }
+@media (max-width: 700px) { .settings-public-binding { flex-basis: 100%; min-width: 0; } }

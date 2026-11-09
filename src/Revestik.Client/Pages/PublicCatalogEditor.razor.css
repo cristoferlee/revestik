@@ -37,3 +37,40 @@
 .catalog-visual-primary-image>img{display:block;width:100%;max-height:320px;object-fit:contain;border-radius:7px;background:#f0f2f4}
 .catalog-visual-empty-photo{padding:2rem;text-align:center;border:1px dashed #cdd5dc;border-radius:8px}
 .catalog-visual-upload small{font-size:.78rem;color:#637080}
+
+/* 01D-C/D: real public preview with admin-only overlays. */
+.catalog-visual-browser-toolbar{display:flex;justify-content:space-between;gap:1rem;align-items:center;padding:.75rem 0}
+.catalog-visual-browser{display:block;width:100%;height:min(75vh,900px);min-height:470px;border:1px solid #d7dee5;border-radius:12px;background:white}
+.catalog-visual-preview-hint{font-size:.85rem;color:#5e6874}
+.catalog-visual-admin-toggle{display:flex;gap:.6rem;align-items:center;margin:1rem 0;font-size:.9rem}
+.catalog-visual-edit-backdrop{position:fixed;inset:0;z-index:1100;background:#101e2caa;display:grid;place-items:center;padding:1rem}
+.catalog-visual-edit-backdrop>.catalog-visual-form{background:white;border-radius:14px;overflow-y:auto;max-height:calc(100vh - 2rem);width:min(1150px,100%);box-shadow:0 15px 55px #0005}
+.catalog-visual-classification{padding:.55rem;border-bottom:1px solid #e5e7eb}
+.catalog-visual-classification summary{cursor:pointer;font-weight:600}
+@media(max-width:580px){.catalog-visual-browser{min-height:520px;height:70vh}.catalog-visual-edit-backdrop{padding:.4rem}.catalog-visual-edit-backdrop>.catalog-visual-form{max-height:calc(100vh - .8rem)}}
+
+/* Administrator-only product creation is always visible above the iframe. */
+.catalog-visual-browser-actions{display:flex;align-items:center;gap:.85rem;flex-wrap:wrap;justify-content:flex-end}
+.catalog-visual-create-product{border:1px solid #b9832e;border-radius:8px;padding:.6rem 1rem;background:#c48c36;color:#171717;font:700 .9rem/1.35 system-ui,sans-serif;cursor:pointer;min-height:40px}
+.catalog-visual-create-product:hover{background:#dca24b}
+.catalog-visual-create-product:focus-visible{outline:3px solid #274f7a;outline-offset:3px}
+.catalog-visual-create-product:disabled{opacity:.6;cursor:not-allowed}
+@media(max-width:600px){.catalog-visual-browser-toolbar{align-items:flex-start;flex-wrap:wrap}.catalog-visual-browser-actions{width:100%;justify-content:space-between}}
+
+/* Keep validation feedback visible inside the scrollable product dialog. */
+.catalog-visual-form-error{margin:.8rem 0 1rem}
+.catalog-visual-subcategory-notice{margin:.6rem 0;padding:.7rem .85rem;border-left:3px solid #c48c36;background:#fff8ed;color:#634617;font-size:.88rem;line-height:1.5}
+
+/* Embedded product editor: the parent owns the single live public preview. */
+.catalog-visual-editor--embedded{max-width:none;min-height:0;margin:0;border:0;border-radius:0;overflow:visible;background:transparent}
+.catalog-visual-editor--embedded .catalog-visual-gallery{padding:1rem 1.5rem;border-top:1px solid #e4e7eb}
+.catalog-visual-editor--embedded .catalog-visual-browser-toolbar{padding:0}
+
+/* Permanent deletion is intentionally distinct from publication and ordinary editing. */
+.catalog-visual-bottom-actions .catalog-visual-danger,.catalog-visual-dialog-actions .catalog-visual-danger{background:#fff4f1;border:1px solid #a33b30;color:#902d24;border-radius:8px;padding:.75rem 1.2rem;font:inherit;font-weight:650;cursor:pointer}
+.catalog-visual-dialog-actions .catalog-visual-danger{background:#9a3328;color:#fff}
+.catalog-visual-bottom-actions .catalog-visual-danger:hover{background:#fee7e1}
+
+/* Browser-session drafts stay separate from published product records. */
+.catalog-visual-draft-hint{font-size:.81rem;color:#56657a;margin:.1rem 0 1rem;padding:.65rem .85rem;border-left:3px solid #c48c36;background:#fff9ef}
+.catalog-visual-draft-date{font-size:.82rem;color:#64748b}

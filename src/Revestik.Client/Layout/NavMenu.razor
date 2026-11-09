@@ -12,36 +12,36 @@
     </button>
 
     <div id="primary-navigation" class="@NavigationCssClass">
-        <NavLink class="navigation-link" href="/" Match="NavLinkMatch.All" @onclick="CloseNavigation">
+        <NavLink class="navigation-link" href="" Match="NavLinkMatch.All" @onclick="CloseNavigation">
             <span class="nav-icon" aria-hidden="true">⌂</span><span>Dashboard</span>
         </NavLink>
 
-        <NavLink class="navigation-link" href="/customers" @onclick="CloseNavigation">
+        <NavLink class="navigation-link" href="customers" @onclick="CloseNavigation">
             <span class="nav-icon" aria-hidden="true">◎</span><span>Clientes</span>
         </NavLink>
 
         <AuthorizeView Roles="Administrator,Accountant,Sales">
-            <NavLink class="navigation-link" href="/projects" @onclick="CloseNavigation">
+            <NavLink class="navigation-link" href="projects" @onclick="CloseNavigation">
                 <span class="nav-icon" aria-hidden="true">▣</span><span>Proyectos</span>
             </NavLink>
         </AuthorizeView>
 
-        <NavLink class="navigation-link" href="/quotes" @onclick="CloseNavigation">
+        <NavLink class="navigation-link" href="quotes" @onclick="CloseNavigation">
             <span class="nav-icon" aria-hidden="true">▤</span><span>Cotizaciones</span>
         </NavLink>
 
-        <NavLink class="navigation-link" href="/sales" @onclick="CloseNavigation">
+        <NavLink class="navigation-link" href="sales" @onclick="CloseNavigation">
             <span class="nav-icon" aria-hidden="true">↗</span><span>Ventas</span>
         </NavLink>
 
         <NavLink class="navigation-link"
-                 href="/inventory"
+                 href="inventory"
                  Match="NavLinkMatch.All"
                  @onclick="CloseNavigation">
             <span class="nav-icon" aria-hidden="true">◇</span><span>Inventario</span>
         </NavLink>
 
-        <NavLink class="navigation-link" href="/inventory/cost-layers" @onclick="CloseNavigation">
+        <NavLink class="navigation-link" href="inventory/cost-layers" @onclick="CloseNavigation">
             <span class="nav-icon" aria-hidden="true">≋</span><span>Lotes de costo</span>
         </NavLink>
 
@@ -58,34 +58,34 @@
 
             <div id="purchases-navigation" class="@PurchasesSubmenuCssClass">
                 <NavLink class="navigation-sublink"
-                         href="/purchases"
+                         href="purchases"
                          Match="NavLinkMatch.All"
                          @onclick="CloseNavigation">
                     Nueva compra
                 </NavLink>
 
                 <NavLink class="navigation-sublink"
-                         href="/purchases/received-documents"
+                         href="purchases/received-documents"
                          @onclick="CloseNavigation">
                     Documentos recibidos
                 </NavLink>
 
                 <AuthorizeView Roles="Administrator,Accountant">
                     <NavLink class="navigation-sublink"
-                             href="/purchases/fiscal-reconciliation"
+                             href="purchases/fiscal-reconciliation"
                              @onclick="CloseNavigation">
                         Conciliación fiscal
                     </NavLink>
                 </AuthorizeView>
 
                 <NavLink class="navigation-sublink"
-                         href="/purchases/history"
+                         href="purchases/history"
                          @onclick="CloseNavigation">
                     Historial y cuentas por pagar
                 </NavLink>
 
                 <NavLink class="navigation-sublink"
-                         href="/cabys"
+                         href="cabys"
                          @onclick="CloseNavigation">
                     CAByS
                 </NavLink>
@@ -93,7 +93,7 @@
         </div>
 
         <AuthorizeView Roles="Administrator,Accountant">
-            <NavLink class="navigation-link" href="/expenses" @onclick="CloseNavigation">
+            <NavLink class="navigation-link" href="expenses" @onclick="CloseNavigation">
                 <span class="nav-icon" aria-hidden="true">₡</span><span>Gastos</span>
             </NavLink>
         </AuthorizeView>
@@ -101,7 +101,7 @@
         <AuthorizeView Roles="Administrator">
             <div class="navigation-divider"></div>
 
-            <NavLink class="navigation-link" href="/settings" @onclick="CloseNavigation">
+            <NavLink class="navigation-link" href="settings" @onclick="CloseNavigation">
                 <span class="nav-icon" aria-hidden="true">⚙</span><span>Configuración</span>
             </NavLink>
         </AuthorizeView>

@@ -97,15 +97,43 @@
             <div class="featured-products-grid">
                 @foreach (var product in FeaturedProducts.Take(5))
                 {
-                    <div class="featured-product">
-                        <a class="featured-product-link" href="@($"{SiteLinks.Path(lang, 2)}/{product.Slug}")" aria-label="@(product.Text(lang)?.Name ?? product.Slug)">
-                            <div class="featured-product-image">
-                                @if (product.CoverImageId is int cover)
-                                {
-                                    <img src="@($"/media/catalog/{cover}")" alt="@(product.Text(lang)?.Name ?? product.Slug)" loading="lazy" width="680" height="510" />
-                                }
-                            </div>
-                            <span class="featured-product-label">@(product.Text(lang)?.Name ?? product.Slug) <span aria-hidden="true">&#8594;</span></span>
+                    var photos = product.Images.OrderByDescending(i => i.Role == "ProductCover")
+                        .ThenBy(i => i.DisplayOrder).ThenBy(i => i.Id).Take(5).ToArray();
+                    if (photos.Length == 0) continue;
+                    var name = product.Text(lang)?.Name ?? product.Slug;
+                    var productUrl = $"{SiteLinks.Path(lang, 2)}/{Uri.EscapeDataString(product.Slug)}";
+                    <div class="featured-product" data-featured-gallery>
+                        <div class="featured-product-media">
+                            <a class="featured-product-image-link" href="@productUrl" aria-label="@name">
+                                <div class="featured-product-image">
+                                    @for (var i = 0; i < photos.Length; i++)
+                                    {
+                                        var photo = photos[i];
+                                        var source = $"/media/catalog/{photo.Id}";
+                                        <img class="featured-product-photo"
+                                             data-featured-slide
+                                             src="@(i == 0 ? source : null)"
+                                             data-featured-src="@(i > 0 ? source : null)"
+                                             hidden="@(i != 0)"
+                                             aria-hidden="@(i == 0 ? "false" : "true")"
+                                             alt="@(product.ImageAlt(photo, lang) ?? name)"
+                                             loading="lazy" decoding="async" width="680" height="510" />
+                                    }
+                                </div>
+                            </a>
+                            @if (photos.Length > 1)
+                            {
+                                <div class="featured-product-controls" role="group" aria-label="@GalleryLabel(lang)">
+                                    <button type="button" class="featured-product-control" data-featured-prev
+                                            aria-label="@PreviousPhoto(lang)" title="@PreviousPhoto(lang)">&#8592;</button>
+                                    <span class="featured-product-count" data-featured-status aria-live="polite">1 / @photos.Length</span>
+                                    <button type="button" class="featured-product-control" data-featured-next
+                                            aria-label="@NextPhoto(lang)" title="@NextPhoto(lang)">&#8594;</button>
+                                </div>
+                            }
+                        </div>
+                        <a class="featured-product-link" href="@productUrl">
+                            <span class="featured-product-label">@name <span aria-hidden="true">&#8594;</span></span>
                         </a>
                     </div>
                 }
@@ -218,27 +246,25 @@
         try { HomeSections = await Catalog.HomeSections(); }
         catch (HttpRequestException) { HomeSections = []; }
         catch (TaskCanceledException) { HomeSections = []; }
-        var selected = Section("products")?.FeaturedSlugs;
-        if (selected is { Count: > 0 })
-        {
-            foreach (var slug in selected.Take(5))
-            {
-                try
-                {
-                    var product = await Catalog.Product(slug);
-                    if (product is not null) FeaturedProducts.Add(product);
-                }
-                catch (HttpRequestException) { /* Missing products are not displayed. */ }
-                catch (TaskCanceledException) { /* Missing products are not displayed. */ }
-            }
-        }
-        else
-        {
-            try { FeaturedProducts = (await Catalog.Products(1, null, null, null)).Items.Take(5).ToList(); }
-            catch (HttpRequestException) { FeaturedProducts = []; }
-            catch (TaskCanceledException) { FeaturedProducts = []; }
-        }
+        // One API request, regardless of whether featured products are selected manually
+        // or filled automatically. Every returned gallery belongs to its public product.
+        try { FeaturedProducts = await Catalog.FeaturedProducts(Section("products")?.FeaturedSlugs); }
+        catch (HttpRequestException) { FeaturedProducts = []; }
+        catch (TaskCanceledException) { FeaturedProducts = []; }
     }
+
+    private static string GalleryLabel(string lang) => lang switch
+    {
+        "en" => "Product photographs", "de" => "Produktfotos", _ => "Fotografías del producto"
+    };
+    private static string PreviousPhoto(string lang) => lang switch
+    {
+        "en" => "Previous photograph", "de" => "Vorheriges Foto", _ => "Fotografía anterior"
+    };
+    private static string NextPhoto(string lang) => lang switch
+    {
+        "en" => "Next photograph", "de" => "Nächstes Foto", _ => "Fotografía siguiente"
+    };
 
     private sealed record Advantage(string Title, string Description);
 

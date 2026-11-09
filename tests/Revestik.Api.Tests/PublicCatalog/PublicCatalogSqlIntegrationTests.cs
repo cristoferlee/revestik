@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
+using Revestik.Api.Models;
 using Revestik.Api.Models.PublicCatalog;
+using Revestik.Api.Endpoints.PublicCatalog;
 using Revestik.Api.Tests.Hosting;
 
 namespace Revestik.Api.Tests.PublicCatalog;
@@ -13,18 +15,18 @@ public sealed class PublicCatalogSqlIntegrationTests(SqlServerIntegrationTestFix
     private static string UniqueSlug(string prefix) =>
         $"{prefix}-{Guid.NewGuid():N}";
 
-    private static PublicCatalogCategory Category(string? slug = null) => new()
+    private static ProductCategory Category(string? slug = null) => new()
     {
-        Slug = slug ?? UniqueSlug("category"),
-        NameEs = "Pisos exteriores",
+        PublicSlug = slug ?? UniqueSlug("category"),
+        Name = UniqueSlug("Pisos exteriores"),
         CreatedAtUtc = DateTime.UtcNow
     };
 
-    private static PublicCatalogSubcategory Subcategory(int categoryId, string? slug = null) => new()
+    private static ProductSubcategory Subcategory(int categoryId, string? slug = null) => new()
     {
         CategoryId = categoryId,
-        Slug = slug ?? UniqueSlug("subcategory"),
-        NameEs = "Porcelanatos",
+        PublicSlug = slug ?? UniqueSlug("subcategory"),
+        Name = UniqueSlug("Porcelanatos"),
         CreatedAtUtc = DateTime.UtcNow
     };
 
@@ -33,6 +35,178 @@ public sealed class PublicCatalogSqlIntegrationTests(SqlServerIntegrationTestFix
         Slug = slug ?? UniqueSlug("product"),
         CreatedAtUtc = DateTime.UtcNow
     };
+
+    [Fact]
+    public async Task FeaturedProductsUseOnlyPublishedPublicCatalogAndReturnOrderedGalleries()
+    {
+        await using var db = fixture.CreateDbContext();
+        var category = Category();
+        category.IsActive = false; // Inventory state must not hide public products.
+        db.ProductCategories.Add(category);
+        await db.SaveChangesAsync();
+        var subcategory = Subcategory(category.Id);
+        subcategory.IsActive = false;
+        db.ProductSubcategories.Add(subcategory);
+        await db.SaveChangesAsync();
+
+        var products = Enumerable.Range(0, 6).Select(i =>
+        {
+            var item = Product();
+            item.IsPublished = true;
+            item.DisplayOrder = i;
+            return item;
+        }).ToArray();
+        var unpublished = Product();
+        db.PublicCatalogProducts.AddRange(products);
+        db.PublicCatalogProducts.Add(unpublished);
+        await db.SaveChangesAsync();
+
+        foreach (var product in products.Append(unpublished))
+            db.PublicCatalogProductSubcategories.Add(new()
+            {
+                ProductId = product.Id, SubcategoryId = subcategory.Id
+            });
+        foreach (var product in products.Append(unpublished))
+        {
+            db.Set<PublicCatalogImage>().Add(new()
+            {
+                ProductId = product.Id, Role = "ProductCover", StorageKey = Guid.NewGuid().ToString("N"),
+                ContentType = "image/jpeg", Width = 680, Height = 510, FileSizeBytes = 300,
+                DisplayOrder = 1, CreatedAtUtc = DateTime.UtcNow
+            });
+        }
+        db.Set<PublicCatalogImage>().Add(new()
+        {
+            ProductId = products[4].Id, Role = "ProductGallery", StorageKey = Guid.NewGuid().ToString("N"),
+            ContentType = "image/jpeg", Width = 680, Height = 510, FileSizeBytes = 300,
+            DisplayOrder = 0, CreatedAtUtc = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var requested = await PublicCatalogEndpoints.ReadFeaturedPublicProductsAsync(db,
+            [products[4].Slug, unpublished.Slug, products[0].Slug], CancellationToken.None);
+        var selectedJson = System.Text.Json.JsonSerializer.SerializeToElement(requested);
+        Assert.Equal(2, selectedJson.GetArrayLength());
+        Assert.Equal(products[4].Slug, selectedJson[0].GetProperty("Slug").GetString());
+        Assert.Equal(products[0].Slug, selectedJson[1].GetProperty("Slug").GetString());
+        var gallery = selectedJson[0].GetProperty("Images");
+        Assert.Equal(2, gallery.GetArrayLength());
+        Assert.Equal("ProductCover", gallery[0].GetProperty("Role").GetString());
+
+        var automatic = await PublicCatalogEndpoints.ReadFeaturedPublicProductsAsync(db,
+            [], CancellationToken.None);
+        var automaticJson = System.Text.Json.JsonSerializer.SerializeToElement(automatic);
+        Assert.Equal(5, automaticJson.GetArrayLength());
+        for (var i = 0; i < 5; i++)
+            Assert.Equal(products[i].Slug, automaticJson[i].GetProperty("Slug").GetString());
+    }
+
+    [Fact]
+    public async Task ProductSlugIsGeneratedFromSpanishNameAndDuplicatesGetStableSuffixes()
+    {
+        await using var db = fixture.CreateDbContext();
+        var name = "Porcelanato Mármol-" + Guid.NewGuid().ToString("N")[..8];
+        var first = await PublicCatalogEndpoints.GenerateUniqueProductSlugAsync(name, db, CancellationToken.None);
+        Assert.StartsWith("porcelanato-marmol-", first);
+        Assert.True(first.Length <= 160);
+
+        db.PublicCatalogProducts.Add(Product(first));
+        await db.SaveChangesAsync();
+        var duplicate = await PublicCatalogEndpoints.GenerateUniqueProductSlugAsync(name, db, CancellationToken.None);
+        Assert.Equal(first + "-2", duplicate);
+        db.PublicCatalogProducts.Add(Product(duplicate));
+        await db.SaveChangesAsync();
+        Assert.Equal(first + "-3", await PublicCatalogEndpoints.GenerateUniqueProductSlugAsync(name, db, CancellationToken.None));
+
+        Assert.Equal("producto", await PublicCatalogEndpoints.GenerateUniqueProductSlugAsync("東京", db, CancellationToken.None));
+        var longName = new string('A', 300);
+        Assert.True((await PublicCatalogEndpoints.GenerateUniqueProductSlugAsync(longName, db, CancellationToken.None)).Length <= 160);
+    }
+
+    [Fact]
+    public async Task PermanentPublicProductDeletionRemovesOnlyPublicDependenciesAndFeaturedReference()
+    {
+        await using var db = fixture.CreateDbContext();
+        var category = Category();
+        db.ProductCategories.Add(category);
+        await db.SaveChangesAsync();
+        var subcategory = Subcategory(category.Id);
+        db.ProductSubcategories.Add(subcategory);
+        await db.SaveChangesAsync();
+
+        var removed = Product();
+        removed.IsPublished = true;
+        var kept = Product();
+        kept.IsPublished = true;
+        db.PublicCatalogProducts.AddRange(removed, kept);
+        await db.SaveChangesAsync();
+        db.PublicCatalogProductSubcategories.AddRange(
+            new() { ProductId = removed.Id, SubcategoryId = subcategory.Id },
+            new() { ProductId = kept.Id, SubcategoryId = subcategory.Id });
+        db.PublicCatalogProductTranslations.Add(new()
+        {
+            ProductId = removed.Id, LanguageCode = "es", Name = "Porcelanato",
+            Description = "Producto de muestra"
+        });
+        var coverKey = Guid.NewGuid().ToString("N");
+        var galleryKey = Guid.NewGuid().ToString("N");
+        db.Set<PublicCatalogImage>().AddRange(
+            new() { ProductId = removed.Id, Role = "ProductCover", StorageKey = coverKey,
+                ContentType = "image/png", Width = 100, Height = 100, FileSizeBytes = 200,
+                DisplayOrder = 0, CreatedAtUtc = DateTime.UtcNow },
+            new() { ProductId = removed.Id, Role = "ProductGallery", StorageKey = galleryKey,
+                ContentType = "image/png", Width = 100, Height = 100, FileSizeBytes = 200,
+                DisplayOrder = 1, CreatedAtUtc = DateTime.UtcNow });
+        var section = new PublicHomeSection
+        {
+            Key = "products", ContentEs = "{}", UpdatedAtUtc = DateTime.UtcNow,
+            FeaturedSlugsJson = System.Text.Json.JsonSerializer.Serialize(new[] { removed.Slug, kept.Slug })
+        };
+        db.PublicHomeSections.Add(section);
+        await db.SaveChangesAsync();
+        var version = Convert.ToBase64String(removed.RowVersion);
+
+        var outcome = await PublicCatalogEndpoints.DeletePublicProductDataAsync(
+            removed.Id, version, db, "test-admin", CancellationToken.None);
+        Assert.Equal(PublicCatalogEndpoints.ProductDeletionStatus.Deleted, outcome.Status);
+        Assert.Equal(2, outcome.StorageKeys.Count);
+        Assert.Contains(coverKey, outcome.StorageKeys);
+        Assert.Contains(galleryKey, outcome.StorageKeys);
+
+        await using var verify = fixture.CreateDbContext();
+        Assert.False(await verify.PublicCatalogProducts.AnyAsync(x => x.Id == removed.Id));
+        Assert.False(await verify.PublicCatalogProductTranslations.AnyAsync(x => x.ProductId == removed.Id));
+        Assert.False(await verify.PublicCatalogProductSubcategories.AnyAsync(x => x.ProductId == removed.Id));
+        Assert.False(await verify.Set<PublicCatalogImage>().AnyAsync(x => x.ProductId == removed.Id));
+        Assert.True(await verify.PublicCatalogProducts.AnyAsync(x => x.Id == kept.Id));
+        Assert.True(await verify.ProductCategories.AnyAsync(x => x.Id == category.Id));
+        Assert.True(await verify.ProductSubcategories.AnyAsync(x => x.Id == subcategory.Id));
+        var stored = await verify.PublicHomeSections.AsNoTracking().SingleAsync(x => x.Key == "products");
+        Assert.Equal(new[] { kept.Slug }, System.Text.Json.JsonSerializer.Deserialize<List<string>>(stored.FeaturedSlugsJson));
+    }
+
+    [Fact]
+    public async Task StaleVersionCannotDeletePublicProductOrItsImages()
+    {
+        await using var db = fixture.CreateDbContext();
+        var product = Product();
+        db.PublicCatalogProducts.Add(product);
+        await db.SaveChangesAsync();
+        db.Set<PublicCatalogImage>().Add(new()
+        {
+            ProductId = product.Id, Role = "ProductCover", StorageKey = Guid.NewGuid().ToString("N"),
+            ContentType = "image/png", Width = 100, Height = 100, FileSizeBytes = 200,
+            DisplayOrder = 0, CreatedAtUtc = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+        var stale = Convert.ToBase64String(new byte[] { 1, 2, 3 });
+        var outcome = await PublicCatalogEndpoints.DeletePublicProductDataAsync(
+            product.Id, stale, db, "test-admin", CancellationToken.None);
+        Assert.Equal(PublicCatalogEndpoints.ProductDeletionStatus.Conflict, outcome.Status);
+        await using var verify = fixture.CreateDbContext();
+        Assert.True(await verify.PublicCatalogProducts.AnyAsync(p => p.Id == product.Id));
+        Assert.True(await verify.Set<PublicCatalogImage>().AnyAsync(i => i.ProductId == product.Id));
+    }
 
     [Fact]
     public async Task MigrationCreatesSixCatalogTables()
@@ -45,65 +219,120 @@ public sealed class PublicCatalogSqlIntegrationTests(SqlServerIntegrationTestFix
             "SELECT [name] AS [Value] FROM sys.tables WHERE [name] LIKE 'PublicCatalog%'")
             .ToListAsync();
 
-        Assert.Equal(6, tables.Count);
-        Assert.Contains("PublicCatalogCategories", tables);
+        Assert.Equal(4, tables.Count);
         Assert.Contains("PublicCatalogImages", tables);
-        Assert.Contains("PublicCatalogSubcategories", tables);
         Assert.Contains("PublicCatalogProducts", tables);
         Assert.Contains("PublicCatalogProductSubcategories", tables);
         Assert.Contains("PublicCatalogProductTranslations", tables);
     }
 
     [Fact]
-    public async Task ProductCanBelongToSubcategoriesAcrossTwoCategories()
-    {
-        await using var db = fixture.CreateDbContext();
-        var outside = Category();
-        var inside = Category();
-        db.PublicCatalogCategories.AddRange(outside, inside);
-        await db.SaveChangesAsync();
-
-        var outdoors = Subcategory(outside.Id);
-        var indoors = Subcategory(inside.Id);
-        var product = Product();
-        db.PublicCatalogSubcategories.AddRange(outdoors, indoors);
-        db.PublicCatalogProducts.Add(product);
-        await db.SaveChangesAsync();
-
-        db.PublicCatalogProductSubcategories.AddRange(
-            new PublicCatalogProductSubcategory { ProductId = product.Id, SubcategoryId = outdoors.Id },
-            new PublicCatalogProductSubcategory { ProductId = product.Id, SubcategoryId = indoors.Id });
-        await db.SaveChangesAsync();
-
-        await using var verify = fixture.CreateDbContext();
-        var actualCategoryIds = await verify.PublicCatalogProductSubcategories
-            .AsNoTracking()
-            .Where(x => x.ProductId == product.Id)
-            .Select(x => x.Subcategory.CategoryId)
-            .ToListAsync();
-        Assert.Equal(2, actualCategoryIds.Distinct().Count());
-        Assert.Contains(outside.Id, actualCategoryIds);
-        Assert.Contains(inside.Id, actualCategoryIds);
-    }
-
-    [Fact]
-    public async Task DuplicateProductMembershipIsRejectedBySqlServer()
+    public async Task ProductCanSelectMultipleSubcategoriesWithinOneSharedCategory()
     {
         await using var db = fixture.CreateDbContext();
         var category = Category();
-        db.PublicCatalogCategories.Add(category);
+        db.ProductCategories.Add(category);
+        await db.SaveChangesAsync();
+        var interior = Subcategory(category.Id);
+        var exterior = Subcategory(category.Id);
         var product = Product();
+        db.ProductSubcategories.AddRange(interior, exterior);
         db.PublicCatalogProducts.Add(product);
         await db.SaveChangesAsync();
+
+        Assert.True(await PublicCatalogEndpoints.ValidProductSubcategoriesAsync(
+            [interior.Id, exterior.Id], db, CancellationToken.None));
+
+        db.PublicCatalogProductSubcategories.AddRange(
+            new PublicCatalogProductSubcategory { ProductId = product.Id, SubcategoryId = interior.Id },
+            new PublicCatalogProductSubcategory { ProductId = product.Id, SubcategoryId = exterior.Id });
+        await db.SaveChangesAsync();
+
+        await using var verify = fixture.CreateDbContext();
+        var categoryIds = await verify.PublicCatalogProductSubcategories.AsNoTracking()
+            .Where(x => x.ProductId == product.Id)
+            .Select(x => x.Subcategory.CategoryId).ToListAsync();
+        Assert.Equal(2, categoryIds.Count);
+        Assert.Single(categoryIds.Distinct());
+        Assert.Equal(category.Id, categoryIds[0]);
+    }
+
+    [Fact]
+    public async Task CrossCategoryProductSelectionIsRejectedByPublicWriteRule()
+    {
+        await using var db = fixture.CreateDbContext();
+        var interior = Category();
+        var exterior = Category();
+        db.ProductCategories.AddRange(interior, exterior);
+        await db.SaveChangesAsync();
+        var subInterior = Subcategory(interior.Id);
+        var subExterior = Subcategory(exterior.Id);
+        db.ProductSubcategories.AddRange(subInterior, subExterior);
+        await db.SaveChangesAsync();
+
+        Assert.False(await PublicCatalogEndpoints.ValidProductSubcategoriesAsync(
+            [subInterior.Id, subExterior.Id], db, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task InactiveSharedClassificationsCanBeSelectedForPublicProduct()
+    {
+        await using var db = fixture.CreateDbContext();
+        var category = Category();
+        category.IsActive = false;
+        db.ProductCategories.Add(category);
+        await db.SaveChangesAsync();
         var sub = Subcategory(category.Id);
-        db.PublicCatalogSubcategories.Add(sub);
+        sub.IsActive = false;
+        db.ProductSubcategories.Add(sub);
+        await db.SaveChangesAsync();
+
+        Assert.True(await PublicCatalogEndpoints.ValidProductSubcategoriesAsync(
+            [sub.Id], db, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task EmptyDuplicateAndUnknownSubcategorySelectionsAreRejected()
+    {
+        await using var db = fixture.CreateDbContext();
+        var category = Category();
+        db.ProductCategories.Add(category);
+        await db.SaveChangesAsync();
+        var sub = Subcategory(category.Id);
+        db.ProductSubcategories.Add(sub);
+        await db.SaveChangesAsync();
+
+        Assert.False(await PublicCatalogEndpoints.ValidProductSubcategoriesAsync(
+            Array.Empty<int>(), db, CancellationToken.None));
+        Assert.False(await PublicCatalogEndpoints.ValidProductSubcategoriesAsync(
+            [sub.Id, sub.Id], db, CancellationToken.None));
+        Assert.False(await PublicCatalogEndpoints.ValidProductSubcategoriesAsync(
+            [sub.Id, int.MaxValue], db, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task DuplicateSharedSubcategoryMembershipIsRejectedBySqlServer()
+    {
+        await using var db = fixture.CreateDbContext();
+        var category = new Revestik.Api.Models.ProductCategory
+        {
+            Name = "Shared-" + Guid.NewGuid().ToString("N"), CreatedAtUtc = DateTime.UtcNow
+        };
+        var product = Product();
+        db.ProductCategories.Add(category);
+        db.PublicCatalogProducts.Add(product);
+        await db.SaveChangesAsync();
+        var sub = new Revestik.Api.Models.ProductSubcategory
+        {
+            CategoryId = category.Id, Name = "Porcelanato", CreatedAtUtc = DateTime.UtcNow
+        };
+        db.ProductSubcategories.Add(sub);
         await db.SaveChangesAsync();
         db.PublicCatalogProductSubcategories.Add(new()
         {
             ProductId = product.Id, SubcategoryId = sub.Id
         });
         await db.SaveChangesAsync();
-
         await using var second = fixture.CreateDbContext();
         second.PublicCatalogProductSubcategories.Add(new()
         {
@@ -116,7 +345,7 @@ public sealed class PublicCatalogSqlIntegrationTests(SqlServerIntegrationTestFix
     public async Task InvalidCategoryAndProductRelationsAreRejectedBySqlServer()
     {
         await using var db = fixture.CreateDbContext();
-        db.PublicCatalogSubcategories.Add(Subcategory(int.MaxValue));
+        db.ProductSubcategories.Add(Subcategory(int.MaxValue));
         await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
 
         await using var other = fixture.CreateDbContext();
@@ -133,12 +362,12 @@ public sealed class PublicCatalogSqlIntegrationTests(SqlServerIntegrationTestFix
         var sharedCategorySlug = UniqueSlug("category");
         await using (var db = fixture.CreateDbContext())
         {
-            db.PublicCatalogCategories.Add(Category(sharedCategorySlug));
+            db.ProductCategories.Add(Category(sharedCategorySlug));
             await db.SaveChangesAsync();
         }
         await using (var duplicate = fixture.CreateDbContext())
         {
-            duplicate.PublicCatalogCategories.Add(Category(sharedCategorySlug));
+            duplicate.ProductCategories.Add(Category(sharedCategorySlug));
             await Assert.ThrowsAsync<DbUpdateException>(() => duplicate.SaveChangesAsync());
         }
 
@@ -158,15 +387,15 @@ public sealed class PublicCatalogSqlIntegrationTests(SqlServerIntegrationTestFix
         {
             var a = Category();
             var b = Category();
-            db.PublicCatalogCategories.AddRange(a, b);
+            db.ProductCategories.AddRange(a, b);
             await db.SaveChangesAsync();
             var sharedSubSlug = UniqueSlug("sub");
-            db.PublicCatalogSubcategories.AddRange(
+            db.ProductSubcategories.AddRange(
                 Subcategory(a.Id, sharedSubSlug),
                 Subcategory(b.Id, sharedSubSlug));
             await db.SaveChangesAsync(); // Same slug in different categories is permitted.
 
-            db.PublicCatalogSubcategories.Add(Subcategory(a.Id, sharedSubSlug));
+            db.ProductSubcategories.Add(Subcategory(a.Id, sharedSubSlug));
             await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
         }
     }
@@ -264,16 +493,16 @@ public sealed class PublicCatalogSqlIntegrationTests(SqlServerIntegrationTestFix
         {
             await using var transaction = await db.Database.BeginTransactionAsync();
             var category = Category(slug);
-            db.PublicCatalogCategories.Add(category);
+            db.ProductCategories.Add(category);
             await db.SaveChangesAsync();
             var subcategory = Subcategory(category.Id);
-            db.PublicCatalogSubcategories.Add(subcategory);
+            db.ProductSubcategories.Add(subcategory);
             await db.SaveChangesAsync();
             await transaction.RollbackAsync();
         }
 
         await using var verify = fixture.CreateDbContext();
-        Assert.False(await verify.PublicCatalogCategories.AnyAsync(x => x.Slug == slug));
+        Assert.False(await verify.ProductCategories.AnyAsync(x => x.PublicSlug == slug));
     }
 
     [Fact]
@@ -283,9 +512,9 @@ public sealed class PublicCatalogSqlIntegrationTests(SqlServerIntegrationTestFix
         await using (var db = fixture.CreateDbContext())
         {
             var category = Category();
-            db.PublicCatalogCategories.Add(category);
+            db.ProductCategories.Add(category);
             await db.SaveChangesAsync();
-            db.PublicCatalogSubcategories.Add(Subcategory(category.Id));
+            db.ProductSubcategories.Add(Subcategory(category.Id));
             await db.SaveChangesAsync();
             categoryId = category.Id;
         }
@@ -293,7 +522,7 @@ public sealed class PublicCatalogSqlIntegrationTests(SqlServerIntegrationTestFix
         await using var attempt = fixture.CreateDbContext();
         // ExecuteDelete bypasses EF's tracked relationship fix-up: SQL FK must reject this.
         await Assert.ThrowsAsync<SqlException>(async () =>
-            await attempt.PublicCatalogCategories.Where(x => x.Id == categoryId)
+            await attempt.ProductCategories.Where(x => x.Id == categoryId)
                 .ExecuteDeleteAsync());
     }
 }

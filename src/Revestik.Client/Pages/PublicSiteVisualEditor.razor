@@ -1,5 +1,7 @@
 @page "/settings/public-site/editor"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.Extensions.Configuration
 @using Microsoft.JSInterop
@@ -14,15 +16,15 @@
 @inject IJSRuntime JS
 
 <PageTitle>Editor del sitio público | Revestik</PageTitle>
-<NavigationLock ConfirmExternalNavigation="@(editing is not null || editingSection is not null)" />
+<NavigationLock ConfirmExternalNavigation="@IsBusyEditing" OnBeforeInternalNavigation="GuardEditorNavigation" />
 <main class="public-editor">
     <header class="public-editor__toolbar">
         <div>
-            <a href="/settings/public-site">← Sitio web público</a>
+            <a href="settings/public-site">← Sitio web público</a>
             <h1>Editar sitio web público</h1>
             <p>Estás viendo el sitio público real. Solo los controles señalados permiten modificar contenido.</p>
         </div>
-        <span class="public-editor__role">Administrador · Inicio</span>
+        <span class="public-editor__role">Administrador · Editor único</span>
     </header>
 
     @if (error is not null)
@@ -36,12 +38,11 @@
 
     <div class="public-editor__navigation">
         <strong>Secciones</strong>
-        <span aria-current="page">Inicio</span>
-        <a href="/settings/public-site/editor/acabados">Acabados · Productos</a>
-        <span class="public-editor__muted" title="Disponible en una futura entrega">Proyectos · Solo vista</span>
-        <span class="public-editor__muted" title="Disponible en una futura entrega">Soluciones · Solo vista</span>
+        <button type="button" aria-current="@(IsHomePage ? "page" : null)" disabled="@IsBusyEditing" @onclick="() => NavigatePreview(0)">Inicio</button>
+        <button type="button" aria-current="@(IsCatalogPage ? "page" : null)" disabled="@IsBusyEditing" @onclick="() => NavigatePreview(2)">Acabados · Productos</button>
+        <span class="public-editor__muted">Proyectos y otras páginas: navegá en el menú de la vista pública.</span>
         <label for="preview-language">Idioma de previsualización</label>
-        <select id="preview-language" @bind="language">
+        <select id="preview-language" value="@language" @onchange="ChangeLanguage" disabled="@IsBusyEditing">
             <option value="es">Español</option>
             <option value="en">English</option>
             <option value="de">Deutsch</option>
@@ -50,14 +51,18 @@
 
     <section class="public-editor__stage" aria-label="Vista previa del sitio público">
         <div class="public-editor__stage-header">
-            <span><strong>Inicio</strong> · Vista pública de solo lectura</span>
-            <a href="@PreviewUrl" target="_blank" rel="noopener noreferrer">Abrir sitio público</a>
+            <span><strong>@CurrentPageTitle</strong> · Vista pública real</span>
+            <a href="@PublicBrowserUrl" target="_blank" rel="noopener noreferrer">Abrir sitio público</a>
         </div>
         <div class="public-editor__browser">
             <iframe @ref="previewFrame" src="@PreviewUrl" title="Vista previa de REVESTIK en @language" loading="eager"></iframe>
         </div>
-        <p class="public-editor__hint">Desplazate por Inicio y seleccioná <strong>Editar</strong> junto a la sección correspondiente. Proyectos destacados, Header y Footer permanecen en modo de consulta.</p>
+        <p class="public-editor__hint">Navegá dentro del sitio y seleccioná <strong>Editar</strong> o <strong>Agregar</strong> junto al contenido disponible. Las páginas sin controles permanecen en modo de consulta.</p>
     </section>
+
+    <PublicCatalogEditor @ref="catalogEditor" Embedded="true" DisplayCatalogTools="@IsCatalogPage"
+                         OnEditorChanged="CatalogEditorChanged" OnCatalogSaved="RefreshPublicPreview"
+                         OnCatalogDeleted="NavigateAfterProductDeletion" />
 
     @if (editingSection is not null && sectionForm is not null)
     {
@@ -286,7 +291,11 @@
     private string language = "es";
     private string? pendingToken, pendingName, error, notice;
     private bool busy, confirmSave, removeImage;
-    private int reloadNumber;
+    [SupplyParameterFromQuery(Name = "view")] public string? InitialView { get; set; }
+    private PublicCatalogEditor? catalogEditor;
+    private string previewStartUrl = "about:blank";
+    private string publicOrigin = "";
+    private string currentPublicPath = "/es";
     private ElementReference previewFrame;
     private IJSObjectReference? previewModule;
     private IJSObjectReference? previewConnection;
@@ -301,7 +310,7 @@
             previewModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/public-site-editor-bridge.js");
             previewCallback = DotNetObjectReference.Create(this);
             previewConnection = await previewModule.InvokeAsync<IJSObjectReference>(
-                "connect", previewFrame, previewCallback, previewToken, new Uri(PreviewUrl).GetLeftPart(UriPartial.Authority));
+                "connect", previewFrame, previewCallback, previewToken, publicOrigin);
         }
         catch (JSException)
         {
@@ -313,8 +322,13 @@
     [JSInvokable]
     public async Task OnPreviewEdit(string action)
     {
-        if (busy || editing is not null || editingSection is not null) return;
-        if (action.StartsWith("hero:", StringComparison.Ordinal) &&
+        if (IsBusyEditing) return;
+        if (action == "product:new" && catalogEditor is not null)
+            await catalogEditor.BeginNewProductAsync();
+        else if (action.StartsWith("product:", StringComparison.Ordinal) &&
+                 int.TryParse(action.AsSpan(8), out var productId) && productId > 0 && catalogEditor is not null)
+            await catalogEditor.BeginProductEditAsync(productId);
+        else if (action.StartsWith("hero:", StringComparison.Ordinal) &&
             int.TryParse(action.AsSpan(5), out var slot) && slot is >= 1 and <= 3)
             StartEdit(slot);
         else if (SectionEntries.Any(entry => entry.Key == action))
@@ -322,19 +336,104 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    private string PreviewUrl
+    private bool IsBusyEditing => busy || editing is not null || editingSection is not null || catalogEditor?.HasOpenForm == true;
+    private bool IsHomePage => currentPublicPath.Split('?')[0].TrimEnd('/') is "/es" or "/en" or "/de";
+    private bool IsCatalogPage
     {
         get
         {
-            var configured = Configuration["PublicSitePreviewBaseUrl"] ?? "https://revestikcr.com";
-            if (!Uri.TryCreate(configured, UriKind.Absolute, out var uri) ||
-                (uri.Scheme != Uri.UriSchemeHttps && !(uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)))
-                return "about:blank";
-            return $"{uri.GetLeftPart(UriPartial.Authority)}/{language}?editorPreview={reloadNumber}";
+            var parts = currentPublicPath.Split('?')[0].Split('/', StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length >= 2 && (parts[1] is "acabados" or "finishes" or "oberflaechen");
+        }
+    }
+    private string CurrentPageTitle => IsHomePage ? "Inicio" : IsCatalogPage ? "Acabados" : "Sitio público";
+    private string PreviewUrl => previewStartUrl;
+    private string PublicBrowserUrl
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(publicOrigin)) return "about:blank";
+            var path = currentPublicPath.Split('?')[0];
+            var query = currentPublicPath.Contains('?') ? currentPublicPath[(currentPublicPath.IndexOf('?') + 1)..] : "";
+            var safeQuery = string.Join("&", query.Split('&', StringSplitOptions.RemoveEmptyEntries)
+                .Where(p => !p.StartsWith("editorPreview=", StringComparison.OrdinalIgnoreCase) &&
+                            !p.StartsWith("revision=", StringComparison.OrdinalIgnoreCase)));
+            return publicOrigin + path + (safeQuery.Length > 0 ? "?" + safeQuery : "");
         }
     }
 
-    protected override async Task OnInitializedAsync() => await Reload();
+    [JSInvokable]
+    public async Task OnPreviewLocation(string pathAndQuery)
+    {
+        if (!pathAndQuery.StartsWith('/') || pathAndQuery.StartsWith("//") ||
+            !Uri.TryCreate(pathAndQuery, UriKind.Relative, out _)) return;
+        var route = pathAndQuery.Split('?')[0];
+        if (route != "/es" && route != "/en" && route != "/de" &&
+            !route.StartsWith("/es/", StringComparison.Ordinal) &&
+            !route.StartsWith("/en/", StringComparison.Ordinal) &&
+            !route.StartsWith("/de/", StringComparison.Ordinal)) return;
+        currentPublicPath = pathAndQuery;
+        language = route.Split('/', StringSplitOptions.RemoveEmptyEntries)[0];
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void GuardEditorNavigation(LocationChangingContext context)
+    {
+        if (!IsBusyEditing) return;
+        context.PreventNavigation();
+        error = "Cerrá o guardá la edición actual antes de abandonar el editor.";
+    }
+
+    private Task CatalogEditorChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task RefreshPublicPreview()
+    {
+        if (previewConnection is not null)
+            await previewConnection.InvokeVoidAsync("refresh");
+    }
+
+    private async Task NavigateAfterProductDeletion()
+    {
+        if (previewConnection is null) return;
+        var target = language switch
+        {
+            "en" => "/en/finishes", "de" => "/de/oberflaechen", _ => "/es/acabados"
+        };
+        // After a permanent delete, do not leave the iframe on a now-missing product URL.
+        await previewConnection.InvokeVoidAsync("navigate", target);
+    }
+
+    private async Task NavigatePreview(int page)
+    {
+        if (IsBusyEditing || previewConnection is null) return;
+        var target = page == 2 ? language switch
+        {
+            "en" => "/en/finishes", "de" => "/de/oberflaechen", _ => "/es/acabados"
+        } : "/" + language;
+        await previewConnection.InvokeVoidAsync("navigate", target);
+    }
+
+    private async Task ChangeLanguage(ChangeEventArgs args)
+    {
+        if (IsBusyEditing || previewConnection is null) return;
+        var target = args.Value?.ToString();
+        if (target is not ("es" or "en" or "de")) return;
+        // Follow the public site's own localized link, preserving product/category paths and filters.
+        await previewConnection.InvokeVoidAsync("changeLanguage", target);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var configured = Configuration["PublicSitePreviewBaseUrl"] ?? "https://revestikcr.com";
+        if (Uri.TryCreate(configured, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)))
+        {
+            publicOrigin = uri.GetLeftPart(UriPartial.Authority);
+            currentPublicPath = InitialView == "acabados" ? "/es/acabados" : "/es";
+            previewStartUrl = publicOrigin + currentPublicPath + "?editorPreview=1";
+        }
+        await Reload();
+    }
 
     private async Task Reload()
     {
@@ -450,8 +549,8 @@
             editingSection = null;
             confirmSave = false;
             removeImage = false;
-            reloadNumber++;
             await Reload();
+            await RefreshPublicPreview();
             notice = $"{SectionTitle(key)} guardada. Recargá la vista previa si no aparece inmediatamente.";
         }
         catch (Exception e) when (e is InvalidOperationException or HttpRequestException or TaskCanceledException)
@@ -529,8 +628,8 @@
             sectionForm = null;
             confirmSave = false;
             removeImage = false;
-            reloadNumber++;
             await Reload();
+            await RefreshPublicPreview();
             notice = $"Diapositiva {slot} guardada. El sitio público ya puede mostrar los cambios.";
         }
         catch (Exception e) when (e is InvalidOperationException or HttpRequestException or TaskCanceledException)

@@ -10,6 +10,10 @@ public sealed class Product
 
     public ProductCategory Category { get; set; } = null!;
 
+    // Optional: existing inventory products require no reclassification.
+    public int? SubcategoryId { get; set; }
+    public ProductSubcategory? Subcategory { get; set; }
+
     public string Name { get; set; } = string.Empty;
 
     public string Description { get; set; } = string.Empty;

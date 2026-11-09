@@ -277,7 +277,7 @@ else
 {
     app.Use(async (context, next) =>
     {
-        if (context.Request.Path.Equals("/index.html", StringComparison.OrdinalIgnoreCase))
+        if (context.Request.Path.Equals("/administracion/index.html", StringComparison.OrdinalIgnoreCase))
         {
             context.Response.OnStarting(() =>
             {
@@ -367,15 +367,19 @@ app.MapProjectTaskDeadlineEndpoints();
 app.MapProjectLifecycleEndpoints();
 app.MapProjectDashboardAlertEndpoints();
 
-if (!app.Environment.IsDevelopment())
+// All routes belonging to the business UI are hosted below /administracion/.
+// Static web assets are enabled in Development as well so local testing uses
+// the same server as the API. Public root routes intentionally do not fall back
+// to the business dashboard.
+app.MapStaticAssets().AllowAnonymous();
+app.MapFallback("/api/{**path}", () => Results.NotFound())
+    .WithMetadata(new Microsoft.AspNetCore.Routing.HttpMethodMetadata(
+        new[] { "GET", "HEAD" }))
+    .AllowAnonymous();
+app.MapFallbackToFile("/administracion/{*path:nonfile}", "administracion/index.html", new StaticFileOptions
 {
-    app.MapStaticAssets().AllowAnonymous();
-    app.MapFallback("/api/{**path}", () => Results.NotFound()).AllowAnonymous();
-    app.MapFallbackToFile("index.html", new StaticFileOptions
-    {
-        OnPrepareResponse = static context => DisableClientIndexCaching(context.Context.Response)
-    }).AllowAnonymous();
-}
+    OnPrepareResponse = static context => DisableClientIndexCaching(context.Context.Response)
+}).AllowAnonymous();
 
 await app.InitializeIdentityAsync();
 app.Run();

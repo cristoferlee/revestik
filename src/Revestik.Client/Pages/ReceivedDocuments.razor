@@ -954,7 +954,7 @@
                                     <tr>
                                         <td>@line.LineNumber</td>
                                         <td>
-                                            <a class="cabys-link" href="@($"/cabys?search={line.CabysCode}")">@line.CabysCode</a>
+                                            <a class="cabys-link" href="@($"cabys?search={line.CabysCode}")">@line.CabysCode</a>
                                             @if (!string.IsNullOrWhiteSpace(line.CabysTaxReference)) { <small>Ref.: @line.CabysTaxReference</small> }
                                         </td>
                                         <td>

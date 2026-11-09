@@ -687,7 +687,7 @@
                     {
                         <button type="button" class="dashboard-refresh" @onclick="LoadSalesAsync">Reintentar ventas</button>
                     }
-                    <a href="/sales/history">Ver historial de ventas</a>
+                    <a href="sales/history">Ver historial de ventas</a>
                 </div>
             </Authorized>
         </AuthorizeView>
@@ -780,7 +780,7 @@
             </div>
         }
         <p class="dashboard-period-note">Fuente: Compras y cuentas por pagar (Purchases). Estos registros sirven de control operativo y pueden representar compras respaldadas por documentos recibidos. No sumar este total al de compras documentadas ni considerarlo gasto adicional.</p>
-        <div class="dashboard-summary-actions"><a href="/purchases/history">Ver historial de compras</a></div>
+        <div class="dashboard-summary-actions"><a href="purchases/history">Ver historial de compras</a></div>
     </section>
 
     <section class="dashboard-expenses" aria-labelledby="monthly-expenses-title">
@@ -903,7 +903,7 @@
             </div>
             <p class="dashboard-period-note">Clasificación y conciliación son procesos distintos: sus conteos no deben sumarse entre sí ni a los importes de compras.</p>
         }
-        <div class="dashboard-summary-actions"><a href="/purchases/received-documents">Ver documentos recibidos</a></div>
+        <div class="dashboard-summary-actions"><a href="purchases/received-documents">Ver documentos recibidos</a></div>
     </section>
 
 
@@ -957,7 +957,7 @@
                     El valor conocido no incluye esas existencias.
                 </p>
             }
-            <div class="dashboard-summary-actions"><a href="/inventory">Ver inventario completo</a></div>
+            <div class="dashboard-summary-actions"><a href="inventory">Ver inventario completo</a></div>
         }
     </section>
 
@@ -1003,7 +1003,7 @@
                 }
             </div>
         }
-        <div class="dashboard-summary-actions"><a href="/purchases/history">Ver compras y cuentas por pagar</a></div>
+        <div class="dashboard-summary-actions"><a href="purchases/history">Ver compras y cuentas por pagar</a></div>
     </section>
 
 
@@ -1068,7 +1068,7 @@
                     <p class="dashboard-inventory-warning" role="status">@projectsSummary.CompletedProjectsWithBalance proyecto(s) finalizado(s) mantienen saldo operativo pendiente. No se incluyen en los saldos de proyectos abiertos.</p>
                 }
             </div>
-            <div class="dashboard-summary-actions"><a href="/projects">Ver proyectos</a></div>
+            <div class="dashboard-summary-actions"><a href="projects">Ver proyectos</a></div>
         }
     </section>
 

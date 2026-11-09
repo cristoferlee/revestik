@@ -29,7 +29,7 @@ var apiBaseAddress = builder.HostEnvironment.IsDevelopment()
         builder.Configuration["ApiBaseUrl"]
             ?? throw new InvalidOperationException(
                 "The development API base URL was not configured."))
-    : new Uri(builder.HostEnvironment.BaseAddress);
+    : new Uri(new Uri(builder.HostEnvironment.BaseAddress).GetLeftPart(UriPartial.Authority) + "/");
 
 builder.Services.AddAuthorizationCore();
 

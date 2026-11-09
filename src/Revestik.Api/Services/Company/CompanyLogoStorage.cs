@@ -33,9 +33,14 @@ public sealed class CompanyLogoStorage(IHostEnvironment environment, IConfigurat
 
     // Verify structural image framing, PNG chunk CRCs and dimensions.
     // This is not full image decoding; other formats still require hardened decoding validation.
-    public static string Validate(ReadOnlySpan<byte> bytes, string fileName)
+    // Keep the 2 MB default for company logos; callers with a separate domain limit opt in explicitly.
+    public static string Validate(ReadOnlySpan<byte> bytes, string fileName) =>
+        Validate(bytes, fileName, MaxBytes);
+
+    public static string Validate(ReadOnlySpan<byte> bytes, string fileName, int maximumBytes)
     {
-        if (bytes.IsEmpty || bytes.Length > MaxBytes) throw new InvalidDataException("La imagen debe medir como máximo 2 MB.");
+        if (maximumBytes <= 0 || bytes.IsEmpty || bytes.Length > maximumBytes)
+            throw new InvalidDataException($"La imagen debe medir como máximo {maximumBytes / (1024 * 1024)} MB.");
         var ext = Path.GetExtension(fileName).ToLowerInvariant();
         if (ext == ".png" && ValidPng(bytes)) return "image/png";
         if (ext is ".jpg" or ".jpeg" && ValidJpeg(bytes)) return "image/jpeg";

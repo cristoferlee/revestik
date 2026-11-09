@@ -60,7 +60,7 @@
       <div class="catalog-grid">
         @foreach (var product in Products.Items)
         {
-          <article class="catalog-card"><a href="@($"{SiteLinks.Path(Lang,2)}/{product.Slug}")">
+          <article class="catalog-card" data-editor-product-id="@product.Id"><a href="@($"{SiteLinks.Path(Lang,2)}/{product.Slug}")">
               @if(product.CoverImageId is int cover){<img src="@($"/media/catalog/{cover}")" alt="@(product.Text(Lang)?.Name ?? product.Slug)" loading="lazy" width="720" height="540" />}
               <div class="catalog-card-copy"><h3>@(product.Text(Lang)?.Name ?? product.Slug)</h3></div>
             </a></article>

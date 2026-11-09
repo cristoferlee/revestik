@@ -129,6 +129,111 @@ public sealed class InventoryCatalogService(
         return true;
     }
 
+    private static ProductSubcategoryResponse MapSubcategory(ProductSubcategory item) =>
+        new(item.Id, item.CategoryId, item.Category.Name, item.Name,
+            item.IsActive, item.CreatedAtUtc, item.UpdatedAtUtc,
+            Convert.ToBase64String(item.RowVersion));
+
+    private async Task EnsureSubcategoryNameAvailableAsync(
+        int categoryId, string name, int? excludedId, CancellationToken ct)
+    {
+        if (await dbContext.ProductSubcategories.AsNoTracking().AnyAsync(x =>
+                x.CategoryId == categoryId && x.Name == name &&
+                (!excludedId.HasValue || x.Id != excludedId.Value), ct))
+            throw new DuplicateInventoryCatalogValueException(
+                "Ya existe una subcategoría con ese nombre en esta categoría.");
+    }
+
+    public async Task<IReadOnlyList<ProductSubcategoryResponse>> GetSubcategoriesAsync(
+        bool includeInactive, CancellationToken ct)
+    {
+        IQueryable<ProductSubcategory> query = dbContext.ProductSubcategories.AsNoTracking().Include(x => x.Category);
+        if (!includeInactive) query = query.Where(x => x.IsActive && x.Category.IsActive);
+        return (await query.OrderBy(x => x.Category.Name).ThenBy(x => x.Name)
+            .ToListAsync(ct)).Select(MapSubcategory).ToList();
+    }
+
+    public async Task<ProductSubcategoryResponse?> GetSubcategoryByIdAsync(int id, CancellationToken ct)
+    {
+        var item = await dbContext.ProductSubcategories.AsNoTracking()
+            .Include(x => x.Category).SingleOrDefaultAsync(x => x.Id == id, ct);
+        return item is null ? null : MapSubcategory(item);
+    }
+
+    public async Task<ProductSubcategoryResponse> CreateSubcategoryAsync(
+        ProductSubcategoryUpsertRequest request, CancellationToken ct)
+    {
+        var name = NormalizeRequired(request.Name);
+        var category = await dbContext.ProductCategories.SingleOrDefaultAsync(
+            x => x.Id == request.CategoryId, ct);
+        if (category is null || (!category.IsActive && request.IsActive))
+            throw new InvalidProductCatalogReferenceException(
+                "La categoría seleccionada no existe o está inactiva.");
+        await EnsureSubcategoryNameAvailableAsync(category.Id, name, null, ct);
+        var item = new ProductSubcategory
+        {
+            CategoryId = category.Id, Category = category,
+            Name = name, IsActive = request.IsActive, CreatedAtUtc = DateTime.UtcNow
+        };
+        dbContext.ProductSubcategories.Add(item);
+        await SaveChangesAsync(ct);
+        return MapSubcategory(item);
+    }
+
+    public async Task<ProductSubcategoryResponse?> UpdateSubcategoryAsync(
+        int id, ProductSubcategoryUpsertRequest request, string version, CancellationToken ct)
+    {
+        var item = await dbContext.ProductSubcategories.Include(x => x.Category)
+            .SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (item is null) return null;
+        CheckSubcategoryVersion(item, version);
+        var name = NormalizeRequired(request.Name);
+        var category = await dbContext.ProductCategories.SingleOrDefaultAsync(
+            x => x.Id == request.CategoryId, ct);
+        if (category is null || (!category.IsActive && request.IsActive))
+            throw new InvalidProductCatalogReferenceException(
+                "La categoría seleccionada no existe o está inactiva.");
+        if (item.CategoryId != request.CategoryId)
+        {
+            // Moving a referenced subcategory would violate inventory/category invariants.
+            if (await dbContext.Products.AnyAsync(x => x.SubcategoryId == id, ct) ||
+                await dbContext.PublicCatalogProductSubcategories.AnyAsync(x => x.SubcategoryId == id, ct))
+                throw new InvalidProductCatalogReferenceException(
+                    "No se puede cambiar la categoría de una subcategoría que está en uso.");
+        }
+        await EnsureSubcategoryNameAvailableAsync(category.Id, name, id, ct);
+        item.CategoryId = category.Id;
+        item.Category = category;
+        item.Name = name;
+        item.IsActive = request.IsActive;
+        item.UpdatedAtUtc = DateTime.UtcNow;
+        try { await SaveChangesAsync(ct); }
+        catch (DbUpdateConcurrencyException) { throw new InvalidOperationException("La subcategoría cambió. Recargá la página."); }
+        return MapSubcategory(item);
+    }
+
+    public async Task<bool> DeactivateSubcategoryAsync(int id, string version, CancellationToken ct)
+    {
+        var item = await dbContext.ProductSubcategories.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (item is null) return false;
+        CheckSubcategoryVersion(item, version);
+        if (item.IsActive)
+        {
+            item.IsActive = false;
+            item.UpdatedAtUtc = DateTime.UtcNow;
+            try { await SaveChangesAsync(ct); }
+            catch (DbUpdateConcurrencyException) { throw new InvalidOperationException("La subcategoría cambió. Recargá la página."); }
+        }
+        return true;
+    }
+
+    private static void CheckSubcategoryVersion(ProductSubcategory item, string version)
+    {
+        if (string.IsNullOrWhiteSpace(version) ||
+            !Convert.ToBase64String(item.RowVersion).Equals(version, StringComparison.Ordinal))
+            throw new InvalidOperationException("La subcategoría cambió. Recargá la página.");
+    }
+
     public async Task<IReadOnlyList<UnitOfMeasureResponse>> GetUnitsAsync(
         bool includeInactive,
         CancellationToken cancellationToken)

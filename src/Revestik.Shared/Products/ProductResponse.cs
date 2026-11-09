@@ -24,6 +24,7 @@ public sealed record ProductResponse(
     DateTime CreatedAtUtc,
     DateTime? UpdatedAtUtc)
 {
+    public int? SubcategoryId { get; init; }
     public SalePriceBasis SalePriceBasis { get; init; } =
         SalePriceBasis.InventoryUnit;
 }

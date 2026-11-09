@@ -21,7 +21,7 @@
 <PageTitle>Expediente de proyecto | Revestik</PageTitle>
 <section class="projects-page">
     <header class="projects-header">
-        <div><a href="/projects" class="back-link">← Volver a proyectos</a><h1>@(isNew ? "Nuevo proyecto" : project?.Name ?? "Expediente")</h1><p>Cliente: @(customer?.Name ?? "Sin identificar")</p></div>
+        <div><a href="projects" class="back-link">← Volver a proyectos</a><h1>@(isNew ? "Nuevo proyecto" : project?.Name ?? "Expediente")</h1><p>Cliente: @(customer?.Name ?? "Sin identificar")</p></div>
         @if (project is not null) { <span class="status-chip">@StatusLabel(project.Status)</span> }
     </header>
     @if (loading) { <p role="status">Cargando expediente...</p> }
@@ -328,7 +328,7 @@
             if (validationErrors.Count > 0) return;
             var req = form.ToRequest(project?.Version);
             project = isNew ? await Api.CreateAsync(CustomerId, req) : await Api.UpdateAsync(project!.Id, req);
-            if (isNew) Navigation.NavigateTo($"/projects/{project.Id}");
+            if (isNew) Navigation.NavigateTo($"projects/{project.Id}");
             else { await RefreshAsync(); showGeneralEditor = false; validationErrors.Clear(); }
         });
     }

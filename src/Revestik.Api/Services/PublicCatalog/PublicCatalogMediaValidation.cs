@@ -35,7 +35,7 @@ public static class PublicCatalogMediaValidation
         }
         // Structural checks already used for the company's logo. This does NOT
         // replace full image decoding or sanitization for untrusted image bytes.
-        CompanyLogoStorage.Validate(bytes, "image" + ext);
+        CompanyLogoStorage.Validate(bytes, "image" + ext, maximumBytes: checked((int)PublicCatalogMediaStorage.MaxBytes));
         var (width, height) = mime switch
         {
             "image/png" => (checked((int)BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16, 4))),

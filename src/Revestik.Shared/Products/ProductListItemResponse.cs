@@ -18,6 +18,7 @@ public sealed record ProductListItemResponse(
     decimal MinimumStock,
     bool IsDeleted)
 {
+    public int? SubcategoryId { get; init; }
     public SalePriceBasis SalePriceBasis { get; init; } =
         SalePriceBasis.InventoryUnit;
 }

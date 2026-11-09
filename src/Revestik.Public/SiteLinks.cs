@@ -17,16 +17,30 @@ public static class SiteLinks
     // A future published-content service must resolve localized slugs independently.
     public static string LanguagePath(string language, string currentUri)
     {
-        var current = new Uri(currentUri).AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var sourceUri = new Uri(currentUri);
+        var current = sourceUri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
         var page = PageFromUri(currentUri);
         var target = Path(language, page);
-        if (page == 1 && current.Length == 3 &&
-            PublicProjectCatalog.IsKnownSlug(current[2]))
-            return target + "/" + current[2];
-        if (page == 2 && current.Length == 3 && current[2] != "categoria" && current[2] != "category" && current[2] != "kategorie")
-            return target + "/" + current[2];
-        if (page == 2 && current.Length == 4 && current[2] is "categoria" or "category" or "kategorie")
-            return target + "/" + (language == "en" ? "category" : language == "de" ? "kategorie" : "categoria") + "/" + current[3];
+        if (page == 1 && current.Length == 3 && PublicProjectCatalog.IsKnownSlug(current[2]))
+            target += "/" + current[2];
+        else if (page == 2 && current.Length == 3 && current[2] is not ("categoria" or "category" or "kategorie"))
+            target += "/" + current[2];
+        else if (page == 2 && current.Length == 4 && current[2] is "categoria" or "category" or "kategorie")
+            target += "/" + (language == "en" ? "category" : language == "de" ? "kategorie" : "categoria") + "/" + current[3];
+
+        // Preserve only supported catalog filters when switching languages. Never copy editor/session flags.
+        if (page == 2 && sourceUri.Query.Length > 1)
+        {
+            var filters = sourceUri.Query.TrimStart('?')
+                .Split('&', StringSplitOptions.RemoveEmptyEntries)
+                .Where(part =>
+                {
+                    var key = Uri.UnescapeDataString(part.Split('=', 2)[0]);
+                    return key is "page" or "search" or "categoryId" or "subcategoryId";
+                });
+            var query = string.Join("&", filters);
+            if (query.Length > 0) target += "?" + query;
+        }
         return target;
     }
 

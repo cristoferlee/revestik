@@ -11,6 +11,7 @@ public static class InventoryCatalogEndpoints
         this IEndpointRouteBuilder endpoints)
     {
         MapCategoryEndpoints(endpoints);
+        MapSubcategoryEndpoints(endpoints);
         MapUnitEndpoints(endpoints);
 
         return endpoints;
@@ -143,6 +144,72 @@ public static class InventoryCatalogEndpoints
             .RequireAuthorization(PolicyNames.ManageProductCatalog)
             .AddEndpointFilter<AntiforgeryValidationFilter>()
             .WithName("DeactivateProductCategory");
+    }
+
+    private static void MapSubcategoryEndpoints(IEndpointRouteBuilder endpoints)
+    {
+        var group = endpoints.MapGroup("/api/product-subcategories")
+            .WithTags("Product Subcategories")
+            .RequireAuthorization(PolicyNames.ManageInventory);
+
+        group.MapGet("/", async (bool? includeInactive,
+            IInventoryCatalogService service, CancellationToken ct) =>
+            Results.Ok(await service.GetSubcategoriesAsync(includeInactive ?? false, ct)))
+            .WithName("GetProductSubcategories");
+
+        group.MapGet("/{id:int}", async (int id, IInventoryCatalogService service,
+            CancellationToken ct) =>
+        {
+            var item = await service.GetSubcategoryByIdAsync(id, ct);
+            return item is null ? Results.NotFound() : Results.Ok(item);
+        }).WithName("GetProductSubcategoryById");
+
+        group.MapPost("/", async (ProductSubcategoryUpsertRequest request,
+            IInventoryCatalogService service, CancellationToken ct) =>
+        {
+            var errors = ValidateRequest(request);
+            if (errors.Count > 0) return Results.ValidationProblem(errors);
+            try
+            {
+                var item = await service.CreateSubcategoryAsync(request, ct);
+                return Results.Created($"/api/product-subcategories/{item.Id}", item);
+            }
+            catch (DuplicateInventoryCatalogValueException e) { return CreateConflict(e.Message); }
+            catch (InvalidProductCatalogReferenceException e) { return Results.BadRequest(e.Message); }
+        }).RequireAuthorization(PolicyNames.ManageProductCatalog)
+            .AddEndpointFilter<AntiforgeryValidationFilter>()
+            .WithName("CreateProductSubcategory");
+
+        group.MapPut("/{id:int}", async (int id, ProductSubcategoryWriteRequest request,
+            IInventoryCatalogService service, CancellationToken ct) =>
+        {
+            var errors = ValidateRequest(request);
+            if (errors.Count > 0) return Results.ValidationProblem(errors);
+            if (string.IsNullOrWhiteSpace(request.Version)) return Results.BadRequest("Se requiere versión.");
+            try
+            {
+                var item = await service.UpdateSubcategoryAsync(id, request, request.Version, ct);
+                return item is null ? Results.NotFound() : Results.Ok(item);
+            }
+            catch (DuplicateInventoryCatalogValueException e) { return CreateConflict(e.Message); }
+            catch (InvalidProductCatalogReferenceException e) { return Results.BadRequest(e.Message); }
+            catch (InvalidOperationException e) { return Results.Conflict(e.Message); }
+        }).RequireAuthorization(PolicyNames.ManageProductCatalog)
+            .AddEndpointFilter<AntiforgeryValidationFilter>()
+            .WithName("UpdateProductSubcategory");
+
+        group.MapDelete("/{id:int}", async (int id, string version,
+            IInventoryCatalogService service, CancellationToken ct) =>
+        {
+            try
+            {
+                return await service.DeactivateSubcategoryAsync(id, version, ct)
+                    ? Results.NoContent() : Results.NotFound();
+            }
+            catch (InvalidOperationException e) { return Results.Conflict(e.Message); }
+        }).RequireAuthorization(PolicyNames.ManageProductCatalog)
+            .AddEndpointFilter<AntiforgeryValidationFilter>()
+            .WithName("DeactivateProductSubcategory");
     }
 
     private static void MapUnitEndpoints(

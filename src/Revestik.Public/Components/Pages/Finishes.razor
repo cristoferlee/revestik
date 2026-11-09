@@ -41,7 +41,7 @@
       <div class="catalog-grid">
         @foreach (var product in Products.Items)
         {
-          <article class="catalog-card">
+          <article class="catalog-card" data-editor-product-id="@product.Id">
             <a href="@($"{SiteLinks.Path(Lang, 2)}/{product.Slug}")">
               @if (product.CoverImageId is int imageId)
               {

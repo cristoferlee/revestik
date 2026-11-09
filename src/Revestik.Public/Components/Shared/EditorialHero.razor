@@ -1,0 +1,42 @@
+@namespace Revestik.Public.Components.Shared
+
+<section class="editorial-hero editorial-hero--@Variant" aria-labelledby="editorial-page-title">
+    <div class="editorial-hero-shell">
+        <div class="editorial-hero-copy">
+            <p class="eyebrow">@Eyebrow</p>
+            <h1 id="editorial-page-title">@Heading</h1>
+            <p class="editorial-hero-lead">@Introduction</p>
+            <div class="hero-actions">
+                <a class="hero-action-primary" href="@PrimaryHref">@PrimaryLabel <span aria-hidden="true">&#8594;</span></a>
+                <a class="hero-action-secondary" href="@SecondaryHref">@SecondaryLabel</a>
+            </div>
+        </div>
+        <div class="editorial-hero-art" aria-hidden="true">
+            @if (Variant == "solutions")
+            {
+                <div class="editorial-material editorial-material--one"></div>
+                <div class="editorial-material editorial-material--two"></div>
+                <div class="editorial-material editorial-material--three"></div>
+                <span class="editorial-art-accent"></span>
+            }
+            else
+            {
+                <span class="editorial-about-outline"></span>
+                <span class="editorial-about-wordmark">REVESTIK</span>
+                <span class="editorial-about-rule"></span>
+                <span class="editorial-about-place">COSTA RICA</span>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Variant { get; set; } = "about";
+    [Parameter, EditorRequired] public string Eyebrow { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Heading { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Introduction { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string PrimaryHref { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string PrimaryLabel { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string SecondaryHref { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string SecondaryLabel { get; set; } = string.Empty;
+}

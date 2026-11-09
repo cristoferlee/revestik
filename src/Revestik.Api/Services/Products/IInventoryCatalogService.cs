@@ -25,6 +25,29 @@ public interface IInventoryCatalogService
         int id,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<ProductSubcategoryResponse>> GetSubcategoriesAsync(
+        bool includeInactive,
+        CancellationToken cancellationToken);
+
+    Task<ProductSubcategoryResponse?> GetSubcategoryByIdAsync(
+        int id,
+        CancellationToken cancellationToken);
+
+    Task<ProductSubcategoryResponse> CreateSubcategoryAsync(
+        ProductSubcategoryUpsertRequest request,
+        CancellationToken cancellationToken);
+
+    Task<ProductSubcategoryResponse?> UpdateSubcategoryAsync(
+        int id,
+        ProductSubcategoryUpsertRequest request,
+        string version,
+        CancellationToken cancellationToken);
+
+    Task<bool> DeactivateSubcategoryAsync(
+        int id,
+        string version,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<UnitOfMeasureResponse>> GetUnitsAsync(
         bool includeInactive,
         CancellationToken cancellationToken);

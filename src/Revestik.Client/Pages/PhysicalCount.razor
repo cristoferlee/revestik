@@ -13,7 +13,7 @@
 <section class="physical-count-page">
     <header class="physical-count-header">
         <div>
-            <a class="back-link" href="/inventory">← Inventario</a>
+            <a class="back-link" href="inventory">← Inventario</a>
             <h1>Conteo físico</h1>
             <p>
                 Compara las existencias registradas con el conteo real de bodega.
@@ -73,7 +73,7 @@
             </div>
 
             <div class="physical-count-actions">
-                <a class="secondary-button" href="/inventory">Cancelar</a>
+                <a class="secondary-button" href="inventory">Cancelar</a>
                 <button type="button"
                         class="primary-button"
                         disabled="@isBusy"
@@ -88,7 +88,7 @@
         <section class="physical-count-card empty-state">
             <h2>Conteo no encontrado</h2>
             <p>El conteo solicitado no existe o ya no está disponible.</p>
-            <a class="secondary-button" href="/inventory/physical-count">
+            <a class="secondary-button" href="inventory/physical-count">
                 Iniciar nuevo conteo
             </a>
         </section>
@@ -196,7 +196,7 @@
         </section>
 
         <div class="physical-count-actions sticky-actions">
-            <a class="secondary-button" href="/inventory">Volver a inventario</a>
+            <a class="secondary-button" href="inventory">Volver a inventario</a>
 
             @if (physicalCount.Status == PhysicalCountStatus.Draft)
             {
@@ -298,7 +298,7 @@
                 });
 
             Navigation.NavigateTo(
-                $"/inventory/physical-count/{created.Id}");
+                $"inventory/physical-count/{created.Id}");
         }
         catch (HttpRequestException exception)
         {

@@ -29,6 +29,16 @@ public sealed class PublicCatalogAdminApi(HttpClient http)
                 RemovedImageIds = removed.ToArray()
             });
     public Task<AdminProduct> Product(int id) => Read<AdminProduct>($"api/admin/public-catalog/products/{id}");
+    public async Task<bool> StagedExists(string token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            $"api/admin/public-catalog/images/staged/{Uri.EscapeDataString(token)}");
+        // Only inspect response headers; do not download the image to the Blazor client.
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        if (response.StatusCode == HttpStatusCode.NotFound) return false;
+        await Check(response);
+        return true;
+    }
 
     public Task<AdminCategory> SaveCategory(AdminCategory c) => c.Id == 0
         ? Send<AdminCategory>(HttpMethod.Post, "api/admin/public-catalog/categories", c.Write())
@@ -38,6 +48,13 @@ public sealed class PublicCatalogAdminApi(HttpClient http)
         : Send<AdminSubcategory>(HttpMethod.Put, $"api/admin/public-catalog/subcategories/{c.Id}", c.Write());
     public Task<AdminProduct> CreateProduct(AdminProductWrite p) => Send<AdminProduct>(HttpMethod.Post,"api/admin/public-catalog/products", p);
     public Task<AdminProduct> UpdateProduct(int id,AdminProductWrite p) => Send<AdminProduct>(HttpMethod.Put,$"api/admin/public-catalog/products/{id}",p);
+    public async Task DeleteProduct(int id, string version)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete,
+            $"api/admin/public-catalog/products/{id}?version={Uri.EscapeDataString(version)}");
+        using var response = await http.SendAsync(request);
+        await Check(response);
+    }
     public Task<ProductOperationResult> Publish(int id,string version,bool publish) =>
         Send<ProductOperationResult>(HttpMethod.Post,$"api/admin/public-catalog/products/{id}/{(publish ? "publish" : "unpublish")}",new { Version=version });
     public async Task<StagedImage> Stage(IBrowserFile file,string role)
@@ -45,12 +62,13 @@ public sealed class PublicCatalogAdminApi(HttpClient http)
         if(file.Size is <=0 or >5242880)throw new InvalidOperationException("La imagen debe medir 5 MB como máximo.");
         using var multipart=new MultipartFormDataContent();
         using var stream=new StreamContent(file.OpenReadStream(5242880));
-        stream.Headers.ContentType=new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+        // The browser-provided MIME type is advisory; the API validates the actual bytes.
+        if (!System.Net.Http.Headers.MediaTypeHeaderValue.TryParse(file.ContentType, out var contentType))
+            contentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+        stream.Headers.ContentType = contentType;
         multipart.Add(stream,"file",file.Name);
         multipart.Add(new StringContent(role),"role");
         using var response=await http.PostAsync("api/admin/public-catalog/images/stage",multipart);
-        if (response.StatusCode == HttpStatusCode.BadRequest)
-            throw new InvalidOperationException("No se pudo procesar la imagen. Comprobá que sea un archivo JPG, PNG o WebP válido, de máximo 5 MB.");
         await Check(response);
         return await response.Content.ReadFromJsonAsync<StagedImage>() ?? throw new InvalidOperationException("El servidor no devolvió un identificador de imagen.");
     }
@@ -79,17 +97,72 @@ public sealed class PublicCatalogAdminApi(HttpClient http)
     }
     private static async Task Check(HttpResponseMessage response)
     {
-        if(response.IsSuccessStatusCode)return;
-        var text=await response.Content.ReadAsStringAsync();
-        var description=response.StatusCode switch
+        if (response.IsSuccessStatusCode) return;
+
+        // Only display messages from a known, bounded set of API validation responses.
+        // Never display arbitrary server exceptions, stack traces or HTML.
+        var apiMessage = await KnownApiMessage(response);
+        var description = response.StatusCode switch
         {
-            HttpStatusCode.Conflict => "Otro usuario modificó el contenido. Recargá antes de intentarlo de nuevo.",
-            HttpStatusCode.BadRequest => "El servidor rechazó los datos o la protección CSRF.",
-            HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => "No tenés autorización para esta operación.",
+            HttpStatusCode.BadRequest when apiMessage == "Invalid CSRF token." =>
+                "La sesión de edición necesita renovarse. Recargá la página e iniciá sesión nuevamente si es necesario.",
+            HttpStatusCode.BadRequest => apiMessage switch
+            {
+                "Maximum image size is 5 MB." or "Image must be between 1 byte and 5 MB." =>
+                    "La imagen supera el límite de 5 MB o está vacía.",
+                "Extension and image content do not match." or "Unsupported image signature." or
+                "Unsupported image format." or "Adjuntá una imagen PNG, JPG o WebP válida." =>
+                    "La fotografía no es un JPG, PNG o WebP válido, o su extensión no coincide con el contenido.",
+                "Image dimensions are outside safety limits." =>
+                    "La resolución de la fotografía supera los límites permitidos.",
+                "Staged image is missing or invalid." or "Uploaded image is missing or invalid." =>
+                    "Una fotografía temporal ya no está disponible. Quitala o volvé a subirla antes de guardar.",
+                "Invalid product fields or subcategories." or "Invalid product, category, or unit selection." =>
+                    "Revisá el nombre, descripción, subcategorías, precio y unidad de venta.",
+                "Invalid gallery changes." or "A published product requires one cover and at most five images." or
+                "Publish requires one cover and at most five valid staged images." =>
+                    "Revisá las fotografías: debe haber una portada y un máximo de cinco imágenes.",
+                _ => "El servidor rechazó la operación (HTTP 400). Revisá los campos o la sesión de edición."
+            },
+            HttpStatusCode.Conflict when apiMessage == "Product or images changed. Reload before deleting." =>
+                "El producto cambió en otra sesión o alguna imagen sigue en uso. Recargá antes de eliminar.",
+            HttpStatusCode.Conflict when apiMessage == "Product is referenced by another record." =>
+                "El producto tiene referencias que impiden eliminarlo. Recargá y revisá el contenido.",
+            HttpStatusCode.Conflict => apiMessage == "Gallery changed. Reload before saving." ||
+                apiMessage == "Product or gallery changed. Reload." || apiMessage == "Product changed. Reload."
+                    ? "El producto o sus fotografías cambiaron en otra sesión. Conservá tus datos y recargá antes de volver a guardar."
+                    : "Los datos cambiaron en otra sesión o entran en conflicto. Revisá antes de intentarlo nuevamente.",
+            HttpStatusCode.NotFound =>
+                "El recurso solicitado ya no existe o no está disponible. Revisá la fotografía o recargá los datos.",
+            HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden =>
+                "La sesión expiró o no tenés autorización. Iniciá sesión nuevamente.",
+            HttpStatusCode.RequestEntityTooLarge => "La fotografía excede el tamaño permitido de 5 MB.",
+            HttpStatusCode.ServiceUnavailable or HttpStatusCode.BadGateway =>
+                "El servicio no está disponible en este momento. Revisá el estado antes de reintentar.",
             _ => $"La operación falló (HTTP {(int)response.StatusCode})."
         };
-        // Do not echo raw server exceptions or untrusted HTML into the user interface.
         throw new InvalidOperationException(description);
+    }
+
+    private static async Task<string?> KnownApiMessage(HttpResponseMessage response)
+    {
+        var mediaType = response.Content.Headers.ContentType?.MediaType;
+        if (mediaType is not ("application/json" or "application/problem+json")) return null;
+        var body = await response.Content.ReadAsStringAsync();
+        if (body.Length > 4096) return null;
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind != JsonValueKind.Object) return null;
+            foreach (var field in new[] { "message", "title" })
+            {
+                if (document.RootElement.TryGetProperty(field, out var value) &&
+                    value.ValueKind == JsonValueKind.String)
+                    return value.GetString();
+            }
+        }
+        catch (JsonException) { /* Unknown response: use generic status text. */ }
+        return null;
     }
 }
 

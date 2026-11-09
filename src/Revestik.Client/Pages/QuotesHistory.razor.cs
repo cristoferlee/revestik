@@ -233,7 +233,7 @@ public partial class QuotesHistory :
             }
 
             Navigator.NavigateTo(
-                $"/sales?draftId={sale.Id}");
+                $"sales?draftId={sale.Id}");
         }
         catch (OperationCanceledException)
         {
@@ -399,10 +399,10 @@ public partial class QuotesHistory :
             string.IsNullOrWhiteSpace(
                 selectedListItem.ConvertedSaleNumber))
         {
-            return $"/sales?draftId={saleId}";
+            return $"sales?draftId={saleId}";
         }
 
-        return "/sales/history";
+        return "sales/history";
     }
 
     private static string FormatDate(

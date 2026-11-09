@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Models.PublicCatalog;
+using Revestik.Api.Models;
 using Revestik.Api.Tests.Hosting;
 
 namespace Revestik.Api.Tests.PublicCatalog;
@@ -12,10 +13,10 @@ namespace Revestik.Api.Tests.PublicCatalog;
 public sealed class PublicCatalogImageSqlIntegrationTests(SqlServerIntegrationTestFixture fixture)
     : IClassFixture<SqlServerIntegrationTestFixture>
 {
-    private static PublicCatalogCategory NewCategory() => new()
+    private static ProductCategory NewCategory() => new()
     {
-        Slug = "cat-" + Guid.NewGuid().ToString("N"),
-        NameEs = "Pisos interiores",
+        Name = "Pisos-" + Guid.NewGuid().ToString("N"),
+        PublicSlug = "cat-" + Guid.NewGuid().ToString("N"),
         CreatedAtUtc = DateTime.UtcNow
     };
 
@@ -90,7 +91,7 @@ public sealed class PublicCatalogImageSqlIntegrationTests(SqlServerIntegrationTe
     {
         await using var db = fixture.CreateDbContext();
         var category = NewCategory();
-        db.PublicCatalogCategories.Add(category);
+        db.ProductCategories.Add(category);
         await db.SaveChangesAsync();
         var hero = Image("CategoryHeroPrimary");
         hero.CategoryId = category.Id;
@@ -109,7 +110,7 @@ public sealed class PublicCatalogImageSqlIntegrationTests(SqlServerIntegrationTe
     {
         await using var db = fixture.CreateDbContext();
         var category = NewCategory();
-        db.PublicCatalogCategories.Add(category);
+        db.ProductCategories.Add(category);
         await db.SaveChangesAsync();
         var fallback = Image("CategoryHeroFallback");
         fallback.CategoryId = category.Id;
@@ -134,7 +135,7 @@ public sealed class PublicCatalogImageSqlIntegrationTests(SqlServerIntegrationTe
         await using var db = fixture.CreateDbContext();
         var category = NewCategory();
         var product = NewProduct();
-        db.PublicCatalogCategories.Add(category);
+        db.ProductCategories.Add(category);
         db.PublicCatalogProducts.Add(product);
         await db.SaveChangesAsync();
         var image = Image(role, mime);
@@ -170,7 +171,7 @@ public sealed class PublicCatalogImageSqlIntegrationTests(SqlServerIntegrationTe
         await using var db = fixture.CreateDbContext();
         var category = NewCategory();
         var product = NewProduct();
-        db.PublicCatalogCategories.Add(category);
+        db.ProductCategories.Add(category);
         db.PublicCatalogProducts.Add(product);
         await db.SaveChangesAsync();
         var image = Image("ProductCover");

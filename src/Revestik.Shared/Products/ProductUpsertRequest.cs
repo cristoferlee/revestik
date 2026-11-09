@@ -4,6 +4,9 @@ namespace Revestik.Shared.Products;
 
 public sealed class ProductUpsertRequest : IValidatableObject
 {
+    [Range(1, int.MaxValue, ErrorMessage = "La subcategoría no es válida.")]
+    public int? SubcategoryId { get; set; }
+
     [Range(1, int.MaxValue, ErrorMessage = "La categoría es obligatoria.")]
     public int CategoryId { get; set; }
 

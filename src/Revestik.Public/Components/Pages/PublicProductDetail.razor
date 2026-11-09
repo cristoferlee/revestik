@@ -14,7 +14,7 @@
   <meta name="robots" content="noindex,follow" />
 </HeadContent>
 <main id="main" class="subpage catalog-page">
-  <div class="subpage-inner">
+  <div class="subpage-inner catalog-product-detail" data-editor-product-id="@(Product?.Id)">
     <nav class="project-detail-breadcrumb"><a href="@SiteLinks.Path(Lang,2)">@Locale.Get(Lang).Nav[2]</a> / <span aria-current="page">@(Product?.Text(Lang)?.Name ?? Slug)</span></nav>
     @if (Error)
     {

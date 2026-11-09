@@ -60,7 +60,8 @@ public sealed class ProductService(RevestikDbContext dbContext)
                         product.MinimumStock,
                         product.IsDeleted)
                     {
-                        SalePriceBasis = product.SalePriceBasis
+                        SalePriceBasis = product.SalePriceBasis,
+                        SubcategoryId = product.SubcategoryId
                     })
                 .ToListAsync(cancellationToken);
         }
@@ -106,7 +107,8 @@ public sealed class ProductService(RevestikDbContext dbContext)
                     product.CreatedAtUtc,
                     product.UpdatedAtUtc)
                 {
-                    SalePriceBasis = product.SalePriceBasis
+                    SalePriceBasis = product.SalePriceBasis,
+                    SubcategoryId = product.SubcategoryId
                 })
             .SingleOrDefaultAsync(cancellationToken);
     }
@@ -470,6 +472,17 @@ public sealed class ProductService(RevestikDbContext dbContext)
                 "La categoría no existe o está inactiva.");
         }
 
+        if (request.SubcategoryId is int subcategoryId)
+        {
+            var validSubcategory = await dbContext.ProductSubcategories.AsNoTracking()
+                .AnyAsync(s => s.Id == subcategoryId && s.CategoryId == request.CategoryId &&
+                    (s.IsActive || (currentProduct != null && currentProduct.SubcategoryId == subcategoryId)),
+                    cancellationToken);
+            if (!validSubcategory)
+                throw new InvalidProductCatalogReferenceException(
+                    "La subcategoría no corresponde a la categoría o está inactiva.");
+        }
+
         var validUnitIds =
             await dbContext.UnitsOfMeasure
                 .AsNoTracking()
@@ -518,6 +531,7 @@ public sealed class ProductService(RevestikDbContext dbContext)
     {
         product.CategoryId =
             request.CategoryId;
+        product.SubcategoryId = request.SubcategoryId;
 
         product.Name =
             NormalizeRequired(request.Name);

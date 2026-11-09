@@ -47,10 +47,9 @@
     </dialog>
     <script src="/js/public-nav.js" defer></script>
     <script src="/js/public-hero.js" defer></script>
+    <script src="/js/public-featured-products.js" defer></script>
     <script src="/js/public-image-viewer.js" defer></script>
-    @if (new Uri(Navigation.Uri).Query.Contains("editorPreview=", StringComparison.Ordinal))
-    {
-        <script src="/js/public-editor-preview.js" defer></script>
-    }
+    @* The script is inert outside an authenticated parent handshake, including on normal public pages. *@
+    <script src="/js/public-editor-preview.js" defer></script>
 </body>
 </html>

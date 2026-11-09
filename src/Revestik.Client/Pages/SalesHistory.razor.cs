@@ -359,7 +359,7 @@ public partial class SalesHistory : ComponentBase, IDisposable
                 LoadSummaryAsync());
 
             Navigator.NavigateTo(
-                $"/sales?draftId={replacement.Id}");
+                $"sales?draftId={replacement.Id}");
         }
         catch (OperationCanceledException)
         {

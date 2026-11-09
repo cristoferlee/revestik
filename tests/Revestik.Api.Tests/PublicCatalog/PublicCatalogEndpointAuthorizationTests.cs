@@ -41,6 +41,15 @@ public sealed class PublicCatalogEndpointAuthorizationTests
     }
 
     [Fact]
+    public async Task AnonymousCanReadFeaturedPublicProducts()
+    {
+        using var factory = new RevestikWebApplicationFactory("Development");
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/api/public/catalog/featured-products");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task AnonymousPublicCategoriesCanBeRead()
     {
         using var factory=new RevestikWebApplicationFactory("Development");
@@ -66,6 +75,35 @@ public sealed class PublicCatalogEndpointAuthorizationTests
         client.DefaultRequestHeaders.Add(TestAuthenticationHandler.RoleHeaderName, "Sales");
         var response = await client.GetAsync("/api/admin/public-catalog/products?page=1&pageSize=24");
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PermanentProductDeletionRequiresAdministrator()
+    {
+        using var factory = new RevestikWebApplicationFactory("Development");
+        using var anonymous = factory.CreateClient();
+        using var anonymousResponse = await anonymous.DeleteAsync(
+            "/api/admin/public-catalog/products/1?version=abc");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
+
+        using var sales = factory.CreateClient();
+        sales.DefaultRequestHeaders.Add(TestAuthenticationHandler.UserHeaderName, "sales-user");
+        sales.DefaultRequestHeaders.Add(TestAuthenticationHandler.RoleHeaderName, "Sales");
+        using var salesResponse = await sales.DeleteAsync(
+            "/api/admin/public-catalog/products/1?version=abc");
+        Assert.Equal(HttpStatusCode.Forbidden, salesResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task PermanentProductDeletionRejectsMissingCsrf()
+    {
+        using var factory = new RevestikWebApplicationFactory("Development");
+        using var client = factory.CreateClient();
+        client.BaseAddress = new Uri("https://localhost");
+        client.DefaultRequestHeaders.Add(TestAuthenticationHandler.UserHeaderName, "catalog-admin");
+        using var response = await client.DeleteAsync(
+            "/api/admin/public-catalog/products/1?version=abc");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]

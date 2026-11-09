@@ -7,6 +7,7 @@
 @attribute [Authorize(Roles = "Administrator,Accountant,Sales,Warehouse")]
 @inject IInventoryApiService InventoryApi
 @inject IProductApiService ProductApi
+@inject IInventoryCatalogApiService CatalogApi
 
 <PageTitle>Inventario | Revestik</PageTitle>
 
@@ -20,7 +21,7 @@
         <div class="inventory-header-actions">
             <AuthorizeView Roles="Administrator">
                 <a class="secondary-button inventory-catalog-link"
-                   href="/settings">
+                   href="settings">
                     Categorías y unidades
                 </a>
             </AuthorizeView>
@@ -35,7 +36,7 @@
             </AuthorizeView>
 
             <a class="secondary-button"
-               href="/inventory/physical-count">
+               href="inventory/physical-count">
                 Nuevo conteo físico
             </a>
 
@@ -502,7 +503,7 @@
                             <p class="field-guidance">
                                 ¿Falta una categoría o unidad?
 
-                                <a href="/settings"
+                                <a href="settings"
                                    class="inventory-settings-link">
                                     Administrar categorías y unidades
                                 </a>
@@ -527,7 +528,7 @@
                         <div class="form-group">
                             <label>Categoría</label>
 
-                            <InputSelect @bind-Value="productRequest.CategoryId">
+                            <InputSelect @bind-Value="productRequest.CategoryId" @bind-Value:after="ClearInvalidSubcategory">
                                 <option value="0">Seleccione</option>
 
                                 @foreach (var category in categories)
@@ -539,6 +540,18 @@
                             </InputSelect>
 
                             <ValidationMessage For="@(() => productRequest.CategoryId)" />
+                        </div>
+                        <div class="form-group">
+                            <label>Subcategoría (opcional)</label>
+                            <InputSelect @bind-Value="productRequest.SubcategoryId">
+                                <option value="">Sin subcategoría</option>
+                                @foreach (var sub in subcategories.Where(s => s.CategoryId == productRequest.CategoryId &&
+                                    (s.IsActive || s.Id == productRequest.SubcategoryId)))
+                                {
+                                    <option value="@sub.Id">@sub.Name</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => productRequest.SubcategoryId)" />
                         </div>
 
                         <div class="form-group">
@@ -771,7 +784,15 @@
 
     private InventoryAdjustmentRequest adjustmentRequest = new();
     private InitialStockRequest initialStockRequest = new();
+    private void ClearInvalidSubcategory()
+    {
+        if (productRequest.SubcategoryId is int id &&
+            !subcategories.Any(s => s.Id == id && s.CategoryId == productRequest.CategoryId))
+            productRequest.SubcategoryId = null;
+    }
+
     private ProductUpsertRequest productRequest = new();
+    private IReadOnlyList<ProductSubcategoryResponse> subcategories = [];
 
     private int? editingProductId;
     private string editingUnitDescription = string.Empty;
@@ -806,6 +827,7 @@
 
             units =
                 await ProductApi.GetUnitsAsync();
+            subcategories = await CatalogApi.GetSubcategoriesAsync(includeInactive: true);
 
             summary =
                 await InventoryApi.GetSummaryAsync();
@@ -991,6 +1013,7 @@
                 new ProductUpsertRequest
                 {
                     CategoryId = product.CategoryId,
+                    SubcategoryId = product.SubcategoryId,
                     Name = product.Name,
                     Description = product.Description,
                     CabysCode = product.CabysCode,

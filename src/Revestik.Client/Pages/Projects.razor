@@ -13,7 +13,7 @@
 <section class="projects-page">
     <header class="projects-header">
         <div><h1>Proyectos</h1><p>Consulta y organiza los expedientes de cada cliente.</p></div>
-        <a class="secondary-button" href="/customers">Administrar clientes</a>
+        <a class="secondary-button" href="customers">Administrar clientes</a>
     </header>
     @if (error is not null) { <p class="status-message error-message" role="alert">@error</p> }
     <section class="projects-card">
@@ -94,7 +94,7 @@
                 <div><span class="section-eyebrow">Cliente seleccionado</span><h2>@selected.Name</h2><p>@selected.IdentificationNumber · @(selected.IsActive ? "Cliente activo" : "Cliente inactivo: consulta histórica disponible")</p></div>
                 <div class="projects-utility-actions">
                     <button type="button" class="secondary-button" disabled="@loadingProjects" @onclick="RefreshProjectsAsync">Actualizar proyectos</button>
-                    @if (selected.IsActive) { <a class="primary-button" href="@($"/projects/customer/{selected.Id}/new")">Nuevo proyecto</a> }
+                    @if (selected.IsActive) { <a class="primary-button" href="@($"projects/customer/{selected.Id}/new")">Nuevo proyecto</a> }
                 </div>
             </div>
             @if (loadingProjects) { <p role="status">Cargando proyectos...</p> }
@@ -109,7 +109,7 @@
                             <div class="project-item-top"><strong>@project.Name</strong><span class="status-chip">@StatusLabel(project.Status)</span></div>
                             <small>Registrado: @project.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</small>
                             <div class="project-card-actions">
-                                <a class="secondary-button" href="@($"/projects/{project.Id}")">Abrir expediente</a>
+                                <a class="secondary-button" href="@($"projects/{project.Id}")">Abrir expediente</a>
                                 @if (isAdmin || project.ResponsibleUserId == userId)
                                 {
                                     <button type="button" class="project-delete-button" disabled="@deleting" @onclick="() => PrepareDeleteAsync(project)">Eliminar</button>

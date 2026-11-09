@@ -34,6 +34,14 @@ public sealed class PublicCatalogReader(HttpClient http)
         return await http.GetFromJsonAsync<ProductPageDto>(uri, ct) ?? new();
     }
 
+    public async Task<List<ProductDto>> FeaturedProducts(IReadOnlyList<string>? slugs, CancellationToken ct = default)
+    {
+        var uri = "api/public/catalog/featured-products";
+        if (slugs is { Count: > 0 })
+            uri += "?slugs=" + Uri.EscapeDataString(string.Join(',', slugs.Take(5)));
+        return await http.GetFromJsonAsync<List<ProductDto>>(uri, ct) ?? [];
+    }
+
     public Task<ProductDto?> Product(string slug, CancellationToken ct = default) =>
         Optional<ProductDto>($"api/public/catalog/products/{Uri.EscapeDataString(slug)}", ct);
 

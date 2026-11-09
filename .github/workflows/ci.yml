@@ -50,7 +50,7 @@ jobs:
 
       - name: Verify hosted Blazor assets
         run: |
-          test -f artifacts/publish/wwwroot/index.html
-          test -f artifacts/publish/wwwroot/_framework/blazor.webassembly.js
-          find artifacts/publish/wwwroot/_framework -type f \( -name 'dotnet.runtime.*.js' -o -name 'dotnet.native.*.wasm' \) -print -quit | grep -q .
-          find artifacts/publish/wwwroot/_framework -type f -name '*.br' -print -quit | grep -q .
+          test -f artifacts/publish/wwwroot/administracion/index.html
+          test -f artifacts/publish/wwwroot/administracion/_framework/blazor.webassembly.js
+          find artifacts/publish/wwwroot/administracion/_framework -type f \( -name 'dotnet.runtime.*.js' -o -name 'dotnet.native.*.wasm' \) -print -quit | grep -q .
+          find artifacts/publish/wwwroot/administracion/_framework -type f -name '*.br' -print -quit | grep -q .

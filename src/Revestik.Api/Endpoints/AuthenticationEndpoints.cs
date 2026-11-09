@@ -376,7 +376,7 @@ public static class AuthenticationEndpoints
                 "SQL connection timed out during Google authentication callback.");
 
             var loginUrl = QueryHelpers.AddQueryString(
-                $"{clientBaseUrl}/login",
+                $"{clientBaseUrl}/administracion/login",
                 new Dictionary<string, string?>
                 {
                     ["error"] = "database_temporarily_unavailable",
@@ -406,11 +406,14 @@ public static class AuthenticationEndpoints
 
     private static string NormalizeReturnPath(string? returnPath)
     {
+        // Only allow redirects inside the business application after OAuth.
         if (string.IsNullOrWhiteSpace(returnPath) ||
-            !returnPath.StartsWith('/') ||
-            returnPath.StartsWith("//"))
+            returnPath.StartsWith("//", StringComparison.Ordinal) ||
+            returnPath.Contains('\\') ||
+            !(returnPath.Equals("/administracion", StringComparison.OrdinalIgnoreCase) ||
+              returnPath.StartsWith("/administracion/", StringComparison.OrdinalIgnoreCase)))
         {
-            return "/";
+            return "/administracion/";
         }
 
         return returnPath;
@@ -433,7 +436,7 @@ public static class AuthenticationEndpoints
         string errorCode)
     {
         var loginUrl = QueryHelpers.AddQueryString(
-            $"{clientBaseUrl}/login",
+            $"{clientBaseUrl}/administracion/login",
             "error",
             errorCode);
 

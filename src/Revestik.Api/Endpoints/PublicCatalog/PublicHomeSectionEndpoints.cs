@@ -87,9 +87,8 @@ public static class PublicHomeSectionEndpoints
 
         if (key == "products" && request.FeaturedSlugs.Count > 0)
         {
-            var approved = await db.PublicCatalogProducts.AsNoTracking()
-                .Where(p => request.FeaturedSlugs.Contains(p.Slug) && p.IsPublished && !p.IsArchived &&
-                    p.SubcategoryLinks.Any(l => l.Subcategory.IsActive && l.Subcategory.Category.IsActive))
+            var approved = await PublicCatalogVisibility.VisibleProducts(db).AsNoTracking()
+                .Where(p => request.FeaturedSlugs.Contains(p.Slug))
                 .Select(p => p.Slug).ToListAsync(ct);
             if (approved.Count != request.FeaturedSlugs.Count)
                 return Results.BadRequest(new { message = "Solo se pueden destacar productos publicados y disponibles." });

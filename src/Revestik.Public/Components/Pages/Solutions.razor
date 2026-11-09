@@ -1,22 +1,90 @@
 @page "/es/soluciones"
 @page "/en/solutions"
 @page "/de/loesungen"
+@using Revestik.Public.Components.Shared
 @inject NavigationManager Navigation
 @{
     var lang = Locale.FromUri(Navigation.Uri);
-    var t = Locale.Get(lang);
     var seo = PublicSeo.Get(lang, 3);
+    var t = Locale.Get(lang);
 }
 <PageTitle>@seo.Title</PageTitle>
 <HeadContent>
     <meta name="description" content="@seo.Description" />
     <meta name="robots" content="noindex,follow" />
 </HeadContent>
-<main id="main" class="subpage">
-  <div class="subpage-inner">
-    <p class="eyebrow">REVESTIK &middot; COSTA RICA</p>
-    <h1>@seo.Heading</h1>
-    <p>@t.Pending</p>
-    <a class="back-home" href="@SiteLinks.Path(lang, 0)">← @t.Nav[0]</a>
-  </div>
+<main id="main" class="editorial-page editorial-page--solutions">
+    <EditorialHero Variant="solutions"
+                   Eyebrow="@(L("REVESTIK · SOLUCIONES", "REVESTIK · SOLUTIONS", "REVESTIK · LÖSUNGEN"))"
+                   Heading="@seo.Heading"
+                   Introduction="@(L(
+                       "Explorá materiales y acabados pensando en el espacio, el uso y la identidad de cada proyecto.",
+                       "Explore materials and finishes with the space, its purpose and the character of each project in mind.",
+                       "Entdecken Sie Materialien und Oberflächen passend zum Raum, seiner Nutzung und dem Charakter jedes Projekts."))"
+                   PrimaryHref="@SiteLinks.Path(lang, 2)" PrimaryLabel="@t.Nav[2]"
+                   SecondaryHref="@SiteLinks.Path(lang, 5)" SecondaryLabel="@t.Nav[5]" />
+
+    <div class="editorial-content">
+        <section class="editorial-intro" aria-labelledby="solutions-intro-title">
+            <div>
+                <p class="editorial-kicker">01 / @L("EL ENFOQUE", "OUR APPROACH", "UNSER ANSATZ")</p>
+                <h2 id="solutions-intro-title">@L("Cada espacio pide una solución diferente.", "Different spaces call for different finishes.", "Jeder Raum stellt andere Anforderungen.")</h2>
+            </div>
+            <p>@L(
+                "Un piso interior, una terraza o un muro tienen necesidades distintas. Nuestro catálogo público reúne opciones para explorar acabados sin convertir la elección en una lista interminable de productos.",
+                "An interior floor, a terrace and a wall each have different needs. Our public catalog brings together finishing options without turning the selection process into an endless product list.",
+                "Innenböden, Terrassen und Wände stellen unterschiedliche Anforderungen. Unser öffentlicher Katalog bietet eine überschaubare Auswahl an Oberflächen für verschiedene Anwendungen.")</p>
+        </section>
+
+        <section class="editorial-offerings" aria-labelledby="solutions-options-title">
+            <div class="editorial-section-heading">
+                <p class="editorial-kicker">02 / @L("APLICACIONES", "APPLICATIONS", "ANWENDUNGEN")</p>
+                <h2 id="solutions-options-title">@L("Acabados para explorar", "Explore finish options", "Oberflächen entdecken")</h2>
+            </div>
+            <div class="editorial-rows">
+                <article class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">01</span>
+                    <div>
+                        <h3>@L("Pisos interiores", "Interior flooring", "Bodenbeläge für Innenräume")</h3>
+                        <p>@L("Superficies para espacios residenciales y comerciales. Compará formatos, apariencias y características según el ambiente.", "Surfaces for residential and commercial interiors. Compare formats, looks and characteristics for each space.", "Oberflächen für Wohn- und Geschäftsräume. Vergleichen Sie Formate, Optik und Eigenschaften für den jeweiligen Raum.")</p>
+                    </div>
+                </article>
+                <article class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">02</span>
+                    <div>
+                        <h3>@L("Pisos exteriores", "Outdoor flooring", "Bodenbeläge für Außenbereiche")</h3>
+                        <p>@L("Opciones para áreas expuestas al clima, donde conviene revisar textura, mantenimiento y condiciones de instalación.", "Options for weather-exposed areas, where texture, maintenance and installation conditions deserve attention.", "Optionen für wetterexponierte Bereiche, bei denen Oberfläche, Pflege und Verlegebedingungen wichtig sind.")</p>
+                    </div>
+                </article>
+                <article class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">03</span>
+                    <div>
+                        <h3>@L("Paredes y fachadas", "Walls and facades", "Wände und Fassaden")</h3>
+                        <p>@L("Revestimientos y materiales que aportan carácter a muros, zonas húmedas y superficies verticales.", "Wall coverings and materials that bring character to walls, wet areas and vertical surfaces.", "Verkleidungen und Materialien, die Wänden, Feuchtbereichen und vertikalen Flächen Charakter verleihen.")</p>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <aside class="editorial-cta" aria-labelledby="solutions-cta-title">
+            <div>
+                <p class="editorial-kicker">@L("SIGUIENTE PASO", "NEXT STEP", "NÄCHSTER SCHRITT")</p>
+                <h2 id="solutions-cta-title">@L("Encontrá el acabado que va con tu proyecto.", "Find finishes for your next project.", "Finden Sie Oberflächen für Ihr nächstes Projekt.")</h2>
+                <p>@L("Conocé los productos publicados o contanos qué espacio estás planificando.", "Browse published products or tell us about the space you're planning.", "Entdecken Sie veröffentlichte Produkte oder erzählen Sie uns von Ihrem Projekt.")</p>
+            </div>
+            <div class="editorial-cta-actions">
+                <a href="@SiteLinks.Path(lang, 2)">@t.Nav[2] <span aria-hidden="true">&#8594;</span></a>
+                <a class="editorial-cta-secondary" href="@SiteLinks.Path(lang, 5)">@t.Nav[5]</a>
+            </div>
+        </aside>
+    </div>
 </main>
+
+@code {
+    private string L(string es, string en, string de) => Locale.FromUri(Navigation.Uri) switch
+    {
+        "en" => en,
+        "de" => de,
+        _ => es
+    };
+}

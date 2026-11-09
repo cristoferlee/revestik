@@ -1,22 +1,90 @@
 @page "/es/nosotros"
 @page "/en/about"
 @page "/de/ueber-uns"
+@using Revestik.Public.Components.Shared
 @inject NavigationManager Navigation
 @{
     var lang = Locale.FromUri(Navigation.Uri);
-    var t = Locale.Get(lang);
     var seo = PublicSeo.Get(lang, 4);
+    var t = Locale.Get(lang);
 }
 <PageTitle>@seo.Title</PageTitle>
 <HeadContent>
     <meta name="description" content="@seo.Description" />
     <meta name="robots" content="noindex,follow" />
 </HeadContent>
-<main id="main" class="subpage">
-  <div class="subpage-inner">
-    <p class="eyebrow">REVESTIK &middot; COSTA RICA</p>
-    <h1>@seo.Heading</h1>
-    <p>@t.Pending</p>
-    <a class="back-home" href="@SiteLinks.Path(lang, 0)">← @t.Nav[0]</a>
-  </div>
+<main id="main" class="editorial-page editorial-page--about">
+    <EditorialHero Variant="about"
+                   Eyebrow="@(L("REVESTIK · NOSOTROS", "REVESTIK · ABOUT", "REVESTIK · ÜBER UNS"))"
+                   Heading="@seo.Heading"
+                   Introduction="@(L(
+                       "Un espacio para conocer nuestro enfoque y la manera en que pensamos los acabados para construcción y remodelación.",
+                       "A closer look at our approach to finishing materials for construction and renovation.",
+                       "Erfahren Sie mehr über unseren Ansatz für Materialien und Oberflächen bei Bau- und Renovierungsprojekten."))"
+                   PrimaryHref="@SiteLinks.Path(lang, 2)" PrimaryLabel="@t.Nav[2]"
+                   SecondaryHref="@SiteLinks.Path(lang, 5)" SecondaryLabel="@t.Nav[5]" />
+
+    <div class="editorial-content">
+        <section class="editorial-intro" aria-labelledby="about-intro-title">
+            <div>
+                <p class="editorial-kicker">01 / @L("QUIÉNES SOMOS", "WHO WE ARE", "WER WIR SIND")</p>
+                <h2 id="about-intro-title">@L("Los detalles también construyen espacios.", "Details help shape every space.", "Details prägen jeden Raum.")</h2>
+            </div>
+            <p>@L(
+                "REVESTIK presenta materiales y soluciones de acabados para quienes construyen, transforman o renuevan sus espacios. Buscamos que sea más sencillo explorar opciones y conversar sobre lo que necesita cada proyecto.",
+                "REVESTIK presents finishing materials and solutions for people building, transforming or renovating spaces. Our aim is to make it easier to explore options and discuss what each project needs.",
+                "REVESTIK präsentiert Materialien und Oberflächen für Menschen, die Räume bauen, gestalten oder renovieren. Wir möchten die Auswahl übersichtlich und das Gespräch über Projektanforderungen einfacher machen.")</p>
+        </section>
+
+        <section class="editorial-offerings" aria-labelledby="about-values-title">
+            <div class="editorial-section-heading">
+                <p class="editorial-kicker">02 / @L("NUESTRO ENFOQUE", "OUR APPROACH", "UNSER ANSATZ")</p>
+                <h2 id="about-values-title">@L("Materiales, espacios y decisiones.", "Materials, spaces and choices.", "Materialien, Räume und Entscheidungen.")</h2>
+            </div>
+            <div class="editorial-rows">
+                <article class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">01</span>
+                    <div>
+                        <h3>@L("Entender el espacio", "Understand the space", "Den Raum verstehen")</h3>
+                        <p>@L("El uso, la ubicación y el carácter del ambiente orientan la búsqueda de un acabado apropiado.", "Use, location and the character of a space help guide the choice of finishes.", "Nutzung, Lage und Charakter eines Raums helfen bei der Wahl passender Oberflächen.")</p>
+                    </div>
+                </article>
+                <article class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">02</span>
+                    <div>
+                        <h3>@L("Explorar opciones", "Explore options", "Optionen entdecken")</h3>
+                        <p>@L("Una selección clara de productos permite comparar ideas sin depender de un catálogo interminable.", "A focused selection of products makes it easier to compare ideas without an overwhelming catalog.", "Eine gezielte Produktauswahl macht den Vergleich leichter, ohne einen unübersichtlichen Katalog.")</p>
+                    </div>
+                </article>
+                <article class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">03</span>
+                    <div>
+                        <h3>@L("Conversar sobre el proyecto", "Discuss the project", "Über das Projekt sprechen")</h3>
+                        <p>@L("Las dudas sobre materiales, formatos y aplicaciones merecen una conversación antes de tomar decisiones.", "Questions about materials, formats and applications deserve a conversation before making decisions.", "Fragen zu Materialien, Formaten und Anwendungen sollten vor der Entscheidung besprochen werden.")</p>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <aside class="editorial-cta" aria-labelledby="about-cta-title">
+            <div>
+                <p class="editorial-kicker">@L("CONVERSEMOS", "LET'S TALK", "SPRECHEN WIR")</p>
+                <h2 id="about-cta-title">@L("Cada proyecto comienza con una idea.", "Every project starts with an idea.", "Jedes Projekt beginnt mit einer Idee.")</h2>
+                <p>@L("Explorá nuestros productos o acercanos tu consulta.", "Explore our products or get in touch with a question.", "Entdecken Sie unsere Produkte oder kontaktieren Sie uns mit Ihrer Frage.")</p>
+            </div>
+            <div class="editorial-cta-actions">
+                <a href="@SiteLinks.Path(lang, 2)">@t.Nav[2] <span aria-hidden="true">&#8594;</span></a>
+                <a class="editorial-cta-secondary" href="@SiteLinks.Path(lang, 5)">@t.Nav[5]</a>
+            </div>
+        </aside>
+    </div>
 </main>
+
+@code {
+    private string L(string es, string en, string de) => Locale.FromUri(Navigation.Uri) switch
+    {
+        "en" => en,
+        "de" => de,
+        _ => es
+    };
+}

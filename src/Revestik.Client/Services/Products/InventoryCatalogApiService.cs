@@ -72,6 +72,40 @@ public sealed class InventoryCatalogApiService(HttpClient httpClient)
         return true;
     }
 
+    public async Task<IReadOnlyList<ProductSubcategoryResponse>> GetSubcategoriesAsync(
+        bool includeInactive = true, CancellationToken cancellationToken = default)
+        => await httpClient.GetFromJsonAsync<List<ProductSubcategoryResponse>>(
+            $"api/product-subcategories?includeInactive={includeInactive.ToString().ToLowerInvariant()}",
+            cancellationToken) ?? [];
+
+    public async Task<ProductSubcategoryResponse> CreateSubcategoryAsync(
+        ProductSubcategoryUpsertRequest request, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync("api/product-subcategories", request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ProductSubcategoryResponse>(cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException("No se pudo cargar la subcategoría creada.");
+    }
+
+    public async Task<ProductSubcategoryResponse?> UpdateSubcategoryAsync(
+        int id, ProductSubcategoryWriteRequest request, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PutAsJsonAsync($"api/product-subcategories/{id}", request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ProductSubcategoryResponse>(cancellationToken: cancellationToken);
+    }
+
+    public async Task<bool> DeactivateSubcategoryAsync(
+        int id, string version, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.DeleteAsync(
+            $"api/product-subcategories/{id}?version={Uri.EscapeDataString(version)}", cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound) return false;
+        response.EnsureSuccessStatusCode();
+        return true;
+    }
+
     public async Task<IReadOnlyList<UnitOfMeasureResponse>> GetUnitsAsync(
         bool includeInactive = true,
         CancellationToken cancellationToken = default)
