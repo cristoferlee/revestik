@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.FileProviders;
 using System.Net;
 using QuestPDF.Infrastructure;
 using Revestik.Api.Configuration;
@@ -33,6 +34,7 @@ using Revestik.Api.Services.Projects;
 using Revestik.Api.Services.Projects.Documents;
 using Revestik.Api.Services.Projects.Pdf;
 using Revestik.Api.Services.Users;
+using Revestik.Public.Hosting;
 
 const string ClientCorsPolicy = "ClientCorsPolicy";
 QuestPDF.Settings.License = LicenseType.Community;
@@ -151,6 +153,7 @@ var connectionString = builder.Configuration.GetConnectionString("RevestikDataba
     ?? throw new InvalidOperationException("Connection string 'RevestikDatabase' was not found.");
 builder.Services.AddDbContext<RevestikDbContext>(options => options.UseSqlServer(connectionString));
 builder.Services.AddRevestikAuthentication(builder.Configuration);
+builder.Services.AddRevestikPublicSite(builder.Configuration, builder.Environment);
 builder.Services.AddScoped<UserAdministrationService>();
 builder.Services.AddBankVoucherGmailIntegration(builder.Configuration);
 
@@ -272,6 +275,29 @@ else
     });
 }
 app.UseHttpsRedirection();
+
+// Only handle the public site's root-level assets here. Serving the entire
+// web root with UseStaticFiles would bypass MapStaticAssets cache headers for
+// /administracion/, so its existing static asset pipeline is left untouched.
+app.UseWhen(context =>
+        context.Request.Path.StartsWithSegments("/css") ||
+        context.Request.Path.StartsWithSegments("/js") ||
+        context.Request.Path.StartsWithSegments("/assets"),
+    staticAssets =>
+    {
+        staticAssets.UseStaticFiles();
+        if (app.Environment.IsDevelopment())
+        {
+            var sourcePublicAssets = Path.GetFullPath(Path.Combine(
+                app.Environment.ContentRootPath, "..", "Revestik.Public", "wwwroot"));
+            if (Directory.Exists(sourcePublicAssets))
+                staticAssets.UseStaticFiles(new StaticFileOptions
+                {
+                    FileProvider = new PhysicalFileProvider(sourcePublicAssets)
+                });
+        }
+    });
+
 if (app.Environment.IsDevelopment()) app.UseCors(ClientCorsPolicy);
 else
 {
@@ -289,6 +315,7 @@ else
     });
 }
 
+app.UseRevestikPublicProjectStatus();
 app.UseRouting();
 app.UseAuthentication();
 app.UseRateLimiter();
@@ -367,10 +394,9 @@ app.MapProjectTaskDeadlineEndpoints();
 app.MapProjectLifecycleEndpoints();
 app.MapProjectDashboardAlertEndpoints();
 
-// All routes belonging to the business UI are hosted below /administracion/.
-// Static web assets are enabled in Development as well so local testing uses
-// the same server as the API. Public root routes intentionally do not fall back
-// to the business dashboard.
+// The public site shares this host; the business UI stays below
+// /administracion/ and never becomes the anonymous root fallback.
+app.MapRevestikPublicSite();
 app.MapStaticAssets().AllowAnonymous();
 app.MapFallback("/api/{**path}", () => Results.NotFound())
     .WithMetadata(new Microsoft.AspNetCore.Routing.HttpMethodMetadata(

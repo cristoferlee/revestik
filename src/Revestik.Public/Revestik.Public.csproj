@@ -17,4 +17,8 @@
   <ItemGroup>
     <Content Update="wwwroot/assets/revestik-rk.svg;wwwroot/assets/revestik-logo.svg;wwwroot/assets/revestik-sidebar-logo.png" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- Development-only API endpoint configuration must not enter the unified host publish. -->
+  <ItemGroup>
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
 </Project>

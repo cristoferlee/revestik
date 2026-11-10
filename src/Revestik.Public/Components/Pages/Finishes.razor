@@ -3,91 +3,244 @@
 @page "/de/oberflaechen"
 @using Revestik.Public.Services
 @inject PublicCatalogReader Catalog
+@inject FinishesHeroReader HeroCatalog
 @inject NavigationManager Navigation
 
+@{
+    var slides = HeroSlides(Lang);
+}
 <PageTitle>@PublicSeo.Get(Lang, 2).Title</PageTitle>
 <HeadContent>
-  <meta name="description" content="@PublicSeo.Get(Lang, 2).Description" />
-  <meta name="robots" content="noindex,follow" />
+    <meta name="description" content="@PublicSeo.Get(Lang, 2).Description" />
+    <meta name="robots" content="noindex,follow" />
 </HeadContent>
-<main id="main" class="subpage catalog-page">
-  <div class="subpage-inner">
-    <p class="eyebrow">REVESTIK · COSTA RICA</p>
-    <h1>@PublicSeo.Get(Lang, 2).Heading</h1>
-    <p>@PublicSeo.Get(Lang, 2).Description</p>
-    @if (Error)
-    {
-      <p role="alert">@L("El catálogo no está disponible temporalmente.", "The catalog is temporarily unavailable.", "Der Katalog ist vorübergehend nicht verfügbar.")</p>
-    }
-    else
-    {
-      <nav class="catalog-categories" aria-label="@L("Categorías", "Categories", "Kategorien")">
-        <a class="catalog-filter" href="@SiteLinks.Path(Lang, 2)">@L("Todas", "All", "Alle")</a>
-        @foreach (var category in Categories)
-        {
-          <a class="catalog-filter" href="@($"{SiteLinks.Path(Lang, 2)}/{(Lang == "en" ? "category" : Lang == "de" ? "kategorie" : "categoria")}/{category.Slug}")">@category.Name(Lang)</a>
-        }
-      </nav>
-      <form action="@SiteLinks.Path(Lang,2)" method="get" class="catalog-search">
-        @if (CategoryId.HasValue) { <input type="hidden" name="categoryId" value="@CategoryId" /> }
-        <label for="catalog-q">@L("Buscar productos", "Search products", "Produkte suchen")</label>
-        <input id="catalog-q" name="search" value="@Search" maxlength="100" />
-        <button type="submit">@L("Buscar", "Search", "Suchen")</button>
-      </form>
-      @if (Products.Items.Count == 0)
-      {
-        <p>@L("Todavía no hay productos publicados con estos filtros.", "No published products match these filters.", "Keine veröffentlichten Produkte entsprechen diesen Filtern.")</p>
-      }
-      <div class="catalog-grid">
-        @foreach (var product in Products.Items)
-        {
-          <article class="catalog-card" data-editor-product-id="@product.Id">
-            <a href="@($"{SiteLinks.Path(Lang, 2)}/{product.Slug}")">
-              @if (product.CoverImageId is int imageId)
-              {
-                <img src="@($"/media/catalog/{imageId}")" alt="@(product.Text(Lang)?.Name ?? product.Slug)" loading="lazy" width="720" height="540" />
-              }
-              <div class="catalog-card-copy">
-                <h2>@(product.Text(Lang)?.Name ?? product.Slug)</h2>
-                @if (!string.IsNullOrWhiteSpace(product.Brand)) { <p>@product.Brand</p> }
-                @if (product.Price is decimal price) { <p>@price.ToString("N2") @product.Currency / @product.SalesUnit</p> }
-              </div>
-            </a>
-          </article>
-        }
-      </div>
-      @if (Products.Total > 12)
-      {
-        <nav class="catalog-pagination" aria-label="@L("Páginas", "Pages", "Seiten")">
-          @if (CurrentPage > 1) { <a href="@PageUrl(CurrentPage-1)">← @L("Anterior", "Previous", "Zurück")</a> }
-          <span>@CurrentPage / @((Products.Total + 11) / 12)</span>
-          @if (CurrentPage * 12 < Products.Total) { <a href="@PageUrl(CurrentPage+1)">@L("Siguiente", "Next", "Weiter") →</a> }
-        </nav>
-      }
-    }
-  </div>
+<main id="main" class="catalog-page finishes-page">
+    @* Same visual presentation as Inicio, but storage and admin endpoints are isolated by page. *@
+    <section class="home-hero finishes-hero" aria-labelledby="finishes-title" data-hero-gallery
+             aria-label="@L("Portada de Acabados", "Finishes hero", "Oberflächen-Titelbereich")">
+        <div class="hero-viewport" aria-live="off">
+            @for (var i = 0; i < slides.Length; i++)
+            {
+                var slide = slides[i];
+                var saved = SavedSlides.FirstOrDefault(x => x.Slot == i + 1);
+                <div class="hero-slide @(i == 0 ? "is-active" : null)" data-hero-slide
+                     data-hero-title="@(saved?.Heading(Lang) ?? slide.Title)"
+                     data-hero-description="@(saved?.Description(Lang) ?? slide.Description)"
+                     aria-hidden="@(i == 0 ? "false" : "true")">
+                    @if (saved?.HasImage == true)
+                    {
+                        <img class="hero-media-photo" src="@($"/media/finishes-hero/{i + 1}?v={Uri.EscapeDataString(saved.Version)}")"
+                             alt="" aria-hidden="true" width="1920" height="1080" fetchpriority="@(i == 0 ? "high" : "auto")" />
+                    }
+                    else
+                    {
+                        <div class="hero-media-placeholder" aria-hidden="true">
+                            <span class="placeholder-marker">@((i + 1).ToString("00"))</span>
+                            <span class="placeholder-label">@slide.Label</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+        <div class="hero-shade" aria-hidden="true"></div>
+        <div class="home-hero-shell">
+            <div class="home-hero-copy">
+                <p class="eyebrow">REVESTIK &middot; COSTA RICA</p>
+                <h1 id="finishes-title" data-hero-heading>@(SavedSlides.FirstOrDefault(x => x.Slot == 1)?.Heading(Lang) ?? slides[0].Title)</h1>
+                <p class="home-hero-description" data-hero-copy>@(SavedSlides.FirstOrDefault(x => x.Slot == 1)?.Description(Lang) ?? slides[0].Description)</p>
+                <div class="hero-actions">
+                    <a class="hero-action-primary" href="#catalog-results">@L("Explorar acabados", "Explore finishes", "Oberflächen entdecken")</a>
+                    <a class="hero-action-secondary" href="@SiteLinks.Path(Lang, 5)">@L("Consultar", "Contact us", "Anfragen")</a>
+                </div>
+            </div>
+            <div class="hero-gallery-controls" aria-label="@L("Controles de portada", "Hero controls", "Titelbildsteuerung")">
+                <div class="hero-progress" aria-hidden="true">
+                    @for (var i = 0; i < slides.Length; i++)
+                    {
+                        <span class="hero-progress-segment @(i == 0 ? "is-active" : null)" data-hero-indicator></span>
+                    }
+                </div>
+                <span class="hero-gallery-status" data-hero-status role="status" aria-live="off">01 / 03</span>
+                <button type="button" data-hero-prev aria-label="@L("Anterior", "Previous", "Zurück")">&#8592;</button>
+                <button type="button" data-hero-next aria-label="@L("Siguiente", "Next", "Weiter")">&#8594;</button>
+                <button type="button" data-hero-pause
+                        data-pause-label="@L("Pausar", "Pause", "Pausieren")"
+                        data-play-label="@L("Reanudar", "Resume", "Fortsetzen")"
+                        aria-label="@L("Pausar", "Pause", "Pausieren")">
+                    <span data-hero-pause-icon aria-hidden="true">&#10074;&#10074;</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <div class="subpage-inner finishes-content" id="catalog-results">
+        <div class="finishes-layout">
+            <aside class="finishes-sidebar" aria-label="@L("Filtrar acabados", "Filter finishes", "Oberflächen filtern")">
+                <h2>@L("Categorías", "Categories", "Kategorien")</h2>
+                @if (!Error)
+                {
+                    <nav class="finishes-category-list" aria-label="@L("Categorías de productos", "Product categories", "Produktkategorien")">
+                        <a class="finishes-filter @(CategoryId is null ? "is-selected" : null)"
+                           href="@FilterUrl(null, null)" aria-current="@(CategoryId is null ? "true" : null)">
+                            @L("Todas las categorías", "All categories", "Alle Kategorien")
+                        </a>
+                        @foreach (var category in Categories)
+                        {
+                            <a class="finishes-filter @(CategoryId == category.Id ? "is-selected" : null)"
+                               href="@FilterUrl(category.Id, null)" aria-current="@(CategoryId == category.Id ? "true" : null)">
+                                @category.Name(Lang)
+                            </a>
+                        }
+                    </nav>
+                    @if (SelectedCategory is not null && Subcategories.Count > 0)
+                    {
+                        <h3>@L("Subcategorías", "Subcategories", "Unterkategorien")</h3>
+                        <nav class="finishes-category-list" aria-label="@L("Subcategorías de productos", "Product subcategories", "Produktunterkategorien")">
+                            <a class="finishes-filter @(SubcategoryId is null ? "is-selected" : null)"
+                               href="@FilterUrl(CategoryId, null)" aria-current="@(SubcategoryId is null ? "true" : null)">
+                                @L("Todas", "All", "Alle")
+                            </a>
+                            @foreach (var subcategory in Subcategories)
+                            {
+                                <a class="finishes-filter @(SubcategoryId == subcategory.Id ? "is-selected" : null)"
+                                   href="@FilterUrl(CategoryId, subcategory.Id)" aria-current="@(SubcategoryId == subcategory.Id ? "true" : null)">
+                                    @subcategory.Name(Lang)
+                                </a>
+                            }
+                        </nav>
+                    }
+                }
+            </aside>
+
+            <section class="finishes-results" aria-labelledby="finishes-results-title">
+                <div class="finishes-results-heading">
+                    <h2 id="finishes-results-title">@L("Nuestros productos", "Our products", "Unsere Produkte")</h2>
+                    @if (!Error)
+                    {
+                        <span>@Products.Total @L("productos", "products", "Produkte")</span>
+                    }
+                </div>
+                <form action="@SiteLinks.Path(Lang, 2)" method="get" class="catalog-search" role="search">
+                    @if (CategoryId.HasValue) { <input type="hidden" name="categoryId" value="@CategoryId" /> }
+                    @if (SubcategoryId.HasValue) { <input type="hidden" name="subcategoryId" value="@SubcategoryId" /> }
+                    <label class="finishes-search-field" for="catalog-q">
+                        <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                            <circle cx="10.8" cy="10.8" r="6.8"></circle>
+                            <path d="m16 16 5 5"></path>
+                        </svg>
+                        <span class="finishes-screenreader">@L("Buscar productos", "Search products", "Produkte suchen")</span>
+                        <input id="catalog-q" name="search" value="@Search" maxlength="100"
+                               placeholder="@L("Buscar productos...", "Search products...", "Produkte suchen...")" />
+                    </label>
+                    <button type="submit">@L("Buscar", "Search", "Suchen")</button>
+                </form>
+                @if (Error)
+                {
+                    <p role="alert">@L("El catálogo no está disponible temporalmente.", "The catalog is temporarily unavailable.", "Der Katalog ist vorübergehend nicht verfügbar.")</p>
+                }
+                else
+                {
+                    @if (Products.Items.Count == 0)
+                    {
+                        <p>@L("Todavía no hay productos publicados con estos filtros.", "No published products match these filters.", "Keine veröffentlichten Produkte entsprechen diesen Filtern.")</p>
+                    }
+                    <div class="catalog-grid">
+                        @foreach (var product in Products.Items)
+                        {
+                            <article class="catalog-card" data-editor-product-id="@product.Id">
+                                <a href="@($"{SiteLinks.Path(Lang, 2)}/{product.Slug}")">
+                                    @if (product.CoverImageId is int imageId)
+                                    {
+                                        <img src="@($"/media/catalog/{imageId}")" alt="@(product.Text(Lang)?.Name ?? product.Slug)" loading="lazy" width="720" height="540" />
+                                    }
+                                    <div class="catalog-card-copy">
+                                        <h3>@(product.Text(Lang)?.Name ?? product.Slug)</h3>
+                                        @if (!string.IsNullOrWhiteSpace(product.Brand)) { <p>@product.Brand</p> }
+                                        @if (product.Price is decimal price) { <p>@price.ToString("N2") @product.Currency / @product.SalesUnit</p> }
+                                    </div>
+                                </a>
+                            </article>
+                        }
+                    </div>
+                    @if (Products.Total > 12)
+                    {
+                        <nav class="catalog-pagination" aria-label="@L("Páginas de productos", "Product pages", "Produktseiten")">
+                            @if (CurrentPage > 1) { <a href="@PageUrl(CurrentPage - 1)">← @L("Anterior", "Previous", "Zurück")</a> }
+                            <span>@CurrentPage / @((Products.Total + 11) / 12)</span>
+                            @if (CurrentPage * 12 < Products.Total) { <a href="@PageUrl(CurrentPage + 1)">@L("Siguiente", "Next", "Weiter") →</a> }
+                        </nav>
+                    }
+                }
+            </section>
+        </div>
+    </div>
 </main>
 
 @code {
-  [SupplyParameterFromQuery(Name="categoryId")] public int? CategoryId { get; set; }
-  [SupplyParameterFromQuery(Name="search")] public string? Search { get; set; }
-  [SupplyParameterFromQuery(Name="page")] public int? Page { get; set; }
-  private List<CategoryDto> Categories = [];
-  private ProductPageDto Products = new();
-  private bool Error;
-  private string Lang => Locale.FromUri(Navigation.Uri);
-  private string L(string es, string en, string de) => Lang switch { "en" => en, "de" => de, _ => es };
-  private int CurrentPage => Math.Max(1, Page ?? 1);
-  private string PageUrl(int page) => $"{SiteLinks.Path(Lang,2)}?page={page}" + (CategoryId.HasValue ? $"&categoryId={CategoryId}" : "") + (string.IsNullOrWhiteSpace(Search) ? "" : $"&search={Uri.EscapeDataString(Search)}");
-  protected override async Task OnParametersSetAsync()
-  {
-    try
+    [SupplyParameterFromQuery(Name = "categoryId")] public int? CategoryId { get; set; }
+    [SupplyParameterFromQuery(Name = "subcategoryId")] public int? SubcategoryId { get; set; }
+    [SupplyParameterFromQuery(Name = "search")] public string? Search { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public int? Page { get; set; }
+
+    private List<HomeHeroSlideDto> SavedSlides = [];
+    private List<CategoryDto> Categories = [];
+    private List<SubcategoryDto> Subcategories = [];
+    private CategoryDto? SelectedCategory;
+    private ProductPageDto Products = new();
+    private bool Error;
+    private string Lang => Locale.FromUri(Navigation.Uri);
+    private int CurrentPage => Math.Max(1, Page ?? 1);
+    private string L(string es, string en, string de) => Lang switch { "en" => en, "de" => de, _ => es };
+
+    private string FilterUrl(int? categoryId, int? subcategoryId)
     {
-      Categories = await Catalog.Categories();
-      Products = await Catalog.Products(CurrentPage, CategoryId, null, Search);
-      Error = false;
+        var values = new List<string>();
+        if (categoryId.HasValue) values.Add($"categoryId={categoryId.Value}");
+        if (subcategoryId.HasValue) values.Add($"subcategoryId={subcategoryId.Value}");
+        if (!string.IsNullOrWhiteSpace(Search)) values.Add($"search={Uri.EscapeDataString(Search)}");
+        return SiteLinks.Path(Lang, 2) + (values.Count == 0 ? "" : "?" + string.Join("&", values));
     }
-    catch (HttpRequestException) { Error = true; }
-    catch (TaskCanceledException) { Error = true; }
-  }
+    private string PageUrl(int page)
+    {
+        var url = FilterUrl(CategoryId, SubcategoryId);
+        return url + (url.Contains('?') ? "&" : "?") + $"page={page}";
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            Categories = await Catalog.Categories();
+            SelectedCategory = CategoryId is int id ? Categories.FirstOrDefault(c => c.Id == id) : null;
+            Subcategories = [];
+            if (SelectedCategory is not null)
+            {
+                var category = await Catalog.Category(SelectedCategory.Slug);
+                Subcategories = category?.Subcategories ?? [];
+            }
+            Products = await Catalog.Products(CurrentPage, CategoryId, SubcategoryId, Search);
+            Error = false;
+            try { SavedSlides = await HeroCatalog.Slides(); }
+            catch (HttpRequestException) { SavedSlides = []; }
+            catch (TaskCanceledException) { SavedSlides = []; }
+        }
+        catch (HttpRequestException) { Error = true; }
+        catch (TaskCanceledException) { Error = true; }
+    }
+
+    private sealed record HeroSlide(string Title, string Description, string Label);
+    private static HeroSlide[] HeroSlides(string lang)
+    {
+        string[] labels = lang switch
+        {
+            "en" => ["FINISHES", "MATERIALS", "DISCOVER"],
+            "de" => ["OBERFLÄCHEN", "MATERIALIEN", "ENTDECKEN"],
+            _ => ["ACABADOS", "MATERIALES", "EXPLORÁ"]
+        };
+        return Enumerable.Range(1, 3).Select(slot =>
+        {
+            var value = FinishesHeroDefaults.ForSlot(slot);
+            return new HeroSlide(value.Heading(lang), value.Description(lang), labels[slot - 1]);
+        }).ToArray();
+    }
 }

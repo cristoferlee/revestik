@@ -19,10 +19,22 @@ public sealed class PublicHomeHeroSqlIntegrationTests(SqlServerIntegrationTestFi
         Assert.Equal("PublicHomeHeroSlides", table);
     }
 
+    [Fact]
+    public async Task MigrationReservesIndependentSlotsForFinishes()
+    {
+        await using var db = fixture.CreateDbContext();
+        var applied = await db.Database.GetAppliedMigrationsAsync();
+        Assert.Contains(applied, x => x.EndsWith("_AllowFinishesHeroSlots", StringComparison.Ordinal));
+        var constraint = await db.Database.SqlQueryRaw<string>(
+            "SELECT [definition] AS [Value] FROM sys.check_constraints WHERE [name] = 'CK_PublicHomeHeroSlides_Slot'")
+            .SingleAsync();
+        Assert.Contains("6", constraint);
+    }
+
     [Theory]
     [InlineData(0)]
-    [InlineData(4)]
-    public async Task OnlyThreeHeroSlotsAreAllowed(int slot)
+    [InlineData(7)]
+    public async Task SlotsOutsideBothPagesAreRejected(int slot)
     {
         await using var db = fixture.CreateDbContext();
         db.PublicHomeHeroSlides.Add(new PublicHomeHeroSlide

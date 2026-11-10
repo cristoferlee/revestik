@@ -1,3 +1,62 @@
 .catalog-page .subpage-inner{max-width:1260px}.catalog-categories{display:flex;flex-wrap:wrap;gap:.75rem;margin:1.8rem 0}.catalog-filter{display:inline-flex;padding:.6rem .9rem;border:1px solid #d8dce1;border-radius:999px;text-decoration:none;color:inherit}.catalog-filter:hover,.catalog-filter:focus-visible{border-color:#b37a23}.catalog-search{display:flex;align-items:center;flex-wrap:wrap;gap:.7rem;margin:1rem 0 2rem}.catalog-search input{padding:.7rem;border:1px solid #c8ced4;border-radius:7px;min-width:15rem}.catalog-search button{padding:.7rem 1rem;background:#b9893a;color:#151515;border:0;border-radius:7px}.catalog-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.25rem}.catalog-card{border:1px solid #e2e2e2;border-radius:12px;overflow:hidden;background:#fff}.catalog-card a{display:block;color:inherit;text-decoration:none}.catalog-card img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}.catalog-card-copy{padding:1rem}.catalog-card h2{font-size:1.12rem;margin:0 0 .4rem}.catalog-card p{margin:.3rem 0}.catalog-pagination{display:flex;justify-content:center;gap:1.2rem;padding:2rem}.catalog-gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin:1.5rem 0}.catalog-gallery-photo{border:0;background:#f2f2f2;position:relative;padding:0;cursor:zoom-in}.catalog-gallery-photo:first-child{grid-column:span 2;grid-row:span 2}.catalog-gallery-photo img{width:100%;height:100%;aspect-ratio:4/3;object-fit:cover;display:block}.catalog-description{white-space:pre-line;max-width:75ch}.catalog-price{font-weight:700;font-size:1.15rem}@media(max-width:800px){.catalog-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:540px){.catalog-grid{grid-template-columns:1fr}.catalog-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}.catalog-search input{min-width:0;width:100%}}@media(prefers-reduced-motion:reduce){.catalog-page *, .catalog-page *::before,.catalog-page *::after{animation:none!important;scroll-behavior:auto!important}}
 .catalog-category-hero{position:relative;isolation:isolate;margin:1.5rem 0 2rem;min-height:250px;background:#17202b;color:white;overflow:hidden;border-radius:14px}.catalog-category-hero picture img{display:block;width:100%;max-height:620px;object-fit:cover}.catalog-category-hero-copy{position:relative;z-index:1;padding:1.5rem;background:#20262c;color:#fff}.catalog-category-hero-copy h1{color:#fff}.catalog-category-hero-copy p{max-width:75ch}@media(max-width:600px){.catalog-category-hero-copy{padding:1rem}}
 .featured-product-image img{display:block;width:100%;height:100%;object-fit:cover;aspect-ratio:4/3}
+
+/* ACABADOS-RECOVERY-01A: reuse Home hero CSS/JS, create a two-column catalog layout. */
+.finishes-page .finishes-hero { margin: 0; }
+.finishes-page .finishes-content { padding: clamp(34px, 5vw, 62px) 28px 90px; scroll-margin-top: 110px; }
+.finishes-layout { display: grid; grid-template-columns: minmax(185px, 235px) minmax(0, 1fr); gap: clamp(22px, 3vw, 48px); align-items: start; }
+.finishes-sidebar { position: sticky; top: 113px; min-width: 0; padding: 20px 18px; background: #f8f9fa; border: 1px solid var(--border); border-radius: 12px; }
+.finishes-sidebar h2 { margin: 0 0 12px; font-size: 1rem; }
+.finishes-sidebar h3 { margin: 24px 0 9px; font-size: .88rem; }
+.finishes-category-list { display: flex; flex-direction: column; gap: 2px; }
+.finishes-filter { display: block; padding: 9px 11px; border-radius: 7px; color: #343c46; font-size: .86rem; line-height: 1.45; }
+.finishes-filter:hover, .finishes-filter:focus-visible { background: #fff3d9; }
+.finishes-filter.is-selected { color: #3b2b12; background: #ffedc7; font-weight: 800; }
+.finishes-results { min-width: 0; }
+.finishes-results-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 12px; }
+.finishes-results-heading h2 { margin: 0; font-size: clamp(1.4rem, 2.3vw, 2rem); letter-spacing: -.03em; }
+.finishes-results-heading span { color: var(--muted); font-size: .83rem; }
+.finishes-page .catalog-search { margin: 22px 0 26px; }
+.finishes-search-field { display: flex; align-items: center; gap: 10px; padding: 0 12px; border: 1px solid #c8ced4; border-radius: 7px; flex: 1 1 260px; min-width: 0; color: #66717e; background: #fff; }
+.finishes-search-field input { flex: 1; min-width: 0; width: 100%; padding: 11px 0; background: transparent; border: 0; outline: 0; font: inherit; }
+.finishes-search-field:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.finishes-page .catalog-search .finishes-search-field input { min-width: 0; border: 0; padding: 11px 0; }
+.finishes-screenreader { position: absolute; height: 1px; width: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.finishes-page .catalog-card h3 { font-size: 1.12rem; margin: 0 0 .4rem; }
+@media(max-width: 760px) {
+  .finishes-page .finishes-content { padding: 28px 18px 70px; }
+  .finishes-layout { display: block; }
+  .finishes-sidebar { position: static; margin-bottom: 25px; padding: 15px; }
+  .finishes-category-list { flex-direction: row; flex-wrap: wrap; gap: 4px; }
+  .finishes-filter { border: 1px solid #e0e3e8; }
+}
+@media(max-width: 540px) {
+  .finishes-page .catalog-search button { width: 100%; }
+  .finishes-search-field { flex-basis: 100%; }
+}
+
+/* Search suggestions are a progressive enhancement; basic SSR form still works. */
+.finishes-results .catalog-search { position: relative; }
+.finishes-suggestions { position: absolute; z-index: 30; top: 100%; left: 0; right: 0; max-width: 500px; background: #fff; border: 1px solid #d5dce4; border-radius: 9px; box-shadow: 0 12px 26px rgba(20,35,50,.15); overflow: hidden; }
+.finishes-suggestions[hidden] { display: none; }
+.finishes-suggestion { display: block; padding: 11px 13px; color: #172331; font-size: .88rem; }
+.finishes-suggestion:hover, .finishes-suggestion.is-selected { background: #fff6e7; color: #754700; }
+
+/* ACABADOS-RECOVERY-01A FIX01: prevent oversized product cards at low item counts. */
+.finishes-page .catalog-grid {
+  grid-template-columns: repeat(auto-fill, minmax(172px, 220px));
+  justify-content: start;
+  gap: 18px;
+}
+.finishes-page .catalog-card { width: 100%; min-width: 0; }
+.finishes-page .catalog-card img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+@media (max-width: 530px) {
+  .finishes-page .catalog-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+@media (max-width: 350px) {
+  .finishes-page .catalog-grid { grid-template-columns: minmax(0, 1fr); }
+}

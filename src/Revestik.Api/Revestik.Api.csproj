@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Revestik.Client\Revestik.Client.csproj" />
     <ProjectReference Include="..\Revestik.Shared\Revestik.Shared.csproj" />
+    <ProjectReference Include="..\Revestik.Public\Revestik.Public.csproj" />
   </ItemGroup>
 
   <ItemGroup>

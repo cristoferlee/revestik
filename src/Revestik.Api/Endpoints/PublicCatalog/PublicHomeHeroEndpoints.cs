@@ -12,36 +12,52 @@ namespace Revestik.Api.Endpoints.PublicCatalog;
 
 public static class PublicHomeHeroEndpoints
 {
+    // SQL storage is shared, not the public resource. 1..3=Inicio; 4..6=Acabados.
+    // Each route exposes its own slot numbers 1..3; never accepts an internal ID.
     public static IEndpointRouteBuilder MapPublicHomeHeroEndpoints(this IEndpointRouteBuilder app)
     {
-        var publicGroup = app.MapGroup("/api/public/site/home-hero").AllowAnonymous().WithTags("Public site");
-        publicGroup.MapGet("", async (RevestikDbContext db, CancellationToken ct) =>
-            Results.Ok((await db.PublicHomeHeroSlides.AsNoTracking().OrderBy(x => x.Slot).ToListAsync(ct)).Select(ToDto)));
-        publicGroup.MapGet("/media/{slot:int}", (int slot, RevestikDbContext db, PublicCatalogMediaStorage storage, CancellationToken ct) =>
-            ReadImage(slot, db, storage, ct));
-
-        var admin = app.MapGroup("/api/admin/public-site/home-hero")
-            .RequireAuthorization(PolicyNames.AdministratorOnly).WithTags("Public site administration");
-        admin.MapGet("", async (RevestikDbContext db, CancellationToken ct) =>
-            Results.Ok((await db.PublicHomeHeroSlides.AsNoTracking().OrderBy(x => x.Slot).ToListAsync(ct)).Select(ToDto)));
-        admin.MapGet("/media/{slot:int}", (int slot, RevestikDbContext db, PublicCatalogMediaStorage storage, CancellationToken ct) =>
-            ReadImage(slot, db, storage, ct));
-        admin.MapPut("/{slot:int}", SaveSlide).AddEndpointFilter<AntiforgeryValidationFilter>();
+        MapPageHero(app, "home-hero", 0);
+        MapPageHero(app, "finishes-hero", 3);
         return app;
     }
 
-    private static object ToDto(PublicHomeHeroSlide x) => new
+    private static void MapPageHero(IEndpointRouteBuilder app, string route, int offset)
     {
-        x.Slot, x.HeadingEs, x.HeadingEn, x.HeadingDe,
+        var publicGroup = app.MapGroup($"/api/public/site/{route}").AllowAnonymous().WithTags("Public site");
+        publicGroup.MapGet("", async (RevestikDbContext db, CancellationToken ct) =>
+            Results.Ok((await db.PublicHomeHeroSlides.AsNoTracking()
+                .Where(x => x.Slot > offset && x.Slot <= offset + 3)
+                .OrderBy(x => x.Slot).ToListAsync(ct)).Select(x => ToDto(x, offset))));
+        publicGroup.MapGet("/media/{slot:int}", (int slot, RevestikDbContext db, PublicCatalogMediaStorage storage, CancellationToken ct) =>
+            ReadImage(slot, offset, db, storage, ct));
+
+        var admin = app.MapGroup($"/api/admin/public-site/{route}")
+            .RequireAuthorization(PolicyNames.AdministratorOnly).WithTags("Public site administration");
+        admin.MapGet("", async (RevestikDbContext db, CancellationToken ct) =>
+            Results.Ok((await db.PublicHomeHeroSlides.AsNoTracking()
+                .Where(x => x.Slot > offset && x.Slot <= offset + 3)
+                .OrderBy(x => x.Slot).ToListAsync(ct)).Select(x => ToDto(x, offset))));
+        admin.MapGet("/media/{slot:int}", (int slot, RevestikDbContext db, PublicCatalogMediaStorage storage, CancellationToken ct) =>
+            ReadImage(slot, offset, db, storage, ct));
+        admin.MapPut("/{slot:int}", (int slot, SlideWrite request, RevestikDbContext db, PublicCatalogMediaStorage storage, ClaimsPrincipal user, CancellationToken ct) =>
+            SaveSlide(slot, offset, request, db, storage, user, ct))
+            .AddEndpointFilter<AntiforgeryValidationFilter>();
+    }
+
+    private static object ToDto(PublicHomeHeroSlide x, int offset) => new
+    {
+        Slot = x.Slot - offset, x.HeadingEs, x.HeadingEn, x.HeadingDe,
         x.DescriptionEs, x.DescriptionEn, x.DescriptionDe,
         HasImage = x.ImageStorageKey is not null,
         Version = Convert.ToBase64String(x.RowVersion)
     };
 
-    private static async Task<IResult> ReadImage(int slot, RevestikDbContext db, PublicCatalogMediaStorage storage, CancellationToken ct)
+    private static async Task<IResult> ReadImage(int slot, int offset,
+        RevestikDbContext db, PublicCatalogMediaStorage storage, CancellationToken ct)
     {
         if (slot is < 1 or > 3) return Results.NotFound();
-        var image = await db.PublicHomeHeroSlides.AsNoTracking().Where(x => x.Slot == slot)
+        var actualSlot = slot + offset;
+        var image = await db.PublicHomeHeroSlides.AsNoTracking().Where(x => x.Slot == actualSlot)
             .Select(x => new { x.ImageStorageKey, x.ImageContentType }).SingleOrDefaultAsync(ct);
         if (image?.ImageStorageKey is null || image.ImageContentType is not ("image/jpeg" or "image/png" or "image/webp"))
             return Results.NotFound();
@@ -55,10 +71,8 @@ public static class PublicHomeHeroEndpoints
         string? ImageToken, bool RemoveImage);
 
     private static bool IsValid(SlideWrite r) =>
-        r.HeadingEs is { Length: > 0 and <= 180 } &&
-        !string.IsNullOrWhiteSpace(r.HeadingEs) &&
-        r.DescriptionEs is { Length: > 0 and <= 1000 } &&
-        !string.IsNullOrWhiteSpace(r.DescriptionEs) &&
+        r.HeadingEs is { Length: > 0 and <= 180 } && !string.IsNullOrWhiteSpace(r.HeadingEs) &&
+        r.DescriptionEs is { Length: > 0 and <= 1000 } && !string.IsNullOrWhiteSpace(r.DescriptionEs) &&
         (r.HeadingEn is null || r.HeadingEn.Length <= 180) &&
         (r.HeadingDe is null || r.HeadingDe.Length <= 180) &&
         (r.DescriptionEn is null || r.DescriptionEn.Length <= 1000) &&
@@ -66,14 +80,15 @@ public static class PublicHomeHeroEndpoints
         (r.ImageToken is null || (r.ImageToken.Length == 32 && r.ImageToken.All(Uri.IsHexDigit))) &&
         !(r.RemoveImage && r.ImageToken is not null);
 
-    private static async Task<IResult> SaveSlide(int slot, SlideWrite request,
+    private static async Task<IResult> SaveSlide(int slot, int offset, SlideWrite request,
         RevestikDbContext db, PublicCatalogMediaStorage storage, ClaimsPrincipal user, CancellationToken ct)
     {
         if (slot is < 1 or > 3 || request is null || !IsValid(request))
             return Results.BadRequest(new { message = "Verificá el título y la descripción en español." });
 
+        var actualSlot = slot + offset;
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
-        var slide = await db.PublicHomeHeroSlides.SingleOrDefaultAsync(x => x.Slot == slot, ct);
+        var slide = await db.PublicHomeHeroSlides.SingleOrDefaultAsync(x => x.Slot == actualSlot, ct);
         if (slide is null && !string.IsNullOrEmpty(request.Version))
             return Results.Conflict(new { message = "La portada cambió. Recargá la página." });
         if (slide is not null && request.Version != Convert.ToBase64String(slide.RowVersion))
@@ -87,14 +102,14 @@ public static class PublicHomeHeroEndpoints
             { return Results.BadRequest(new { message = "La imagen no está disponible o no es válida." }); }
         }
 
-        var newKey = (string?)null;
+        string? newKey = null;
         try
         {
             if (request.ImageToken is not null)
                 newKey = await storage.CommitAsync(request.ImageToken, ct);
             if (slide is null)
             {
-                slide = new PublicHomeHeroSlide { Slot = slot };
+                slide = new PublicHomeHeroSlide { Slot = actualSlot };
                 db.PublicHomeHeroSlides.Add(slide);
             }
             slide.HeadingEs = request.HeadingEs.Trim();
@@ -114,16 +129,13 @@ public static class PublicHomeHeroEndpoints
                 slide.ImageContentType = media!.ContentType;
             }
             slide.UpdatedAtUtc = DateTime.UtcNow;
-            SecurityAudit.Record(db, "PublicHomeHeroSlideSaved", "PublicHomeHeroSlide", slot.ToString(),
-                user.FindFirstValue(ClaimTypes.NameIdentifier));
+            SecurityAudit.Record(db, offset == 0 ? "PublicHomeHeroSlideSaved" : "PublicFinishesHeroSlideSaved",
+                "PublicHomeHeroSlide", actualSlot.ToString(), user.FindFirstValue(ClaimTypes.NameIdentifier));
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
             if (request.ImageToken is not null)
-            {
-                try { storage.DeletePending(request.ImageToken); } catch (IOException) { /* Stale pending file pruned by worker. */ }
-            }
-            // Old media is intentionally left until the active orphan cleaner confirms it is unreferenced.
-            return Results.Ok(ToDto(slide));
+                try { storage.DeletePending(request.ImageToken); } catch (IOException) { }
+            return Results.Ok(ToDto(slide, offset));
         }
         catch (DbUpdateConcurrencyException)
         {

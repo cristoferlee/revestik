@@ -3717,7 +3717,7 @@ namespace Revestik.Api.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_PublicHomeHeroSlides_Image", "([ImageStorageKey] IS NULL AND [ImageContentType] IS NULL) OR ([ImageStorageKey] IS NOT NULL AND [ImageContentType] IN ('image/jpeg','image/png','image/webp'))");
 
-                            t.HasCheckConstraint("CK_PublicHomeHeroSlides_Slot", "[Slot] BETWEEN 1 AND 3");
+                            t.HasCheckConstraint("CK_PublicHomeHeroSlides_Slot", "[Slot] BETWEEN 1 AND 6");
                         });
                 });
 

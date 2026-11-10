@@ -1,0 +1,524 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@using Revestik.Public
+@using Revestik.Shared.PublicSite
+@inject AuthenticationStateProvider AuthenticationState
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+@if (!string.IsNullOrWhiteSpace(error) && editing is null && sectionEditing is null)
+{
+    <p class="revestik-editor-error" role="alert">@error</p>
+}
+
+@if (editing is not null || sectionEditing is not null)
+{
+    <div class="revestik-editor-backdrop">
+        <section class="revestik-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="revestik-inline-dialog-title">
+            <header class="revestik-editor-dialog-header">
+                <div>
+                    <p>@(sectionEditing is null ? $"REVESTIK · Inicio · Diapositiva {editing?.Slot}" : $"REVESTIK · Inicio · {SectionLabel}")</p>
+                    <h2 id="revestik-inline-dialog-title">@DialogTitle</h2>
+                </div>
+                <button type="button" disabled="@busy" @onclick="CancelAsync" aria-label="Cerrar editor">×</button>
+            </header>
+            @if (!string.IsNullOrWhiteSpace(error))
+            {
+                <p class="revestik-editor-error" role="alert">@error</p>
+            }
+            @if (confirmSave)
+            {
+                <p>¿Guardar los cambios en el sitio público?</p>
+                <div class="revestik-editor-actions">
+                    <button type="button" disabled="@busy" @onclick="() => confirmSave = false">Volver</button>
+                    <button type="button" class="revestik-editor-primary" disabled="@busy" @onclick="SaveAsync">Confirmar y guardar</button>
+                </div>
+            }
+            else
+            {
+                <div class="revestik-editor-fields">
+                    @if (sectionEditing is not null)
+                    {
+                        @if (sectionField is "eyebrow" or "title" or "description")
+                        {
+                            <label>@SectionFieldLabel en español
+                                @if (sectionField == "eyebrow") { <input maxlength="90" @bind="sectionEditing.Es.Eyebrow" /> }
+                                else if (sectionField == "title") { <input maxlength="180" @bind="sectionEditing.Es.Title" /> }
+                                else { <textarea maxlength="1000" rows="4" @bind="sectionEditing.Es.Description"></textarea> }
+                            </label>
+                            <details>
+                                <summary>Traducciones opcionales</summary>
+                                <label>@SectionFieldLabel en inglés
+                                    @if (sectionField == "eyebrow") { <input maxlength="90" @bind="sectionEn.Eyebrow" /> }
+                                    else if (sectionField == "title") { <input maxlength="180" @bind="sectionEn.Title" /> }
+                                    else { <textarea maxlength="1000" rows="3" @bind="sectionEn.Description"></textarea> }
+                                </label>
+                                <label>@SectionFieldLabel en alemán
+                                    @if (sectionField == "eyebrow") { <input maxlength="90" @bind="sectionDe.Eyebrow" /> }
+                                    else if (sectionField == "title") { <input maxlength="180" @bind="sectionDe.Title" /> }
+                                    else { <textarea maxlength="1000" rows="3" @bind="sectionDe.Description"></textarea> }
+                                </label>
+                            </details>
+                        }
+                        else if (sectionField is "card-title" or "card-description")
+                        {
+                            <p>Tarjeta @(cardIndex + 1) · ¿Por qué REVESTIK?</p>
+                            <label>@SectionFieldLabel en español
+                                @if (sectionField == "card-title") { <input maxlength="180" @bind="sectionEditing.Es.Cards[cardIndex].Title" /> }
+                                else { <textarea maxlength="500" rows="3" @bind="sectionEditing.Es.Cards[cardIndex].Description"></textarea> }
+                            </label>
+                            <details>
+                                <summary>Traducciones opcionales</summary>
+                                <label>@SectionFieldLabel en inglés
+                                    @if (sectionField == "card-title") { <input maxlength="180" @bind="sectionEn.Cards[cardIndex].Title" /> }
+                                    else { <textarea maxlength="500" rows="3" @bind="sectionEn.Cards[cardIndex].Description"></textarea> }
+                                </label>
+                                <label>@SectionFieldLabel en alemán
+                                    @if (sectionField == "card-title") { <input maxlength="180" @bind="sectionDe.Cards[cardIndex].Title" /> }
+                                    else { <textarea maxlength="500" rows="3" @bind="sectionDe.Cards[cardIndex].Description"></textarea> }
+                                </label>
+                            </details>
+                        }
+                        else if (sectionField == "image")
+                        {
+                            @if (pendingToken is not null)
+                            {
+                                <img class="revestik-editor-photo" src="@($"/api/admin/public-catalog/images/staged/{pendingToken}")" alt="Nueva fotografía, sin publicar" />
+                                <p>@pendingName · Pendiente de confirmar</p>
+                            }
+                            else if (sectionEditing.HasImage && !removeImage)
+                            {
+                                <img class="revestik-editor-photo" src="@($"/media/home-solutions?v={Uri.EscapeDataString(sectionEditing.Version)}")" alt="Fotografía actual de Soluciones" />
+                            }
+                            else
+                            {
+                                <p>Esta sección no tiene fotografía guardada.</p>
+                            }
+                            <label>Seleccionar imagen JPG, PNG o WebP (máximo 5 MB)
+                                <input type="file" accept="image/jpeg,image/png,image/webp" @ref="imageInput" @onchange="StageImageAsync" disabled="@busy" />
+                            </label>
+                            @if (sectionEditing.HasImage && pendingToken is null)
+                            {
+                                <label class="revestik-editor-checkbox">
+                                    <input type="checkbox" @bind="removeImage" /> Quitar fotografía actual
+                                </label>
+                            }
+                        }
+                    }
+                    else if (target == "heading" && editing is { } headingSlide)
+                    {
+                        <label>Título en español
+                            <input maxlength="180" @bind="headingSlide.HeadingEs" />
+                        </label>
+                        <details>
+                            <summary>Traducciones opcionales</summary>
+                            <label>Inglés<input maxlength="180" @bind="headingSlide.HeadingEn" /></label>
+                            <label>Alemán<input maxlength="180" @bind="headingSlide.HeadingDe" /></label>
+                        </details>
+                    }
+                    else if (target == "description" && editing is { } descriptionSlide)
+                    {
+                        <label>Descripción en español
+                            <textarea maxlength="1000" rows="4" @bind="descriptionSlide.DescriptionEs"></textarea>
+                        </label>
+                        <details>
+                            <summary>Traducciones opcionales</summary>
+                            <label>Inglés<textarea maxlength="1000" rows="3" @bind="descriptionSlide.DescriptionEn"></textarea></label>
+                            <label>Alemán<textarea maxlength="1000" rows="3" @bind="descriptionSlide.DescriptionDe"></textarea></label>
+                        </details>
+                    }
+                    else if (target == "image" && editing is { } imageSlide)
+                    {
+                        @if (pendingToken is not null)
+                        {
+                            <img class="revestik-editor-photo" src="@($"/api/admin/public-catalog/images/staged/{pendingToken}")" alt="Imagen nueva aún no publicada" />
+                            <p>@pendingName · Pendiente de confirmar</p>
+                        }
+                        else if (imageSlide.HasImage && !removeImage)
+                        {
+                            <img class="revestik-editor-photo" src="@($"/media/home-hero/{imageSlide.Slot}?v={Uri.EscapeDataString(imageSlide.Version)}")" alt="Imagen actual de portada" />
+                        }
+                        else
+                        {
+                            <p>Esta diapositiva no tiene una fotografía guardada.</p>
+                        }
+                        <label>Seleccionar imagen JPG, PNG o WebP (máximo 5 MB)
+                            <input type="file" accept="image/jpeg,image/png,image/webp" @ref="imageInput" @onchange="StageImageAsync" disabled="@busy" />
+                        </label>
+                        @if (imageSlide.HasImage && pendingToken is null)
+                        {
+                            <label class="revestik-editor-checkbox">
+                                <input type="checkbox" @bind="removeImage" /> Quitar fotografía actual
+                            </label>
+                        }
+                    }
+                </div>
+                <div class="revestik-editor-actions">
+                    <button type="button" disabled="@busy" @onclick="CancelAsync">Cancelar</button>
+                    <button type="button" class="revestik-editor-primary" disabled="@busy" @onclick="ReviewSave">Revisar y guardar</button>
+                </div>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private bool IsHomeRoute => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/') is "/es" or "/en" or "/de";
+    private IJSObjectReference? module;
+    private DotNetObjectReference<PublicInlineEditor>? callback;
+    private ElementReference imageInput;
+    private HeroSlide? editing;
+    private HomeSectionDto? sectionEditing;
+    private HomeSectionCopy sectionEn = new(), sectionDe = new();
+    private string sectionKey = "";
+    private string sectionField = "";
+    private int cardIndex = -1;
+    private string target = "heading";
+    private string? pendingToken;
+    private string? pendingName;
+    private string? error;
+    private bool removeImage;
+    private bool confirmSave;
+    private bool busy;
+
+    private string SectionLabel => sectionKey switch
+    {
+        "products" => "Nuestros productos",
+        "solutions" => "Soluciones",
+        "advantages" => "¿Por qué REVESTIK?",
+        "contact" => "Contacto",
+        _ => "Sección"
+    };
+
+    private string SectionFieldLabel => sectionField switch
+    {
+        "eyebrow" => "Etiqueta",
+        "title" or "card-title" => "Título",
+        "description" or "card-description" => "Descripción",
+        _ => "Fotografía"
+    };
+
+    private string DialogTitle => sectionEditing is not null
+        ? $"{(sectionField == "image" ? "Cambiar fotografía" : $"Editar {SectionFieldLabel.ToLowerInvariant()}")} · {SectionLabel}"
+        : target switch
+    {
+        "description" => "Editar descripción",
+        "image" => "Cambiar fotografía",
+        _ => "Editar título"
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            if (!await IsAdministratorAsync()) return;
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/public-inline-editor.js?v=VERIFY02-PERSISTENCE-FIX");
+            callback = DotNetObjectReference.Create(this);
+            await module.InvokeVoidAsync("attach", callback);
+        }
+        catch (JSException)
+        {
+            error = "No se pudo activar el modo editor. Actualizá la página.";
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task<bool> IsAdministratorAsync()
+    {
+        var user = (await AuthenticationState.GetAuthenticationStateAsync()).User;
+        return user.Identity?.IsAuthenticated == true && user.IsInRole("Administrator");
+    }
+
+    [JSInvokable]
+    public async Task BeginEdit(int slot, string field)
+    {
+        if (!IsHomeRoute || busy || editing is not null || sectionEditing is not null || slot is < 1 or > 3 ||
+            field is not ("heading" or "description" or "image") ||
+            module is null || !await IsAdministratorAsync())
+            return;
+
+        error = null;
+        busy = true;
+        try
+        {
+            var slides = await module.InvokeAsync<HeroSlide[]>("getSlides");
+            editing = slides.FirstOrDefault(s => s.Slot == slot) ?? NewSlide(slot);
+            target = field;
+            confirmSave = false;
+            removeImage = false;
+            pendingToken = null;
+            pendingName = null;
+        }
+        catch (JSException ex)
+        {
+            error = ex.Message.Contains("401") || ex.Message.Contains("403")
+                ? "Tu sesión no tiene autorización para editar. Volvé a iniciar sesión."
+                : "No se pudo cargar la portada. Comprobá la conexión e intentá nuevamente.";
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    [JSInvokable]
+    public async Task BeginSectionEdit(string key, string field, int index)
+    {
+        if (!IsHomeRoute || busy || editing is not null || sectionEditing is not null || module is null ||
+            key is not ("products" or "solutions" or "advantages" or "contact") ||
+            field is not ("eyebrow" or "title" or "description" or "image" or "card-title" or "card-description") ||
+            (field == "image" && key != "solutions") ||
+            (field is "card-title" or "card-description" && (key != "advantages" || index is < 0 or >= 4)) ||
+            (field is not ("card-title" or "card-description") && index != -1) ||
+            !await IsAdministratorAsync()) return;
+
+        busy = true;
+        error = null;
+        try
+        {
+            var sections = await module.InvokeAsync<HomeSectionDto[]>("getSections");
+            sectionEditing = sections.FirstOrDefault(s => s.Key == key)?.Clone() ?? new HomeSectionDto
+            {
+                Key = key,
+                Es = HomeSectionDefaults.Spanish(key)
+            };
+            // Keep every other field, translation, image and featured-product selection unchanged.
+            if (key == "advantages" && sectionEditing.Es.Cards.Count == 0)
+                sectionEditing.Es.Cards = HomeSectionDefaults.Spanish(key).Cards;
+            sectionEn = sectionEditing.En?.Clone() ?? new();
+            sectionDe = sectionEditing.De?.Clone() ?? new();
+            if (key == "advantages")
+            {
+                while (sectionEn.Cards.Count < 4) sectionEn.Cards.Add(new());
+                while (sectionDe.Cards.Count < 4) sectionDe.Cards.Add(new());
+            }
+            sectionKey = key;
+            sectionField = field;
+            cardIndex = index;
+            confirmSave = false;
+            removeImage = false;
+            pendingToken = null;
+            pendingName = null;
+        }
+        catch (JSException ex)
+        {
+            error = ex.Message.Contains("401") || ex.Message.Contains("403")
+                ? "Tu sesión no tiene autorización para editar. Volvé a iniciar sesión."
+                : "No se pudo cargar la sección. Comprobá la conexión e intentá nuevamente.";
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static bool HasTranslation(HomeSectionCopy copy) =>
+        !string.IsNullOrWhiteSpace(copy.Eyebrow) || !string.IsNullOrWhiteSpace(copy.Title) ||
+        !string.IsNullOrWhiteSpace(copy.Description) ||
+        copy.Cards.Any(c => !string.IsNullOrWhiteSpace(c.Title) || !string.IsNullOrWhiteSpace(c.Description));
+
+    private static HeroSlide NewSlide(int slot)
+    {
+        var seo = PublicSeo.Get("es", 0);
+        return new HeroSlide
+        {
+            Slot = slot,
+            HeadingEs = seo.Heading,
+            DescriptionEs = seo.Description
+        };
+    }
+
+    private async Task StageImageAsync(ChangeEventArgs _)
+    {
+        if (busy || module is null || (editing is null && !(sectionEditing is not null && sectionKey == "solutions" && sectionField == "image")) ||
+            !await IsAdministratorAsync()) return;
+
+        busy = true;
+        error = null;
+        try
+        {
+            var staged = await module.InvokeAsync<StagedImage>("stageImage", imageInput);
+            if (pendingToken is not null)
+                await module.InvokeVoidAsync("discardImage", pendingToken);
+            pendingToken = staged.Token;
+            pendingName = staged.Name;
+            removeImage = false;
+        }
+        catch (JSException)
+        {
+            error = "No se pudo cargar la imagen. Verificá el formato y el límite de 5 MB.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void ReviewSave()
+    {
+        if ((editing is null && sectionEditing is null) || busy) return;
+        if (sectionEditing is not null)
+        {
+            var copy = sectionEditing.Es;
+            if (string.IsNullOrWhiteSpace(copy.Title) || string.IsNullOrWhiteSpace(copy.Description) ||
+                copy.Eyebrow.Length > 90 || copy.Title.Length > 180 || copy.Description.Length > 1000 ||
+                (sectionKey == "advantages" && (copy.Cards.Count != 4 || copy.Cards.Any(c =>
+                    string.IsNullOrWhiteSpace(c.Title) || string.IsNullOrWhiteSpace(c.Description)))))
+            {
+                error = "Revisá el título, la descripción en español y las cuatro tarjetas de Ventajas.";
+                return;
+            }
+            if (sectionField == "image" && pendingToken is null && !removeImage)
+            {
+                error = "Seleccioná una imagen o marcá la opción de quitar la actual.";
+                return;
+            }
+            error = null;
+            confirmSave = true;
+            return;
+        }
+        if (editing is not { } currentSlide) return;
+        if (string.IsNullOrWhiteSpace(currentSlide.HeadingEs) ||
+            string.IsNullOrWhiteSpace(currentSlide.DescriptionEs) ||
+            currentSlide.HeadingEs.Length > 180 || currentSlide.DescriptionEs.Length > 1000)
+        {
+            error = "El título y la descripción en español son obligatorios.";
+            return;
+        }
+        if (target == "image" && pendingToken is null && !removeImage)
+        {
+            error = "Seleccioná una imagen o marcá la opción de quitar la actual.";
+            return;
+        }
+        error = null;
+        confirmSave = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!IsHomeRoute || (editing is null && sectionEditing is null) || busy || module is null ||
+            !await IsAdministratorAsync()) return;
+
+        busy = true;
+        error = null;
+        try
+        {
+            if (sectionEditing is not null)
+            {
+                var sectionPayload = new HomeSectionWrite
+                {
+                    Version = sectionEditing.Version,
+                    Es = sectionEditing.Es,
+                    En = HasTranslation(sectionEn) ? sectionEn : null,
+                    De = HasTranslation(sectionDe) ? sectionDe : null,
+                    FeaturedSlugs = sectionEditing.FeaturedSlugs,
+                    ImageToken = pendingToken,
+                    RemoveImage = removeImage
+                };
+                await module.InvokeVoidAsync("saveSection", sectionKey, sectionPayload);
+                pendingToken = null;
+                sectionEditing = null;
+                confirmSave = false;
+                await module.InvokeVoidAsync("refreshPage");
+                return;
+            }
+            if (editing is not { } currentSlide) return;
+            var payload = new
+            {
+                currentSlide.Version,
+                currentSlide.HeadingEs,
+                currentSlide.HeadingEn,
+                currentSlide.HeadingDe,
+                currentSlide.DescriptionEs,
+                currentSlide.DescriptionEn,
+                currentSlide.DescriptionDe,
+                ImageToken = pendingToken,
+                RemoveImage = removeImage
+            };
+            await module.InvokeVoidAsync("saveSlide", currentSlide.Slot, payload);
+            pendingToken = null;
+            editing = null;
+            confirmSave = false;
+            await module.InvokeVoidAsync("refreshPage");
+        }
+        catch (JSException ex)
+        {
+            error = ex.Message.Contains("409")
+                ? "El contenido cambió en otra sesión. Recargá la página antes de guardar."
+                : ex.Message.Contains("401") || ex.Message.Contains("403")
+                    ? "La sesión ya no tiene permiso para guardar."
+                    : "No se pudo guardar. Revisá la conexión y volvé a intentar.";
+            confirmSave = false;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            if (pendingToken is not null && module is not null)
+            {
+                try { await module.InvokeVoidAsync("discardImage", pendingToken); }
+                catch (JSException) { /* Pending-media cleanup worker removes orphans. */ }
+            }
+        }
+        finally
+        {
+            pendingToken = null;
+            pendingName = null;
+            editing = null;
+            sectionEditing = null;
+            sectionKey = "";
+            sectionField = "";
+            cardIndex = -1;
+            error = null;
+            confirmSave = false;
+            removeImage = false;
+            busy = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        callback?.Dispose();
+        if (module is null) return;
+        try
+        {
+            if (pendingToken is not null)
+                await module.InvokeVoidAsync("discardImage", pendingToken);
+            await module.InvokeVoidAsync("detach");
+            await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+    }
+
+    public sealed class HeroSlide
+    {
+        public int Slot { get; set; }
+        public string Version { get; set; } = "";
+        public string HeadingEs { get; set; } = "";
+        public string? HeadingEn { get; set; }
+        public string? HeadingDe { get; set; }
+        public string DescriptionEs { get; set; } = "";
+        public string? DescriptionEn { get; set; }
+        public string? DescriptionDe { get; set; }
+        public bool HasImage { get; set; }
+    }
+
+    public sealed class StagedImage
+    {
+        public string Token { get; set; } = "";
+        public string Name { get; set; } = "";
+    }
+}

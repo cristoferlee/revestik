@@ -1,3 +1,5 @@
+@using Revestik.Public.Components.Editor
+@using Revestik.Public.Hosting
 @inject NavigationManager Navigation
 @inject IConfiguration Configuration
 @{
@@ -7,17 +9,23 @@
     var knownRoute = SiteLinks.IsKnownPublicRoute(Navigation.Uri);
     var currentPath = new Uri(Navigation.Uri).AbsolutePath;
     var language = Locale.FromUri(Navigation.Uri);
+    var isEditingSite = PublicEditorAccess.CanEditPublicSite(RequestContext);
 }
 <!DOCTYPE html>
 <html lang="@Locale.FromUri(Navigation.Uri)">
 <head>
+    <base href="/" />
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <link rel="icon" type="image/svg+xml" href="/assets/revestik-rk.svg" />
     <link rel="stylesheet" href="/css/public.css" />
-    <link rel="stylesheet" href="/css/catalog.css" />
-    @if (publicBase is not null && knownRoute)
+    <link rel="stylesheet" href="/css/catalog.css?v=ACABADOS-RECOVERY-02" />
+    @if (isEditingSite)
+    {
+        <link rel="stylesheet" href="/css/public-inline-editor.css?v=VERIFY02-PERSISTENCE-FIX" />
+    }
+    @if (publicBase is not null && knownRoute && !isEditingSite)
     {
         <link rel="canonical" href="@(publicBase + currentPath)" />
         @foreach (var alternate in new[] { "es", "en", "de" })
@@ -28,8 +36,19 @@
     }
     <HeadOutlet />
 </head>
-<body>
+@* During editing, force full document navigation so each SSR page gets a fresh
+       authorized editor island and its JS controls are attached once. Ordinary
+       visitors retain the default enhanced-navigation behavior. *@
+<body data-enhance-nav="@(isEditingSite ? "false" : null)">
     <Routes />
+    @if (isEditingSite)
+    {
+        <PublicInlineEditor @rendermode="new InteractiveServerRenderMode(prerender: false)" />
+        @if (currentPath.TrimEnd('/') == SiteLinks.Path(language, 2))
+        {
+            <PublicFinishesEditor @rendermode="new InteractiveServerRenderMode(prerender: false)" />
+        }
+    }
     @* Global SSR-safe image viewer. Javascript enhances explicitly opted-in photos only. *@
     <dialog id="public-image-viewer" class="public-image-viewer" aria-label="Image viewer">
         <div class="public-image-viewer-shell">
@@ -47,9 +66,18 @@
     </dialog>
     <script src="/js/public-nav.js" defer></script>
     <script src="/js/public-hero.js" defer></script>
+    <script src="/js/public-catalog-search.js?v=ACABADOS-RECOVERY-02" defer></script>
     <script src="/js/public-featured-products.js" defer></script>
     <script src="/js/public-image-viewer.js" defer></script>
-    @* The script is inert outside an authenticated parent handshake, including on normal public pages. *@
+    @* Legacy iframe preview will be removed only after the replacement is verified. *@
     <script src="/js/public-editor-preview.js" defer></script>
+    @if (isEditingSite)
+    {
+        <script src="/_framework/blazor.web.js"></script>
+    }
 </body>
 </html>
+
+@code {
+    [CascadingParameter] private HttpContext? RequestContext { get; set; }
+}
