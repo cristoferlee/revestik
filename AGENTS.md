@@ -2,42 +2,58 @@
 
 ## Sources of truth
 
-Inspect the current repository, tests, migrations, Git working tree, and deployment evidence before changes. This document is a continuity aid, not a substitute for source code. Consult `docs/ARCHITECTURE.md`, `docs/BUSINESS_RULES.md`, `docs/SECURITY.md`, `docs/OPERATIONS.md`, and accepted ADRs in `docs/adr/`.
+Inspect the current repository, tests, migrations, Git working tree, and deployment evidence before making changes. Source code and verified execution results prevail over outdated checkpoints. Consult `docs/ARCHITECTURE.md`, `docs/BUSINESS_RULES.md`, `docs/SECURITY.md`, `docs/DEVELOPMENT.md`, `docs/OPERATIONS.md`, and accepted ADRs in `docs/adr/`. The historical public-site decisions are recorded in `docs/PUBLIC-WEB-01-MASTER-CHECKPOINT.md`; older status statements in that file may be superseded.
 
 ## Mandatory workflow
 
 **INVESTIGATE → PLAN → APPROVE → IMPLEMENT → VERIFY → STOP.**
 
-- **INVESTIGATE:** Trace actual endpoints, services, contracts, roles, persistence, dependencies, and tests. Separate evidence from hypotheses. Do not edit during investigation.
-- **PLAN:** Identify bounded scope, affected files, domain/security impact, migrations, risks, and acceptance tests.
-- **APPROVE:** Obtain explicit approval of the proposed scope before implementation; ask again for new scope.
-- **IMPLEMENT:** Make minimal changes, preserve the working tree, and provide complete repository-relative files in source ZIPs when requested.
-- **VERIFY:** Build, run focused and appropriate regression tests, check SQL/HTTP/CSRF/concurrency as applicable, perform sequential smoke tests, and inspect Git diff. Never report unexecuted tests as passed.
-- **STOP:** Summarize evidence and outstanding work. Do not commit, push, deploy, or delete files without separate authorization.
+- **INVESTIGATE:** Trace the real code, endpoints, services, contracts, roles, persistence, dependencies, tests, and affected runtime paths. Distinguish confirmed facts, owner decisions, assumptions, and outstanding evidence. Do not edit while investigating.
+- **PLAN:** Define the smallest bounded scope, affected files, security/domain impact, migration and data risks, and acceptance criteria. Prefer simplification and reuse over adding another layer or duplicate workflow.
+- **APPROVE:** Obtain explicit owner approval before implementing; request separate approval if the scope changes.
+- **IMPLEMENT:** Make minimal, focused changes. Preserve unrelated changes and provide complete repository-relative files when requested. Do not create installers, scripts, ZIPs, or additional deliverables unless requested.
+- **VERIFY:** Build, run focused and appropriate regression tests, validate SQL/HTTP/CSRF/concurrency where applicable, perform ordered smoke tests, and inspect the exact Git diff. Report only tests actually executed and distinguish local from production verification.
+- **STOP:** Report what changed, what passed, what remains unknown, and the next approval boundary. Never commit, push, deploy, run production migrations, or delete files without separate authorization.
 
-## Engineering guardrails
+## Solution architecture
 
-- .NET 10, ASP.NET Core Minimal APIs, Blazor WebAssembly, EF Core/SQL Server, ASP.NET Core Identity, Google OAuth/cookies, QuestPDF, xUnit/Testcontainers.
-- Modular monolith. Do not invent microservices, distributed queues, CQRS, or generic repositories.
-- Backend enforces permissions, state transitions, currency rules, project boundaries, CSRF, financial invariants, and private-file access.
-- Preserve FIFO stock provenance, transaction boundaries, quotation/sale identity, fiscal reconciliation distinctions, and closed-project restrictions.
-- Do not change migrations, public contracts, security behavior, frameworks, or `.gitignore` without explicit approval.
-- Work from `C:\Projects\Revestik` using Windows PowerShell; avoid destructive Git commands and blanket staging (`git add .`, `git add -A`).
-- Never include private files, backups, credentials, customer data, tokens, or local-only configuration in patches, diagnostics, or commits.
-- Communication with the project owner may be in Spanish; repository-facing documentation is **English** for technical recruiters, hiring managers, and collaborators. Preserve existing application UI language and established naming conventions.
-- Prioritize responsive UX, accessibility, clear validation, and maintainability.
+Revestik is a **.NET 10 modular monolith** with four application projects:
 
-## Checkpoint — 2026-11-02
+| Project | Responsibility |
+| --- | --- |
+| `Revestik.Api` | ASP.NET Core application host; Minimal APIs, Identity/Google OAuth, authorization, EF Core/SQL Server, business services, integrations, files, and published web applications. |
+| `Revestik.Client` | Authenticated administrative interface built with Blazor WebAssembly, hosted under `/administracion`. |
+| `Revestik.Public` | Multilingual public website built with ASP.NET Core Razor Components/SSR and interactive server-side editing components. |
+| `Revestik.Shared` | Shared transport contracts and DTOs; not a second persistence/domain layer. |
 
-- Repository: `cristoferlee/revestik`; local branch `main`; reported local HEAD and remote tracking baseline `1ea2fd55cee9f9c755f6ec407396a477049d0953`. Re-verify before work.
-- Project phase: internal production application on Azure; ongoing stabilization and documentation. Next planned phase: public customer-facing business website, with scope to be defined separately.
-- Locally modified and **not yet committed** at this checkpoint: `src/Revestik.Api/Endpoints/AuthenticationEndpoints.cs`, `src/Revestik.Client/Pages/Login.razor`, and `src/Revestik.Client/Pages/Login.razor.css` (AUTH-PROD-01A).
-- Untracked local backup: `src/Revestik.Api/Services/GmailIntegration/GmailIntegrationService.cs.gmail-quota01.bak`. Do not stage, publish, overwrite, or delete it without approval.
-- AUTH-PROD-01A: friendly login recovery for a transient database-unavailable scenario during Google OAuth callback; reported local build, 67 focused authentication tests, UI smoke, and **1,073/1,073 full regression tests** passed. This does not establish deployment to production.
-- Production architecture includes Azure Container Apps, Azure SQL Database, persistent private storage, and certificate-protected Data Protection keys. Verify live settings independently; repository deployment YAML may be a historical/preproduction snapshot.
-- Gmail historical sync is resumable and uses a process-local background worker. Multi-replica synchronization requires distributed coordination before scaling.
-- DOCS-PROD-01: documentation modernization for professional English-language repository presentation, architecture, security, operations, development, roadmap, and current state. No functional code changes are included in the documentation patch.
+`tests/Revestik.Api.Tests` is the automated test project, not a fifth application project.
 
-## Updating this checkpoint
+The intended deployment is **one host and one main domain**, `revestikcr.com`. `Revestik.Api` hosts both web experiences and the API. The earlier administrative subdomain `app.revestikcr.com` and the cross-origin iframe editing bridge are historical integration choices, not the target architecture. The old iframe editor and associated bridge code still require a separately approved, verified cleanup; do not declare them removed.
 
-Update verified SHA, test evidence, deployment status, pending work, and material decisions at each approved release. Keep it concise and current; Git history records implementation chronology. Do not mark a locally tested feature as deployed without a verified production revision.
+The normal current local startup runs **`Revestik.Api` alone**; it serves the administrative WASM client and the public site. Separate development entry points may exist for targeted debugging, but do not instruct contributors to start three processes as the standard workflow. Verify the actual launch profile and Google OAuth callback configuration before providing port-specific instructions.
+
+## Current deployment and product status — 2026-11-10
+
+- **Internal administration:** Deployed on Azure Container Apps with Azure SQL Database. The owner confirms `https://revestikcr.com/administracion` works and presents the Google OAuth sign-in flow for unauthenticated visitors. Administrative access and protected operations remain server-authorized.
+- **Public launch gate:** The owner confirms `https://revestikcr.com` currently returns **HTTP 401** in production. This is an intentional pre-launch restriction, not evidence that the customer-facing website is live. Do not enable public access or search indexing without separate approval.
+- **Public website development:** Home, shared navigation/navbar, and the finishes/products section are implemented in the repository. The full public site is still being completed and validated as a **beta** before its public production launch. Other pages and editor capabilities must be verified individually; never mark the whole public site complete based on a few finished sections.
+- **Public catalog boundaries:** Public product records are independent of internal inventory products. Categories, subcategories, and selling units are shared with existing administrative catalog settings. Anonymous catalog reads must obey publication and visibility rules; privileged mutations require Administrator authorization and relevant antiforgery checks.
+- **Visual editing:** The target is to edit actual public pages on the unified origin, not a second, duplicated preview application. Legacy `iframe`/`postMessage` editor components remain technical debt pending validated removal.
+- **Evidence baseline:** GitHub `main` was verified at `581aef9c99ddb7bbc1fffcbe49ec924699c980a2` (2026-11-10). GitHub CI for that SHA completed successfully. The owner previously reported a local regression of **1,199/1,199** and **17/17** manual security checks for the public-editor recovery. These reports do not establish that the same code, database migrations, or public pages have been deployed to Azure.
+- **Deployment traceability:** The most recent previously documented Azure revision was `ca-revestik-prod--0000018` on 2026-11-06, built from local sources without reliable Git SHA metadata. Verify the live Azure revision, image digest, configuration, database migration history, and smoke results independently before making production claims.
+- **Known follow-up items:** Remove obsolete iframe/bridge code only after replacement verification; check public-media availability after hosting changes; verify SEO `noindex` behavior and launch readiness; check featured-product selections when publication status changes. These are investigation items, not blanket permission to modify code.
+
+## Engineering and security guardrails
+
+- Keep trusted business logic and enforcement in the API. Browser UI visibility is never authorization. Preserve role/resource checks, CSRF, rate limits, private file access, input validation, and secure Google OAuth return paths.
+- Preserve FIFO stock provenance, transaction boundaries, quotation/sale identities, fiscal-document reconciliation, project boundaries, and closed-project restrictions. Do not conflate public marketing data with private customers, inventory costs, financial records, or project documents.
+- Use ASP.NET Core Identity, EF Core/SQL Server, QuestPDF, and the existing xUnit/Testcontainers verification patterns where applicable. Do not invent microservices, CQRS, generic repositories, queues, or duplicated abstractions without evidence and approval.
+- Treat migrations involving public/shared taxonomy as **data-sensitive**. In particular, `20261104230000_ConsolidateSharedProductTaxonomy` explicitly forbids automatic rollback and requires a separate production data review. No production migrations are implicitly authorized by a documentation or UI task.
+- Production storage, Google OAuth credentials, SQL connections, Data Protection certificates, and external integrations must be confirmed against the actual target environment. Never publish secrets or infer a safe production configuration from checked-in development settings.
+- Work from `C:\Projects\Revestik` using Windows PowerShell. Preserve the working tree; avoid destructive Git commands and blanket staging (`git add .`, `git add -A`). Do not overwrite unrelated local modifications, including `src/Revestik.Api/appsettings.Development.json`.
+- Conversation with the owner may be in Spanish; repository technical documentation is in **English**. Preserve the application's established UI language and names.
+- Prioritize responsive UX, accessibility, clear error handling, SEO readiness, maintainability, and actual reuse. Prefer removing proven duplication over introducing a parallel implementation.
+
+## Maintaining this checkpoint
+
+Keep this file concise and current. Update it only with verified Git/test/deployment evidence and explicit owner decisions. Store detailed business rules, architecture, release procedures, and historical decisions in their dedicated documents rather than duplicating entire checkpoints here. Distinguish **implemented**, **tested**, **deployed**, **publicly enabled**, and **planned** in every future handoff.

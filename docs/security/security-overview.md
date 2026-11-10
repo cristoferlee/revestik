@@ -1,5 +1,7 @@
 # Security Overview
 
+> **Current-state note (2026-11-10):** This is the detailed security reference. The concise, maintained overview is [`../SECURITY.md`](../SECURITY.md). REVESTIK now has four application projects: `Revestik.Api`, `Revestik.Client`, `Revestik.Public`, and `Revestik.Shared`. The API is the single normal runtime host, with administration under `/administracion` and public Razor Components/SSR routes at the same origin. Historical explanations below remain useful; when they conflict with this update, verify current code, tests, and the concise security document.
+
 ## 1. Purpose
 
 This document describes the current security model of Revestik.
@@ -27,7 +29,9 @@ This document describes implemented behavior. Future security requirements shoul
 
 ## 2. Trust Boundary
 
-Revestik treats the ASP.NET Core server as the primary application trust boundary.
+Revestik treats the ASP.NET Core server as the primary application trust boundary. The browser can render the administrative Blazor WebAssembly client or the server-rendered public site; neither UI path bypasses server-side authorization for protected operations.
+
+The diagram below illustrates the administrative/API trust relationship; `Revestik.Public` SSR and its narrowly scoped interactive editor also execute through the same ASP.NET Core host.
 
 ```text id="vf6doe"
 Browser / Blazor WASM
@@ -98,7 +102,9 @@ Anonymous access should be treated as an explicit security decision.
 
 Only endpoints that require unauthenticated access should be configured with anonymous access.
 
-Current examples include parts of the authentication flow, application health/static hosting requirements, and other explicitly public infrastructure endpoints.
+Current examples include parts of the authentication flow, application health/static hosting requirements, and explicitly anonymous public-catalog read endpoints. A public read endpoint must filter unpublished/archived products, classifications without a public presentation slug, and media not eligible for public access, rather than exposing the operational product/inventory tables.
+
+**Release gate:** The owner confirmed that `https://revestikcr.com` returned HTTP 401 in production on 2026-11-10. Public-site code being present in the unified host does **not** establish that the corporate website has been launched for visitors. The administration at `https://revestikcr.com/administracion` presents the Google OAuth sign-in flow. These are observed environment states, not guarantees about future deploys.
 
 Anonymous endpoints must not expose sensitive business information merely because they are publicly reachable.
 
@@ -123,6 +129,8 @@ Current protected capabilities include areas such as:
 * Administrative operations where applicable.
 
 Authorization decisions are enforced by the server.
+
+The public site's inline editor uses `PublicEditorAccess.CanEditPublicSite` to verify an authenticated Identity session with the `Administrator` role on a known public route. The `?edit=1` request flag and `Revestik.Public.EditMode` preference cookie only request edit mode; neither grants identity or authorization. Public catalog and site-content writes are separately restricted to administrators, protected by endpoint antiforgery checks, and subject to server-side validation/concurrency checks.
 
 Hiding a button or page in the Blazor client is not considered authorization because client-side behavior can be bypassed.
 
@@ -344,9 +352,9 @@ CORS controls which browser origins may make permitted cross-origin requests to 
 
 CORS is not an authentication mechanism.
 
-Development requires explicit local origins because Client and API run separately.
+The normal local workflow starts only `Revestik.Api`, serving the administrative Blazor WebAssembly client under `/administracion` and the public SSR site on one origin. Separate development hosts exist for specialized testing; cross-origin CORS settings for such cases must remain explicitly scoped and are **not** required for normal unified-host development.
 
-Production uses the hosted application model, reducing the need for broad cross-origin access.
+Production also uses same-origin hosting. Do not reintroduce broad credentialed CORS or cross-domain iframe message privileges to work around editor issues.
 
 ## 18. HTTPS
 
@@ -461,13 +469,15 @@ Archived products remain persisted while being excluded from normal product work
 
 Historical Sales, Quotations, Inventory movements, cost layers, and physical counts are therefore not required to lose their product relationship merely because the product is no longer operational.
 
-## 26. Static Application Hosting
+## 26. Unified Application Hosting and Public Editor
 
-The production ASP.NET Core host serves the compiled Blazor WebAssembly application.
+`Revestik.Api` is the single normal ASP.NET Core host. It serves the compiled administrative `Revestik.Client` Blazor WebAssembly application under `/administracion`, the `Revestik.Public` Razor Components/SSR pages under public routes, and the API endpoints. `Revestik.Shared` supplies transport contracts, not an independently deployed service. The legacy `app.revestikcr.com`/`revestikcr.com` split-host design is no longer the target.
 
-Blazor static files must never contain secrets because they are downloaded to the user's device.
+Blazor WebAssembly static files must never contain secrets because they are downloaded to the user's device. Public catalog SSR data reads must not use administrator cookies or privileged API endpoints and must never return private customer/project documents or financial data. Unknown `/api/*` routes must remain API responses rather than falling through to an HTML/SPA entry point.
 
-Unknown `/api/*` routes remain API responses rather than falling through to the SPA entry point.
+The authorized public inline editor renders interactive server components only after the Identity/Administrator check and requests private, non-cacheable HTML. Entering edit mode is not a privilege escalation. The legacy iframe/postMessage preview and bridge assets still exist in the repository but are **deprecated**, not an intended long-term security boundary. Their removal requires a separate approved implementation and security regression.
+
+Before public beta launch, independently verify anonymous read filtering, media authorization, SEO/indexing state, login isolation, cache behavior, and production routing. Public root currently returning 401 is an owner-reported deployment state, not a substitute for these checks.
 
 ## 27. Security Testing
 
@@ -487,6 +497,8 @@ Automated tests currently verify important security and integrity behavior, incl
 * Product lifecycle behavior.
 * Physical-count behavior.
 * Inventory cost-resolution behavior.
+* Unified-host `/administracion` routing, anonymous/public API boundaries, and editor authorization where covered.
+* Public catalog visibility, media handling, and protected mutable operations where covered.
 
 Security tests verify observable application protections rather than assuming the UI prevents misuse.
 
@@ -548,6 +560,8 @@ A security review should be performed when introducing or significantly changing
 * XML/document ingestion.
 * File uploads.
 * Public APIs.
+* Public editor access, public media visibility, and publication state.
+* Changes to domain routing, anonymous HTML caching, or the legacy iframe bridge.
 * External integrations.
 * Raw SQL.
 * Production hosting.

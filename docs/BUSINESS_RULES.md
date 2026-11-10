@@ -4,6 +4,44 @@
 
 Rules below retain the original scope and qualifiers. Changes to normative behavior require explicit approval and tests.
 
+## Public website, catalog and editor rules (verified source: 2026-11-10)
+
+This section documents behavior implemented in `main` at commit `581aef9c99ddb7bbc1fffcbe49ec924699c980a2`. It does **not** establish that the public website has been launched or that all database migrations have been applied in production. These rules supplement the existing internal business rules below; they do not supersede inventory, sales, purchase, project or fiscal invariants.
+
+**PUB-001 — Public products and inventory products are independent.** `PublicCatalogProduct` is not the internal `Product` entity. Publishing, editing, deleting or displaying public products does not itself change stock, FIFO cost layers, quotations, sales, purchases or internal pricing.
+
+**PUB-002 — The classification taxonomy is shared.** Public products use the existing `ProductCategories`, `ProductSubcategories` and units-of-measure catalog, rather than maintaining a second category hierarchy. Category and subcategory administration belongs in **Configuration → Product catalogs**. Legacy public category/subcategory write endpoints reject attempts to recreate a separate catalog.
+
+**PUB-003 — A public product belongs to one shared category through its subcategories.** The API accepts 1–30 distinct subcategory associations, all from the same category. Internal inventory products may have no subcategory. Subcategory relationships and the active selling-unit catalog are validated on the server.
+
+**PUB-004 — Public visibility is separate from internal activation.** Public catalog queries require published, non-archived public products and eligible category/subcategory public slugs. Internal `IsActive` on categories/subcategories is not itself the public publication switch. Changing classification visibility must not silently change a public product's `IsPublished` flag. Anonymous product, category and image endpoints apply visibility checks on the server.
+
+**PUB-005 — Spanish content is required.** Product submissions require an `es` translation containing a name and description. English (`en`) and German (`de`) are optional. The API enforces allowed languages, field lengths and unique translation language codes.
+
+**PUB-006 — Public price is optional.** When present, it must be non-negative, use `CRC` or `USD`, and reference an active registered selling unit. No price means no currency value is supplied. Public prices do not derive automatically from private inventory cost or price records.
+
+**PUB-007 — A public product's URL slug is stable.** Creation derives a unique slug from the mandatory Spanish product name. Editing the product name does not silently change an existing URL slug.
+
+**PUB-008 — Creation and publication require explicit administrator confirmation.** In the current create endpoint, the confirmed create operation validates the complete submission, commits staged images and **creates the product already published** (`IsPublished = true`). There is no persistent product-draft entity. Do not document a separate unpublished-create step as the default behavior. Existing products support explicit publish/unpublish actions subject to version checks and publication prerequisites.
+
+**PUB-009 — Images have constrained roles and lifecycles.** A newly created public product requires exactly one cover and at most five images in total, including its gallery. Supported product media are JPEG, PNG and WEBP, validated server-side, with a maximum upload size of 5 MiB. Uploaded files are staged before the confirmed transaction. A category's primary hero may support an animated GIF only with a valid static fallback from the same category; GIF is not a general product-gallery format.
+
+**PUB-010 — Public reads do not expose unpublished media.** Anonymous catalog image retrieval checks the public visibility of the owning product or category. Product-detail responses additionally require a cover image. Administrative image access is a separate protected endpoint family.
+
+**PUB-011 — Public deletion is not internal product archival.** An authorized delete permanently removes the public catalog product and its public associations, and removes its slug from manually selected Home featured products. The operation uses transactional database changes and then cleans up owned media. It must not delete an unrelated inventory product or media referenced as another record's fallback.
+
+**PUB-012 — Public content writes are server-authoritative.** `/api/admin/public-catalog` and `/api/admin/public-site/*` require administrator authorization; mutable operations validate CSRF where configured, input requirements and concurrency versions. Public read endpoints are separately anonymous. UI visibility, `iframe` messaging or client JavaScript cannot grant privileged authority.
+
+**PUB-013 — Edit-mode preference is not authorization.** The public site's `?edit=1` / `?edit=0` request and secure session preference cookie control presentation intent only. Each editor render still requires a valid authenticated Identity session, the `Administrator` role and an eligible public route; the API separately authorizes writes. The integrated inline editor is the target architecture. The older administrative iframe/bridge implementation remains legacy code pending verified removal.
+
+**PUB-014 — Home and Finishes hero content is separate.** Home uses stored hero slots 1–3; Finishes (`Acabados`) uses slots 4–6 in the same table and presents its own page-relative slots 1–3. Updates to one page must not overwrite the other page's hero content.
+
+**PUB-015 — Home featured products must remain visible.** Up to five manually selected slugs are displayed in the configured order, excluding products that no longer pass public visibility and cover-image checks. With no manual selection, the current API automatically selects up to five eligible products ordered by `DisplayOrder` and ID. Saving a previously selected unpublished product is rejected; this is a known editor UX case, not an authorization bypass.
+
+**PUB-016 — The public launch is a separate release decision.** The public homepage, navigation and finishes/product experience exist in source, but the owner confirmed that `https://revestikcr.com` still returns HTTP 401 as of 2026-11-10. The administration remains available at `/administracion` with Google OAuth sign-in. An approved beta, production configuration, data review, release and smoke verification are prerequisites to claiming a public launch.
+
+Implementation references: `src/Revestik.Api/Endpoints/PublicCatalog/`, `src/Revestik.Api/Services/PublicCatalog/PublicCatalogVisibility.cs`, `src/Revestik.Public/Hosting/PublicEditorAccess.cs`, and relevant SQL integration/authorization tests under `tests/Revestik.Api.Tests/PublicCatalog/`.
+
 ## CUS rules
 
 **CUS-001 — Customer name is required.**
