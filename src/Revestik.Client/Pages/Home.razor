@@ -250,7 +250,7 @@
                             </div>
                             @if (!string.IsNullOrWhiteSpace(activity.Path))
                             {
-                                <a href="@activity.Path" aria-label="Ver @activity.Title" class="dashboard-recent-link">Ver <span aria-hidden="true">→</span></a>
+                                <a href="@AdminRelativePath(activity.Path)" aria-label="Ver @activity.Title" class="dashboard-recent-link">Ver <span aria-hidden="true">→</span></a>
                             }
                         </li>
                     }
@@ -402,7 +402,7 @@
                 <div class="dashboard-detail-actions">
                     @if (selectedDashboardDetail != "fx")
                     {
-                        <a class="dashboard-detail-link" href="@SelectedDashboardDetailUrl">@SelectedDashboardDetailAction →</a>
+                        <a class="dashboard-detail-link" href="@AdminRelativePath(SelectedDashboardDetailUrl)">@SelectedDashboardDetailAction →</a>
                     }
                     <button type="button" class="dashboard-refresh" @onclick="CloseDashboardDetail">Cerrar detalle</button>
                 </div>
@@ -1080,6 +1080,8 @@
 
 </section>
 @code {
+    private static string AdminRelativePath(string path) => path.TrimStart('/');
+
     // UX-DASH-02: solo clasificar cuando hay datos verificables; no inferir riesgo de un saldo bajo.
     private static string DashboardFinancialState(decimal? amount, bool requiresReview) =>
         amount is null ? string.Empty :
