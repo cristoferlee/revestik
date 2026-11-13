@@ -1,0 +1,32 @@
+/* PUBLIC-PROJECTS-01C2: scoped visual tag editing on saved project photos only. */
+.revestik-tags-dialog { width: min(1120px, 96vw); max-width: 1120px; max-height: 92vh; overflow-y: auto; }
+.revestik-tags-note { font-size: .9rem; line-height: 1.5; opacity: .85; margin: .4rem 0 1rem; }
+.revestik-tags-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(270px, 1fr); gap: 1.25rem; align-items: start; }
+.revestik-tags-canvas { position: relative; display: inline-block; width: fit-content; max-width: 100%; line-height: 0; overflow: visible; touch-action: none; background: #17232b; border-radius: 12px; }
+.revestik-tags-canvas > img { display: block; width: auto; height: auto; max-width: 100%; max-height: 55vh; border-radius: 12px; user-select: none; pointer-events: none; }
+.revestik-tags-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.revestik-tags-lines line { stroke: #fff; stroke-width: .3; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 3px #222); }
+.revestik-tags-lines line[data-tag-draft-line] { stroke: #f8d281; stroke-width: 2; stroke-dasharray: 5 3; }
+.revestik-tags-canvas button { position: absolute; transform: translate(-50%,-50%); z-index: 1; cursor: pointer; }
+.revestik-tags-handle { touch-action: none; user-select: none; border: 2px solid #f6d184; background: rgba(18,32,46,.9); color: white; box-shadow: 0 2px 8px #0008; }
+.revestik-tags-handle-anchor { border-radius: 50%; width: 32px; height: 32px; font-size: 20px; line-height: 1; }
+.revestik-tags-handle-label, .revestik-tags-existing { border-radius: 18px; max-width: 160px; padding: 8px 11px; line-height: 1.25; font-size: .8rem; white-space: normal; overflow-wrap: anywhere; backdrop-filter: blur(8px); }
+.revestik-tags-existing { color: white; background: #1a2932bf; border: 1px solid #e0e6e9a8; }
+.revestik-tags-existing-anchor { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: white; border: 1px solid #20303a; transform: translate(-50%,-50%); pointer-events: none; }
+.revestik-tags-side { min-width: 0; }
+.revestik-tags-heading-row, .revestik-tags-list-row { display: flex; align-items: center; flex-wrap: wrap; gap: .55rem; margin-bottom: .6rem; }
+.revestik-tags-heading-row { justify-content: space-between; }
+.revestik-tags-list-row { padding: .55rem; border: 1px solid #d1d6da; border-radius: 8px; }
+.revestik-tags-list-row > span { flex: 1 1 120px; overflow-wrap: anywhere; }
+.revestik-tags-list-row small { color: #9a5b14; }
+.revestik-tags-form { border-top: 1px solid #d1d6da; padding-top: .8rem; margin-top: .75rem; }
+.revestik-tags-search { max-height: 200px; overflow-y: auto; border: 1px solid #c5cacf; border-radius: 8px; }
+.revestik-tags-search button { display: flex; align-items: center; width: 100%; gap: .55rem; padding: .4rem; border: 0; border-bottom: 1px solid #dce1e4; background: transparent; text-align: left; color: inherit; cursor: pointer; }
+.revestik-tags-search button:hover, .revestik-tags-search button:focus-visible { background: #cad4db55; }
+.revestik-tags-search img { width: 40px; height: 40px; object-fit: cover; border-radius: 5px; }
+.revestik-tags-search small { display: block; opacity: .8; }
+.revestik-tags-coordinates { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .5rem; }
+.revestik-tags-coordinates label input { width: 100%; }
+.revestik-tags-selection { overflow-wrap: anywhere; }
+.revestik-tags-confirm { border: 1px solid #bc7373; border-radius: 8px; padding: .8rem; }
+@media (max-width: 800px) { .revestik-tags-layout { grid-template-columns: 1fr; } .revestik-tags-dialog { width: 96vw; } .revestik-tags-canvas > img { max-height: 46vh; } }

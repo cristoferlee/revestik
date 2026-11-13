@@ -1981,15 +1981,7 @@ namespace Revestik.Api.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("PublicNameEn")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("PublicNameDe")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("PublicDescriptionEs")
+                    b.Property<string>("PublicDescriptionDe")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
@@ -1997,23 +1989,14 @@ namespace Revestik.Api.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
-                    b.Property<string>("PublicDescriptionDe")
+                    b.Property<string>("PublicDescriptionEs")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
-                    b.Property<string>("PublicHeroTitleEs")
-                        .HasMaxLength(180)
-                        .HasColumnType("nvarchar(180)");
+                    b.Property<int>("PublicDisplayOrder")
+                        .HasColumnType("int");
 
-                    b.Property<string>("PublicHeroTitleEn")
-                        .HasMaxLength(180)
-                        .HasColumnType("nvarchar(180)");
-
-                    b.Property<string>("PublicHeroTitleDe")
-                        .HasMaxLength(180)
-                        .HasColumnType("nvarchar(180)");
-
-                    b.Property<string>("PublicHeroDescriptionEs")
+                    b.Property<string>("PublicHeroDescriptionDe")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
@@ -2021,16 +2004,33 @@ namespace Revestik.Api.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
-                    b.Property<string>("PublicHeroDescriptionDe")
+                    b.Property<string>("PublicHeroDescriptionEs")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("PublicHeroTitleDe")
+                        .HasMaxLength(180)
+                        .HasColumnType("nvarchar(180)");
+
+                    b.Property<string>("PublicHeroTitleEn")
+                        .HasMaxLength(180)
+                        .HasColumnType("nvarchar(180)");
+
+                    b.Property<string>("PublicHeroTitleEs")
+                        .HasMaxLength(180)
+                        .HasColumnType("nvarchar(180)");
+
+                    b.Property<string>("PublicNameDe")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("PublicNameEn")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.Property<string>("PublicSlug")
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
-
-                    b.Property<int>("PublicDisplayOrder")
-                        .HasColumnType("int");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -2077,21 +2077,7 @@ namespace Revestik.Api.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<string>("PublicNameEn")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("PublicNameDe")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("PublicDescriptionEs")
+                    b.Property<string>("PublicDescriptionDe")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
@@ -2099,16 +2085,30 @@ namespace Revestik.Api.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
-                    b.Property<string>("PublicDescriptionDe")
+                    b.Property<string>("PublicDescriptionEs")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("PublicDisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PublicNameDe")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("PublicNameEn")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.Property<string>("PublicSlug")
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
 
-                    b.Property<int>("PublicDisplayOrder")
-                        .HasColumnType("int");
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
@@ -3775,6 +3775,289 @@ namespace Revestik.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.PublicProjects.PublicProject", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FeaturedOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(240)
+                        .HasColumnType("nvarchar(240)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<string>("TypeCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FeaturedOrder")
+                        .IsUnique()
+                        .HasFilter("[FeaturedOrder] IS NOT NULL");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.HasIndex("IsPublished", "TypeCode");
+
+                    b.HasIndex("IsPublished", "DisplayOrder", "CreatedAtUtc");
+
+                    b.ToTable("PublicProjects", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PublicProjects_DisplayOrder", "[DisplayOrder] IS NULL OR [DisplayOrder] >= 0");
+
+                            t.HasCheckConstraint("CK_PublicProjects_FeaturedOrder", "[FeaturedOrder] IS NULL OR [FeaturedOrder] BETWEEN 1 AND 3");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicProjects.PublicProjectImage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AltDe")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("AltEn")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("AltEs")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<long>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.HasIndex("ProjectId", "DisplayOrder");
+
+                    b.HasIndex("ProjectId", "Role")
+                        .IsUnique()
+                        .HasFilter("[Role] = 'ProjectCover'");
+
+                    b.ToTable("PublicProjectImages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PublicProjectImages_ContentType", "[ContentType] IN ('image/jpeg','image/png','image/webp')");
+
+                            t.HasCheckConstraint("CK_PublicProjectImages_Dimensions", "[Width] BETWEEN 1 AND 8192 AND [Height] BETWEEN 1 AND 8192");
+
+                            t.HasCheckConstraint("CK_PublicProjectImages_DisplayOrder", "[DisplayOrder] >= 0");
+
+                            t.HasCheckConstraint("CK_PublicProjectImages_FileSize", "[FileSizeBytes] > 0 AND [FileSizeBytes] <= 5242880");
+
+                            t.HasCheckConstraint("CK_PublicProjectImages_Role", "[Role] IN ('ProjectCover','ProjectGallery')");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicProjects.PublicProjectImageTag", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AnchorX")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)");
+
+                    b.Property<decimal>("AnchorY")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)");
+
+                    b.Property<string>("CustomLabelDe")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("CustomLabelEn")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("CustomLabelEs")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ImageId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("LabelX")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)");
+
+                    b.Property<decimal>("LabelY")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)");
+
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProductNameSnapshotDe")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ProductNameSnapshotEn")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ProductNameSnapshotEs")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("ImageId", "DisplayOrder");
+
+                    b.ToTable("PublicProjectImageTags", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PublicProjectImageTags_Coordinates", "[AnchorX] BETWEEN 0 AND 1 AND [AnchorY] BETWEEN 0 AND 1 AND [LabelX] BETWEEN 0 AND 1 AND [LabelY] BETWEEN 0 AND 1");
+
+                            t.HasCheckConstraint("CK_PublicProjectImageTags_DisplayOrder", "[DisplayOrder] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicProjects.PublicProjectSpace", b =>
+                {
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SpaceCode")
+                        .HasMaxLength(48)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(48)");
+
+                    b.HasKey("ProjectId", "SpaceCode");
+
+                    b.HasIndex("SpaceCode", "ProjectId");
+
+                    b.ToTable("PublicProjectSpaces", (string)null);
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicProjects.PublicProjectTranslation", b =>
+                {
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LanguageCode")
+                        .HasMaxLength(2)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(2)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SeoDescription")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<string>("SeoTitle")
+                        .HasMaxLength(180)
+                        .HasColumnType("nvarchar(180)");
+
+                    b.HasKey("ProjectId", "LanguageCode");
+
+                    b.ToTable("PublicProjectTranslations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PublicProjectTranslations_Language", "[LanguageCode] IN ('es','en','de')");
+                        });
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
                 {
                     b.Property<int>("Id")
@@ -5356,6 +5639,57 @@ namespace Revestik.Api.Data.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.PublicProjects.PublicProjectImage", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.PublicProjects.PublicProject", "Project")
+                        .WithMany("Images")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicProjects.PublicProjectImageTag", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.PublicProjects.PublicProjectImage", "Image")
+                        .WithMany("Tags")
+                        .HasForeignKey("ImageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.PublicCatalog.PublicCatalogProduct", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Image");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicProjects.PublicProjectSpace", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.PublicProjects.PublicProject", "Project")
+                        .WithMany("Spaces")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicProjects.PublicProjectTranslation", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.PublicProjects.PublicProject", "Project")
+                        .WithMany("Translations")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>
                 {
                     b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", "CreatedByUser")
@@ -5669,6 +6003,20 @@ namespace Revestik.Api.Data.Migrations
                     b.Navigation("SubcategoryLinks");
 
                     b.Navigation("Translations");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicProjects.PublicProject", b =>
+                {
+                    b.Navigation("Images");
+
+                    b.Navigation("Spaces");
+
+                    b.Navigation("Translations");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicProjects.PublicProjectImage", b =>
+                {
+                    b.Navigation("Tags");
                 });
 
             modelBuilder.Entity("Revestik.Api.Models.Purchase", b =>

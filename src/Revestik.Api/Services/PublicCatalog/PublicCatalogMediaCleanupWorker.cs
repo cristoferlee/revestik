@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Data;
 using Revestik.Api.Models.PublicCatalog;
+using Revestik.Api.Models.PublicProjects;
 
 namespace Revestik.Api.Services.PublicCatalog;
 
@@ -31,6 +32,10 @@ public sealed class PublicCatalogMediaCleanupWorker(
                 var homeSectionKeys = await db.PublicHomeSections.AsNoTracking()
                     .Where(x => x.ImageStorageKey != null).Select(x => x.ImageStorageKey!).ToListAsync(stoppingToken);
                 keys.AddRange(homeSectionKeys);
+                // Public project photographs use the same durable storage, but not the
+                // public catalog images table. Include them before pruning active files.
+                keys.AddRange(await db.Set<PublicProjectImage>().AsNoTracking()
+                    .Select(x => x.StorageKey).ToListAsync(stoppingToken));
                 var orphans = storage.PruneActiveOrphans(keys.ToHashSet(StringComparer.Ordinal), TimeSpan.FromHours(24));
                 if (orphans != 0) logger.LogInformation("Pruned {Count} unreferenced public-catalog files.", orphans);
             }

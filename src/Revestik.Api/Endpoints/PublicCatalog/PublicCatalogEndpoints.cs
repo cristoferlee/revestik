@@ -8,6 +8,7 @@ using Revestik.Api.Models;
 using Revestik.Api.Models.PublicCatalog;
 using Revestik.Api.Services.Audit;
 using Revestik.Api.Services.PublicCatalog;
+using Revestik.Api.Services.PublicProjects;
 using Revestik.Api.Extensions;
 
 namespace Revestik.Api.Endpoints.PublicCatalog;
@@ -327,6 +328,7 @@ public static class PublicCatalogEndpoints
         if(!Version(r.Version,x.RowVersion))return Conflict("Product changed. Reload.");
         await EnsurePresentationsAsync(db, r.SubcategoryIds, ct);
         AssignProduct(x,r);
+        await PublicProjectTagSnapshots.RefreshPublishedAsync(db, x, ct);
         SecurityAudit.Record(db,"PublicCatalogProductUpdated","PublicCatalogProduct",id.ToString(),Actor(user));
         try{await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);}catch(DbUpdateConcurrencyException){return Conflict("Product changed. Reload.");}catch(DbUpdateException){return Conflict("Product update conflicts with existing data.");}
         return Results.Ok(ProductDto(x,await db.Set<PublicCatalogImage>().AsNoTracking().Where(i=>i.ProductId==id).OrderBy(i=>i.DisplayOrder).ToListAsync(ct)));
@@ -406,6 +408,7 @@ public static class PublicCatalogEndpoints
 
                 await EnsurePresentationsAsync(db, input.SubcategoryIds, ct);
                 AssignProduct(product, input);
+                await PublicProjectTagSnapshots.RefreshPublishedAsync(db, product, ct);
                 // SQL Server's unique filtered cover index requires the old cover
                 // to be deleted before inserting its replacement (same transaction).
                 if (removed.Any(imageId => current.Any(i => i.Id == imageId && i.Role == "ProductCover")))
@@ -461,15 +464,17 @@ public static class PublicCatalogEndpoints
             return Bad("Product requires subcategories from one shared category.");
         if(await db.Set<PublicCatalogImage>().CountAsync(i=>i.ProductId==id&&i.Role=="ProductCover",ct)!=1)return Bad("One cover image is required.");
         x.IsPublished=true;x.UpdatedAtUtc=DateTime.UtcNow;
+        await PublicProjectTagSnapshots.RefreshPublishedAsync(db, x, ct);
         SecurityAudit.Record(db,"PublicCatalogProductPublished","PublicCatalogProduct",id.ToString(),Actor(user));
         try{await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);}catch(DbUpdateConcurrencyException){return Conflict("Product changed. Reload.");}
         return Results.Ok(new{x.Id,x.IsPublished,Version=V(x.RowVersion)});
     }
     private static async Task<IResult> UnpublishProduct(int id,VersionWrite r,RevestikDbContext db,ClaimsPrincipal user,CancellationToken ct)
     {
-        var x=await db.PublicCatalogProducts.SingleOrDefaultAsync(x=>x.Id==id&&!x.IsArchived,ct);
+        var x=await ProductIncludes(db).SingleOrDefaultAsync(x=>x.Id==id&&!x.IsArchived,ct);
         if(x is null)return Results.NotFound();
         if(!Version(r.Version,x.RowVersion))return Conflict("Product changed. Reload.");
+        await PublicProjectTagSnapshots.RefreshPublishedAsync(db, x, ct);
         x.IsPublished=false;x.UpdatedAtUtc=DateTime.UtcNow;
         SecurityAudit.Record(db,"PublicCatalogProductUnpublished","PublicCatalogProduct",id.ToString(),Actor(user));
         try{await db.SaveChangesAsync(ct);}catch(DbUpdateConcurrencyException){return Conflict("Product changed. Reload.");}
@@ -512,6 +517,7 @@ public static class PublicCatalogEndpoints
         }
 
         var keys = images.Select(i => i.StorageKey).ToArray();
+        await PublicProjectTagSnapshots.DetachOnDeletionAsync(db, product, ct);
         db.Set<PublicCatalogImage>().RemoveRange(images);
         db.PublicCatalogProductSubcategories.RemoveRange(product.SubcategoryLinks);
         db.PublicCatalogProductTranslations.RemoveRange(product.Translations);

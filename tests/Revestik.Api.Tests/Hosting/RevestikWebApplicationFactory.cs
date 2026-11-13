@@ -10,8 +10,10 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Revestik.Api.Data;
+using Revestik.Api.Services.PublicCatalog;
 
 namespace Revestik.Api.Tests.Hosting;
 
@@ -28,6 +30,13 @@ public sealed class RevestikWebApplicationFactory(
     private readonly string productionStorageRoot = Path.Combine(
         Path.GetTempPath(),
         $"revestik-production-host-tests-{Guid.NewGuid():N}");
+
+    // Unique per-host media storage. Test databases must never share App_Data with development.
+    private readonly string publicMediaTestRoot = Path.Combine(
+        Path.GetTempPath(),
+        $"revestik-media-host-tests-{Guid.NewGuid():N}");
+
+    public string PublicMediaTestRoot => publicMediaTestRoot;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -128,6 +137,19 @@ public sealed class RevestikWebApplicationFactory(
 
         builder.ConfigureTestServices(services =>
         {
+            // A test database does not contain the live media references. Prevent the
+            // production cleanup worker from pruning any files during test startup.
+            var cleanupRegistration = services.SingleOrDefault(descriptor =>
+                descriptor.ServiceType == typeof(IHostedService) &&
+                descriptor.ImplementationType == typeof(PublicCatalogMediaCleanupWorker));
+            if (cleanupRegistration is null)
+                throw new InvalidOperationException("Expected the public media cleanup registration in the test host.");
+            services.Remove(cleanupRegistration);
+
+            // Even direct storage calls made by test endpoints must stay isolated.
+            services.RemoveAll<PublicCatalogMediaStorage>();
+            services.AddSingleton(new PublicCatalogMediaStorage(publicMediaTestRoot));
+
             services.AddAuthentication(options =>
             {
                 options.DefaultAuthenticateScheme =

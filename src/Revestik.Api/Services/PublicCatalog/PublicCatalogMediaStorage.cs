@@ -9,10 +9,15 @@ public sealed class PublicCatalogMediaStorage
     private readonly string _active;
 
     public PublicCatalogMediaStorage(IHostEnvironment env, IConfiguration config)
-    {
-        var root = env.IsProduction()
+        : this(env.IsProduction()
             ? config["RevestikStorage:RootPath"] ?? throw new InvalidOperationException("Persistent storage is required.")
-            : Path.Combine(env.ContentRootPath, "App_Data");
+            : Path.Combine(env.ContentRootPath, "App_Data"))
+    {
+    }
+
+    // Test hosts can supply their own root without changing normal development storage.
+    public PublicCatalogMediaStorage(string root)
+    {
         if (!Path.IsPathFullyQualified(root)) throw new InvalidOperationException("Media root must be absolute.");
         _root = Path.GetFullPath(Path.Combine(root, "public-catalog"));
         _pending = Path.Combine(_root, "pending");

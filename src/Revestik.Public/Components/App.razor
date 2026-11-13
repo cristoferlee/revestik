@@ -25,6 +25,14 @@
     {
         <link rel="stylesheet" href="/css/public-inline-editor.css?v=VERIFY02-PERSISTENCE-FIX" />
     }
+    @if (isEditingSite && currentPath.TrimEnd('/') == SiteLinks.Path(language, 1))
+    {
+        <link rel="stylesheet" href="/css/public-project-tags-editor.css?v=PROJECTS-01C2" />
+    }
+    @if (isEditingSite && currentPath.TrimEnd('/') == SiteLinks.Path(language, 1))
+    {
+        <link rel="stylesheet" href="/css/public-projects-editor.css?v=PROJECTS-01C-UI01" />
+    }
     @if (publicBase is not null && knownRoute && !isEditingSite)
     {
         <link rel="canonical" href="@(publicBase + currentPath)" />
@@ -47,6 +55,10 @@
         @if (currentPath.TrimEnd('/') == SiteLinks.Path(language, 2))
         {
             <PublicFinishesEditor @rendermode="new InteractiveServerRenderMode(prerender: false)" />
+        }
+        @if (currentPath.TrimEnd('/') == SiteLinks.Path(language, 1))
+        {
+            <PublicProjectsEditor @rendermode="new InteractiveServerRenderMode(prerender: false)" />
         }
     }
     @* Global SSR-safe image viewer. Javascript enhances explicitly opted-in photos only. *@

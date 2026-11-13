@@ -1,0 +1,334 @@
+@using System.Globalization
+@using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="revestik-editor-backdrop">
+    <section class="revestik-editor-dialog revestik-tags-dialog" role="dialog" aria-modal="true" aria-labelledby="revestik-tags-heading">
+        <header class="revestik-editor-dialog-header">
+            <div>
+                <p>REVESTIK · Proyectos · Materiales</p>
+                <h2 id="revestik-tags-heading">Etiquetas de fotografía</h2>
+            </div>
+            <button type="button" disabled="@busy" aria-label="Cerrar etiquetas" @onclick="CloseAsync">×</button>
+        </header>
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <p role="alert" class="revestik-editor-error">@error</p>
+        }
+        <p class="revestik-tags-note">Seleccioná un producto publicado de Acabados. Arrastrá el punto y la burbuja con el mouse o el dedo. Las etiquetas se guardan individualmente; los cambios pendientes del proyecto siguen sin guardar.</p>
+        <div class="revestik-tags-layout">
+            <div class="revestik-tags-canvas" @ref="canvas" aria-label="Posiciones de etiquetas en la fotografía">
+                <img src="@($"/api/admin/public-projects/images/{ImageId}/content")" alt="Fotografía del proyecto para ubicar materiales" draggable="false" />
+                <svg class="revestik-tags-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                    @foreach (var item in tags)
+                    {
+                        <line x1="@Coord(item.AnchorX)" y1="@Coord(item.AnchorY)" x2="@Coord(item.LabelX)" y2="@Coord(item.LabelY)" />
+                    }
+                    @if (draft is { } current)
+                    {
+                        <line data-tag-draft-line x1="@Coord(current.AnchorX)" y1="@Coord(current.AnchorY)" x2="@Coord(current.LabelX)" y2="@Coord(current.LabelY)" />
+                    }
+                </svg>
+                @foreach (var item in tags)
+                {
+                    <button type="button" class="revestik-tags-existing" data-tag-edit
+                            style="@Style(item.LabelX, item.LabelY)"
+                            disabled="@busy" title="Editar etiqueta"
+                            @onclick="() => BeginEdit(item)">
+                        @(string.IsNullOrWhiteSpace(item.CustomLabelEs) ? item.ProductNameSnapshotEs : item.CustomLabelEs)
+                    </button>
+                    <span class="revestik-tags-existing-anchor" style="@Style(item.AnchorX, item.AnchorY)" aria-hidden="true"></span>
+                }
+                @if (draft is { } active)
+                {
+                    <button type="button" class="revestik-tags-handle revestik-tags-handle-anchor"
+                            data-tag-drag="anchor" style="@Style(active.AnchorX, active.AnchorY)"
+                            aria-label="Mover punto del material" title="Arrastrar punto">+</button>
+                    <button type="button" class="revestik-tags-handle revestik-tags-handle-label"
+                            data-tag-drag="label" style="@Style(active.LabelX, active.LabelY)"
+                            aria-label="Mover burbuja del material" title="Arrastrar etiqueta">
+                        @(string.IsNullOrWhiteSpace(active.CustomLabelEs) ? (selectedProductName ?? "Material") : active.CustomLabelEs)
+                    </button>
+                }
+            </div>
+            <div class="revestik-tags-side">
+                @if (loading)
+                {
+                    <p>Cargando etiquetas…</p>
+                }
+                else
+                {
+                    <div class="revestik-tags-heading-row">
+                        <strong>Materiales (@tags.Count/5)</strong>
+                        <button type="button" class="revestik-editor-primary" disabled="@(busy || draft is not null || tags.Count >= 5)" @onclick="BeginNew">+ Nueva etiqueta</button>
+                    </div>
+                    @foreach (var item in tags)
+                    {
+                        <div class="revestik-tags-list-row" @key="item.Id">
+                            <span>@(string.IsNullOrWhiteSpace(item.CustomLabelEs) ? item.ProductNameSnapshotEs : item.CustomLabelEs)</span>
+                            @if (item.ProductId is null) { <small>Producto eliminado</small> }
+                            <button type="button" disabled="@busy" @onclick="() => BeginEdit(item)">Editar</button>
+                            <button type="button" disabled="@busy" @onclick="() => AskDelete(item)">Quitar</button>
+                        </div>
+                    }
+                }
+                @if (deletePending is { } remove)
+                {
+                    <div class="revestik-tags-confirm" role="group" aria-label="Confirmar eliminación">
+                        <p>¿Eliminar esta etiqueta? El proyecto y la fotografía se conservarán.</p>
+                        <button type="button" disabled="@busy" @onclick="() => deletePending = null">Cancelar</button>
+                        <button type="button" disabled="@busy" class="revestik-editor-danger" @onclick="DeleteConfirmedAsync">Eliminar etiqueta</button>
+                    </div>
+                }
+                @if (draft is { } editing && deletePending is null)
+                {
+                    <div class="revestik-tags-form revestik-editor-fields">
+                        <strong>@(editing.Id == 0 ? "Agregar etiqueta" : "Editar etiqueta")</strong>
+                        @if (editing.Id != 0 && editing.ProductId is null)
+                        {
+                            <p>El producto original ya no existe. Podés conservar el texto histórico o seleccionar un producto publicado diferente.</p>
+                        }
+                        <label>Buscar material publicado
+                            <input value="@searchTerm" @oninput="SearchAsync" placeholder="Escribí al menos 2 caracteres" maxlength="100" autocomplete="off" />
+                        </label>
+                        @if (matches.Count > 0)
+                        {
+                            <div class="revestik-tags-search" role="list" aria-label="Productos encontrados">
+                                @foreach (var match in matches)
+                                {
+                                    <button type="button" role="listitem" disabled="@busy" @onclick="() => SelectProduct(match)">
+                                        @if (match.CoverImageId is > 0)
+                                        {
+                                            <img src="@($"/api/admin/public-catalog/images/{match.CoverImageId}/content")" alt="" loading="lazy" />
+                                        }
+                                        <span>@match.Name <small>@match.Category</small></span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                        <p class="revestik-tags-selection">Material seleccionado: <strong>@(selectedProductName ?? "Sin seleccionar")</strong></p>
+                        <label>Nombre corto personalizado (opcional)
+                            <input maxlength="120" @bind="editing.CustomLabelEs" placeholder="Dejar vacío para nombre de Acabados" />
+                        </label>
+                        <details>
+                            <summary>Idiomas opcionales</summary>
+                            <label>Etiqueta EN<input maxlength="120" @bind="editing.CustomLabelEn" /></label>
+                            <label>Etiqueta DE<input maxlength="120" @bind="editing.CustomLabelDe" /></label>
+                        </details>
+                        <div class="revestik-tags-coordinates">
+                            <label>Punto X<input type="number" min="0" max="1" step="0.0001" @bind="editing.AnchorX" /></label>
+                            <label>Punto Y<input type="number" min="0" max="1" step="0.0001" @bind="editing.AnchorY" /></label>
+                            <label>Burbuja X<input type="number" min="0" max="1" step="0.0001" @bind="editing.LabelX" /></label>
+                            <label>Burbuja Y<input type="number" min="0" max="1" step="0.0001" @bind="editing.LabelY" /></label>
+                        </div>
+                        <p class="revestik-tags-note">Valores proporcionales de 0 a 1; también podés colocarlos con el mouse o el dedo.</p>
+                        <div class="revestik-editor-actions">
+                            <button type="button" disabled="@busy" @onclick="CancelDraft">Cancelar</button>
+                            <button type="button" disabled="@busy" class="revestik-editor-primary" @onclick="SaveAsync">Guardar etiqueta</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="revestik-editor-actions">
+            <button type="button" disabled="@busy" @onclick="CloseAsync">Volver al proyecto</button>
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int ImageId { get; set; }
+    [Parameter, EditorRequired] public string ImageVersion { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<int> OnCountChanged { get; set; }
+
+    private ElementReference canvas;
+    private IJSObjectReference? module;
+    private DotNetObjectReference<PublicProjectTagEditor>? callback;
+    private List<TagData> tags = [];
+    private List<ProductMatch> matches = [];
+    private TagData? draft;
+    private TagData? deletePending;
+    private string? error, selectedProductName;
+    private string searchTerm = "";
+    private bool loading = true, busy;
+    private CancellationTokenSource? searchCancellation;
+
+    private static string Coord(decimal value) => (value * 100m).ToString("0.####", CultureInfo.InvariantCulture);
+    private static string Style(decimal x, decimal y) => $"left:{Coord(x)}%;top:{Coord(y)}%";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/public-project-tags-editor.js?v=PROJECTS-01C2");
+            callback = DotNetObjectReference.Create(this);
+            await module.InvokeVoidAsync("attach", canvas, callback);
+            await LoadTagsAsync();
+        }
+        catch (JSException)
+        {
+            error = "No se pudo cargar el editor de etiquetas. Recargá la página.";
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadTagsAsync()
+    {
+        if (module is null) return;
+        try
+        {
+            tags = (await module.InvokeAsync<List<TagData>>("listTags", ImageId)) ?? [];
+            await OnCountChanged.InvokeAsync(tags.Count);
+        }
+        catch (JSException) { error = "No se pudieron consultar las etiquetas de esta fotografía."; }
+        finally { loading = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private void BeginNew()
+    {
+        if (busy || draft is not null || tags.Count >= 5) return;
+        error = null; deletePending = null; searchTerm = ""; matches.Clear();
+        selectedProductName = null;
+        draft = new TagData { AnchorX = .35m, AnchorY = .40m, LabelX = .60m, LabelY = .28m,
+            DisplayOrder = tags.Count };
+    }
+
+    private void BeginEdit(TagData tag)
+    {
+        if (busy) return;
+        error = null; deletePending = null; searchTerm = ""; matches.Clear();
+        draft = tag.Copy();
+        selectedProductName = string.IsNullOrWhiteSpace(tag.CustomLabelEs)
+            ? tag.ProductNameSnapshotEs : tag.CustomLabelEs;
+    }
+
+    private void SelectProduct(ProductMatch match)
+    {
+        if (draft is null || busy) return;
+        draft.ProductId = match.Id;
+        selectedProductName = match.Name;
+        searchTerm = ""; matches.Clear();
+        searchCancellation?.Cancel();
+    }
+
+    private async Task SearchAsync(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? "";
+        searchCancellation?.Cancel();
+        searchCancellation?.Dispose();
+        searchCancellation = new CancellationTokenSource();
+        var token = searchCancellation.Token;
+        matches.Clear();
+        if (module is null || searchTerm.Trim().Length < 2) return;
+        try
+        {
+            await Task.Delay(300, token);
+            var results = await module.InvokeAsync<List<ProductMatch>>("searchProducts", token, searchTerm.Trim());
+            if (!token.IsCancellationRequested) { matches = results ?? []; await InvokeAsync(StateHasChanged); }
+        }
+        catch (OperationCanceledException) { }
+        catch (JSException) { if (!token.IsCancellationRequested) error = "No se pudo buscar productos publicados."; }
+    }
+
+    [JSInvokable]
+    public async Task SetTagPosition(string part, double x, double y)
+    {
+        if (draft is null || busy || !double.IsFinite(x) || !double.IsFinite(y)) return;
+        var nx = Math.Round((decimal)Math.Clamp(x, 0, 1), 4);
+        var ny = Math.Round((decimal)Math.Clamp(y, 0, 1), 4);
+        if (part == "anchor") { draft.AnchorX = nx; draft.AnchorY = ny; }
+        else if (part == "label") { draft.LabelX = nx; draft.LabelY = ny; }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static bool ValidPosition(TagData item) =>
+        new[] { item.AnchorX, item.AnchorY, item.LabelX, item.LabelY }
+            .All(v => v is >= 0 and <= 1 && decimal.Round(v, 4) == v);
+
+    private async Task SaveAsync()
+    {
+        if (module is null || draft is null || busy) return;
+        if ((draft.Id == 0 && draft.ProductId is not > 0) || !ValidPosition(draft))
+        { error = "Seleccioná un producto publicado y revisá las coordenadas."; return; }
+        busy = true; error = null;
+        try
+        {
+            var value = new
+            {
+                draft.ProductId, draft.AnchorX, draft.AnchorY, draft.LabelX, draft.LabelY,
+                draft.DisplayOrder, draft.CustomLabelEs, draft.CustomLabelEn, draft.CustomLabelDe,
+                draft.Version, ImageVersion
+            };
+            if (draft.Id == 0) await module.InvokeVoidAsync("createTag", ImageId, value);
+            else await module.InvokeVoidAsync("updateTag", ImageId, draft.Id, value);
+            draft = null; selectedProductName = null; searchTerm = ""; matches.Clear();
+            await LoadTagsAsync();
+        }
+        catch (JSException) { error = "No se pudo guardar la etiqueta. Revisá el producto o actualizá si cambió la fotografía."; }
+        finally { busy = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private void AskDelete(TagData item)
+    {
+        if (busy) return;
+        draft = null; deletePending = item;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        if (module is null || deletePending is null || busy) return;
+        busy = true; error = null;
+        try
+        {
+            await module.InvokeVoidAsync("deleteTag", ImageId, deletePending.Id, deletePending.Version);
+            deletePending = null;
+            await LoadTagsAsync();
+        }
+        catch (JSException) { error = "No se pudo eliminar la etiqueta. Recargá si alguien la modificó."; }
+        finally { busy = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private void CancelDraft() { draft = null; matches.Clear(); searchTerm = ""; error = null; }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        searchCancellation?.Cancel();
+        searchCancellation?.Dispose();
+        callback?.Dispose();
+        if (module is null) return;
+        try { await module.InvokeVoidAsync("detach"); await module.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+    }
+
+    public sealed class TagData
+    {
+        public int Id { get; set; }
+        public int? ProductId { get; set; }
+        public decimal AnchorX { get; set; }
+        public decimal AnchorY { get; set; }
+        public decimal LabelX { get; set; }
+        public decimal LabelY { get; set; }
+        public int DisplayOrder { get; set; }
+        public string? CustomLabelEs { get; set; }
+        public string? CustomLabelEn { get; set; }
+        public string? CustomLabelDe { get; set; }
+        public string? ProductNameSnapshotEs { get; set; }
+        public string Version { get; set; } = "";
+        public TagData Copy() => (TagData)MemberwiseClone();
+    }
+    public sealed class ProductMatch
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string? Category { get; set; }
+        public int? CoverImageId { get; set; }
+    }
+}

@@ -1,0 +1,592 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@inject AuthenticationStateProvider AuthenticationState
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@if (tagImage is { } selectedImage)
+{
+    <PublicProjectTagEditor @key="selectedImage.Id" ImageId="selectedImage.Id" ImageVersion="selectedImage.Version"
+                            OnClose="CloseTagEditor" OnCountChanged="TagCountChanged" />
+}
+else if (managing)
+{
+    <div class="revestik-editor-backdrop">
+        <section class="revestik-editor-dialog revestik-product-dialog" role="dialog" aria-modal="true" aria-labelledby="project-manager-title">
+            <header class="revestik-editor-dialog-header">
+                <div><p>REVESTIK · Proyectos</p><h2 id="project-manager-title">Administrar proyectos públicos</h2></div>
+                <button type="button" disabled="@busy" aria-label="Cerrar editor" @onclick="CloseAsync">×</button>
+            </header>
+            @if (error is not null) { <p role="alert" class="revestik-editor-error">@error</p> }
+            <div class="revestik-editor-fields">
+                <p>Estos registros son editoriales y no corresponden a los proyectos internos de REVESTIK.</p>
+                <button type="button" class="revestik-editor-primary" disabled="@busy" @onclick="NewProjectAsync">+ Agregar proyecto</button>
+                @foreach (var entry in library)
+                {
+                    var item = entry;
+                    <div class="revestik-product-image-row" @key="item.Id">
+                        @if (item.CoverImageId is > 0)
+                        {
+                            <img src="@($"/api/admin/public-projects/images/{item.CoverImageId}/content")" alt="Portada del proyecto" loading="lazy" />
+                        }
+                        <span>@(item.NameEs ?? item.Slug) — @(item.IsPublished ? "Publicado" : "No publicado")</span>
+                        <button type="button" disabled="@busy" @onclick="() => EditProjectAsync(item.Id)">Editar</button>
+                        <button type="button" disabled="@busy" @onclick="() => AskPublication(item)">@(item.IsPublished ? "Despublicar" : "Publicar")</button>
+                        <button type="button" disabled="@busy" @onclick="() => AskDelete(item)">Eliminar</button>
+                    </div>
+                }
+                @if (library.Count == 0 && !busy)
+                {
+                    <p>Todavía no se han creado proyectos públicos.</p>
+                }
+                <div class="revestik-editor-actions">
+                    <button type="button" disabled="@(busy || page <= 1)" @onclick="() => ChangePageAsync(-1)">Anterior</button>
+                    <span>Página @(page) · @(total) proyectos</span>
+                    <button type="button" disabled="@(busy || page * 20 >= total)" @onclick="() => ChangePageAsync(1)">Siguiente</button>
+                </div>
+            </div>
+        </section>
+    </div>
+}
+else if (confirmationItem is not null)
+{
+    <div class="revestik-editor-backdrop">
+        <section class="revestik-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="project-confirm-title">
+            <header class="revestik-editor-dialog-header">
+                <div><p>REVESTIK · Proyectos</p><h2 id="project-confirm-title">@(confirmDelete ? "Eliminar proyecto" : "Cambiar publicación")</h2></div>
+                <button type="button" disabled="@busy" aria-label="Cerrar editor" @onclick="BackToLibraryAsync">×</button>
+            </header>
+            <p>@(confirmDelete ? "¿Eliminar definitivamente el proyecto y todas sus fotografías y etiquetas? No se puede deshacer." : confirmationItem.IsPublished ? "¿Despublicar este proyecto? Desaparecerá de Home y del portafolio." : "¿Publicar este proyecto?")</p>
+            @if (error is not null) { <p role="alert" class="revestik-editor-error">@error</p> }
+            <div class="revestik-editor-actions">
+                <button type="button" disabled="@busy" @onclick="BackToLibraryAsync">Cancelar</button>
+                <button type="button" disabled="@busy" class="@(confirmDelete ? "revestik-editor-danger" : "revestik-editor-primary")" @onclick="ConfirmActionAsync">Confirmar</button>
+            </div>
+        </section>
+    </div>
+}
+else if (project is not null)
+{
+    <div class="revestik-editor-backdrop">
+        <section class="revestik-editor-dialog revestik-product-dialog" role="dialog" aria-modal="true" aria-labelledby="project-editor-title">
+            <header class="revestik-editor-dialog-header">
+                <div><p>REVESTIK · Proyectos</p><h2 id="project-editor-title">@(project.Id == 0 ? "Agregar proyecto" : "Editar proyecto")</h2></div>
+                <button type="button" disabled="@busy" aria-label="Cerrar editor" @onclick="CloseAsync">×</button>
+            </header>
+            @if (error is not null) { <p role="alert" class="revestik-editor-error">@error</p> }
+            @if (removeImageId is not null)
+            {
+                <p>¿Eliminar esta fotografía? También se eliminarán sus @removeImageTagCount etiquetas de materiales. Esta operación será permanente al guardar.</p>
+                <div class="revestik-editor-actions">
+                    <button type="button" disabled="@busy" @onclick="() => removeImageId = null">Cancelar</button>
+                    <button type="button" disabled="@busy" class="revestik-editor-danger" @onclick="ConfirmRemoveImage">Quitar fotografía y etiquetas</button>
+                </div>
+            }
+            else if (confirmSave)
+            {
+                <p>¿Confirmás el guardado? @(project.Id == 0 ? "El proyecto se publicará inmediatamente." : project.IsPublished ? "Los cambios serán visibles al guardar." : "El proyecto permanecerá sin publicar.")</p>
+                <div class="revestik-editor-actions">
+                    <button type="button" disabled="@busy" @onclick="() => confirmSave = false">Volver</button>
+                    <button type="button" disabled="@busy" class="revestik-editor-primary" @onclick="SaveConfirmedAsync">Confirmar y guardar</button>
+                </div>
+            }
+            else
+            {
+                <div class="revestik-editor-fields">
+                    <label>Nombre en español *<input maxlength="200" @bind="Es.Name" /></label>
+                    <label>Descripción en español *<textarea rows="4" maxlength="4000" @bind="Es.Description"></textarea></label>
+                    <label>Ubicación general (opcional)<input maxlength="240" @bind="project.Location" placeholder="Ej. Escazú, San José" /></label>
+                    <label>Tipo de proyecto *
+                        <select @bind="project.TypeCode">
+                            @foreach (var type in Types)
+                            {
+                                <option value="@type.Code">@type.Label</option>
+                            }
+                        </select>
+                    </label>
+                    <fieldset class="revestik-editor-choices"><legend>Espacios (opcionales)</legend>
+                        @foreach (var option in Spaces)
+                        {
+                            var code = option.Code;
+                            <label class="revestik-editor-checkbox"><input type="checkbox" checked="@project.SpaceCodes.Contains(code)" @onchange="e => ToggleSpace(code, e.Value is true)" /> @option.Label</label>
+                        }
+                    </fieldset>
+                    <div class="revestik-editor-split">
+                        <label>Orden de portafolio (opcional)<input type="number" min="0" @bind="project.DisplayOrder" /></label>
+                        <label>Destacado de Inicio (opcional)
+                            <select @bind="project.FeaturedOrder">
+                                <option value="">Automático / No asignado</option>
+                                <option value="1">Posición 1</option>
+                                <option value="2">Posición 2</option>
+                                <option value="3">Posición 3</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="revestik-product-photos">
+                        <h3>Fotografías</h3>
+                        <p>Una portada obligatoria y hasta cuatro fotografías adicionales. JPG, PNG o WebP, máximo 5 MB por fotografía.</p>
+                        @foreach (var image in project.Images.Where(i => !removedImages.Contains(i.Id)).OrderBy(i => i.DisplayOrder).ThenBy(i => i.Id))
+                        {
+                            var current = image;
+                            <div class="revestik-product-image-row" @key="image.Id">
+                                <img src="@($"/api/admin/public-projects/images/{image.Id}/content")" alt="@(image.AltEs ?? "Fotografía del proyecto")" loading="lazy" />
+                                <div>
+                                    <span>@(image.Role == "ProjectCover" ? "Portada" : "Galería") · @image.TagCount etiquetas</span>
+                                    <label>Texto alternativo ES<input maxlength="300" @bind="image.AltEs" /></label>
+                                </div>
+                                <button type="button" disabled="@busy" @onclick="() => BeginTagEditor(current)">Etiquetas (@image.TagCount)</button>
+                                @if (image.Role != "ProjectCover") { <button type="button" disabled="@busy" @onclick="() => SetCover(image.Id, null)">Portada</button> }
+                                <button type="button" disabled="@busy" @onclick="() => ShiftOrder(image.Id, null, -1)">↑</button>
+                                <button type="button" disabled="@busy" @onclick="() => ShiftOrder(image.Id, null, 1)">↓</button>
+                                <button type="button" disabled="@busy" @onclick="() => AskRemoveImage(current.Id)">Quitar</button>
+                            </div>
+                        }
+                        @foreach (var image in stagedImages.OrderBy(i => i.DisplayOrder).ThenBy(i => i.Token))
+                        {
+                            var current = image;
+                            <div class="revestik-product-image-row" @key="image.Token">
+                                <img src="@($"/api/admin/public-projects/images/staged/{image.Token}")" alt="Fotografía pendiente de guardar" />
+                                <div>
+                                    <span>@(image.Role == "ProjectCover" ? "Portada nueva" : "Galería nueva")</span>
+                                    <label>Texto alternativo ES<input maxlength="300" @bind="image.AltEs" /></label>
+                                </div>
+                                @if (image.Role != "ProjectCover") { <button type="button" disabled="@busy" @onclick="() => SetCover(null, image.Token)">Portada</button> }
+                                <button type="button" disabled="@busy" @onclick="() => ShiftOrder(null, image.Token, -1)">↑</button>
+                                <button type="button" disabled="@busy" @onclick="() => ShiftOrder(null, image.Token, 1)">↓</button>
+                                <button type="button" disabled="@busy" @onclick="() => RemoveStagedAsync(current.Token)">Quitar</button>
+                            </div>
+                        }
+                        <label>Agregar fotografía<input type="file" accept="image/jpeg,image/png,image/webp" @ref="photoInput" @onchange="StagePhotoAsync" disabled="@(busy || ImageCount >= 5)" /></label>
+                    </div>
+                    <details><summary>Traducciones opcionales</summary>
+                        <label>Nombre en inglés<input maxlength="200" @bind="En.Name" /></label>
+                        <label>Descripción en inglés<textarea maxlength="4000" rows="3" @bind="En.Description"></textarea></label>
+                        <label>Nombre en alemán<input maxlength="200" @bind="De.Name" /></label>
+                        <label>Descripción en alemán<textarea maxlength="4000" rows="3" @bind="De.Description"></textarea></label>
+                    </details>
+                    <details><summary>SEO (opcional)</summary>
+                        <label>Título SEO ES<input maxlength="180" @bind="Es.SeoTitle" /></label>
+                        <label>Descripción SEO ES<textarea rows="2" maxlength="320" @bind="Es.SeoDescription"></textarea></label>
+                        <label>Título SEO EN<input maxlength="180" @bind="En.SeoTitle" /></label>
+                        <label>Descripción SEO EN<textarea rows="2" maxlength="320" @bind="En.SeoDescription"></textarea></label>
+                        <label>Título SEO DE<input maxlength="180" @bind="De.SeoTitle" /></label>
+                        <label>Descripción SEO DE<textarea rows="2" maxlength="320" @bind="De.SeoDescription"></textarea></label>
+                        @if (project.Id != 0) { <p>Dirección estable: /es/proyectos/@project.Slug</p> }
+                    </details>
+                    <p class="revestik-editor-note">Las posiciones de las etiquetas permanecen en fotografías conservadas. Al eliminar una fotografía se eliminan también sus etiquetas. Podés editar las etiquetas de las fotografías guardadas con el botón «Etiquetas»; cada etiqueta se guarda individualmente.</p>
+                </div>
+                <div class="revestik-editor-actions">
+                    <button type="button" disabled="@busy" @onclick="CloseAsync">Cancelar</button>
+                    <button type="button" disabled="@busy" class="revestik-editor-primary" @onclick="ReviewSave">Revisar y guardar</button>
+                </div>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private IJSObjectReference? module;
+    private DotNetObjectReference<PublicProjectsEditor>? callback;
+    private ProjectData? project;
+    private ProjectImage? tagImage;
+    private List<LibraryItem> library = [];
+    private List<StagedImage> stagedImages = [];
+    private HashSet<int> removedImages = [];
+    private LibraryItem? confirmationItem;
+    private ElementReference photoInput;
+    private int? removeImageId;
+    private int removeImageTagCount;
+    private int page = 1;
+    private int total;
+    private bool managing, confirmDelete, confirmSave, busy;
+    private string? error;
+
+    private Translation Es => project!.Translations.Single(t => t.LanguageCode == "es");
+    private Translation En => project!.Translations.Single(t => t.LanguageCode == "en");
+    private Translation De => project!.Translations.Single(t => t.LanguageCode == "de");
+    private int ImageCount => (project?.Images.Count(i => !removedImages.Contains(i.Id)) ?? 0) + stagedImages.Count;
+
+    private static readonly (string Code, string Label)[] Types =
+    [
+        ("residential", "Residencial"), ("commercial", "Comercial"),
+        ("hospitality", "Hotelero"), ("institutional", "Institucional"),
+        ("renovation", "Remodelación"), ("corporate", "Corporativo")
+    ];
+    private static readonly (string Code, string Label)[] Spaces =
+    [
+        ("kitchen", "Cocina"), ("living-room", "Sala"), ("bathroom", "Baño"),
+        ("pool", "Piscina"), ("showroom", "Showroom"), ("terrace", "Terraza"),
+        ("facade", "Fachada"), ("bedroom", "Dormitorio"), ("dining-room", "Comedor"),
+        ("office", "Oficina"), ("lobby", "Lobby"), ("outdoor", "Área exterior"),
+        ("common-area", "Área común")
+    ];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            if (!await IsAdministratorAsync()) return;
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/public-projects-editor.js?v=PROJECTS-01C1");
+            callback = DotNetObjectReference.Create(this);
+            await module.InvokeVoidAsync("attach", callback);
+        }
+        catch (JSException)
+        {
+            error = "No se pudo inicializar el editor de Proyectos. Recargá la página.";
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task<bool> IsAdministratorAsync()
+    {
+        var user = (await AuthenticationState.GetAuthenticationStateAsync()).User;
+        return user.Identity?.IsAuthenticated == true && user.IsInRole("Administrator");
+    }
+
+    [JSInvokable]
+    public async Task NewProjectAsync()
+    {
+        if (busy || module is null || !await IsAdministratorAsync()) return;
+        await DiscardStagedAsync();
+        project = new ProjectData();
+        EnsureTranslations();
+        managing = false; confirmationItem = null; removedImages.Clear();
+        confirmSave = false; error = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task ManageProjectsAsync()
+    {
+        if (busy || module is null || !await IsAdministratorAsync()) return;
+        await DiscardStagedAsync();
+        project = null; managing = true; confirmationItem = null;
+        confirmSave = false; error = null; page = 1;
+        await LoadLibraryAsync();
+    }
+
+    private async Task LoadLibraryAsync()
+    {
+        if (module is null) return;
+        busy = true; error = null;
+        try
+        {
+            var result = await module.InvokeAsync<LibraryPage>("listProjects", page);
+            library = result.Items ?? [];
+            total = result.Total;
+        }
+        catch (JSException) { error = "No se pudo cargar la lista de proyectos."; }
+        finally { busy = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private async Task ChangePageAsync(int delta)
+    {
+        if (busy || page + delta < 1 || (delta > 0 && page * 20 >= total)) return;
+        page += delta;
+        await LoadLibraryAsync();
+    }
+
+    private async Task EditProjectAsync(int id)
+    {
+        if (busy || module is null || !await IsAdministratorAsync()) return;
+        busy = true; error = null;
+        try
+        {
+            project = await module.InvokeAsync<ProjectData>("getProject", id);
+            EnsureTranslations();
+            stagedImages = []; removedImages.Clear();
+            managing = false; confirmSave = false;
+        }
+        catch (JSException) { error = "No se pudo cargar el proyecto. Actualizá e intentá nuevamente."; }
+        finally { busy = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private void EnsureTranslations()
+    {
+        if (project is null) return;
+        foreach (var code in new[] { "es", "en", "de" })
+            if (!project.Translations.Any(t => t.LanguageCode == code))
+                project.Translations.Add(new Translation { LanguageCode = code });
+    }
+
+    private void ToggleSpace(string code, bool active)
+    {
+        if (project is null) return;
+        if (active && !project.SpaceCodes.Contains(code)) project.SpaceCodes.Add(code);
+        else if (!active) project.SpaceCodes.Remove(code);
+    }
+
+    private async Task StagePhotoAsync(ChangeEventArgs _)
+    {
+        if (project is null || module is null || busy || !await IsAdministratorAsync()) return;
+        if (ImageCount >= 5) { error = "Máximo cinco fotografías."; return; }
+        busy = true; error = null;
+        try
+        {
+            var role = ImageCount == 0 ? "ProjectCover" : "ProjectGallery";
+            var photo = await module.InvokeAsync<StagedImage>("stageImage", photoInput, role);
+            photo.DisplayOrder = ImageCount;
+            photo.AltEs = string.IsNullOrWhiteSpace(Es.Name)
+                ? null : $"{Es.Name.Trim()} - fotografía {ImageCount + 1}";
+            stagedImages.Add(photo);
+        }
+        catch (JSException) { error = "No se pudo cargar la fotografía. Usá JPG, PNG o WebP de hasta 5 MB."; }
+        finally { busy = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private void SetCover(int? imageId, string? token)
+    {
+        if (project is null || busy) return;
+        foreach (var img in project.Images.Where(i => !removedImages.Contains(i.Id)))
+            img.Role = img.Id == imageId && imageId.HasValue ? "ProjectCover" : "ProjectGallery";
+        foreach (var img in stagedImages)
+            img.Role = img.Token == token && token is not null ? "ProjectCover" : "ProjectGallery";
+    }
+
+    private sealed record PhotoOrder(int? Id, string? Token, int Order);
+    private void ShiftOrder(int? imageId, string? token, int delta)
+    {
+        if (project is null || busy) return;
+        var order = project.Images.Where(i => !removedImages.Contains(i.Id))
+            .Select(i => new PhotoOrder(i.Id, null, i.DisplayOrder))
+            .Concat(stagedImages.Select(i => new PhotoOrder(null, i.Token, i.DisplayOrder)))
+            .OrderBy(i => i.Order).ThenBy(i => i.Id ?? 0).ToList();
+        var index = order.FindIndex(i => imageId.HasValue ? i.Id == imageId : i.Token == token);
+        if (index < 0 || index + delta < 0 || index + delta >= order.Count) return;
+        (order[index], order[index + delta]) = (order[index + delta], order[index]);
+        for (var i = 0; i < order.Count; i++)
+        {
+            var photo = order[i];
+            if (photo.Id.HasValue) project.Images.Single(x => x.Id == photo.Id.Value).DisplayOrder = i;
+            else stagedImages.Single(x => x.Token == photo.Token).DisplayOrder = i;
+        }
+    }
+
+    private void BeginTagEditor(ProjectImage image)
+    {
+        if (busy || project is null || project.Id <= 0 || removedImages.Contains(image.Id)) return;
+        tagImage = image;
+        error = null;
+    }
+
+    private void CloseTagEditor() => tagImage = null;
+
+    private void TagCountChanged(int count)
+    {
+        if (tagImage is not null) tagImage.TagCount = count;
+    }
+
+    private void AskRemoveImage(int id)
+    {
+        var image = project?.Images.FirstOrDefault(i => i.Id == id);
+        if (image is null || busy) return;
+        removeImageId = id;
+        removeImageTagCount = image.TagCount;
+    }
+
+    private void ConfirmRemoveImage()
+    {
+        if (removeImageId.HasValue) removedImages.Add(removeImageId.Value);
+        removeImageId = null;
+    }
+
+    private async Task RemoveStagedAsync(string token)
+    {
+        if (busy || module is null) return;
+        busy = true;
+        try
+        {
+            await module.InvokeVoidAsync("discardImage", token);
+            stagedImages.RemoveAll(i => i.Token == token);
+        }
+        catch (JSException) { error = "No se pudo descartar la fotografía."; }
+        finally { busy = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private void ReviewSave()
+    {
+        if (project is null || busy) return;
+        if (string.IsNullOrWhiteSpace(Es.Name) || string.IsNullOrWhiteSpace(Es.Description))
+        { error = "Nombre y descripción en español son obligatorios."; return; }
+        foreach (var translation in new[] { En, De })
+        {
+            var hasName = !string.IsNullOrWhiteSpace(translation.Name);
+            var hasDescription = !string.IsNullOrWhiteSpace(translation.Description);
+            if (hasName != hasDescription)
+            { error = "Completá nombre y descripción de cada traducción opcional, o dejá ambos vacíos."; return; }
+        }
+        if (ImageCount is < 1 or > 5 ||
+            project.Images.Count(i => i.Role == "ProjectCover" && !removedImages.Contains(i.Id)) +
+            stagedImages.Count(i => i.Role == "ProjectCover") != 1)
+        { error = "Se requiere exactamente una portada y un máximo de cinco fotografías."; return; }
+        if (project.DisplayOrder is < 0 || project.FeaturedOrder is < 1 or > 3)
+        { error = "Revisá las posiciones de orden y destacados."; return; }
+        error = null;
+        confirmSave = true;
+    }
+
+    private object Payload()
+    {
+        var translations = project!.Translations.Where(t =>
+            t.LanguageCode == "es" || !string.IsNullOrWhiteSpace(t.Name) && !string.IsNullOrWhiteSpace(t.Description))
+            .Select(t => new { t.LanguageCode, t.Name, t.Description, t.SeoTitle, t.SeoDescription })
+            .ToArray();
+        return new
+        {
+            project = new { project.TypeCode, project.Location, project.DisplayOrder,
+                project.FeaturedOrder, project.SpaceCodes, translations, project.Version },
+            pendingImages = stagedImages.Select(s => new { s.Token, s.Role, s.DisplayOrder,
+                s.AltEs, s.AltEn, s.AltDe }).ToArray(),
+            existingImages = project.Images.Select(i => new { i.Id, i.Role, i.DisplayOrder,
+                i.AltEs, i.AltEn, i.AltDe, i.Version }).ToArray(),
+            removedImageIds = removedImages.ToArray()
+        };
+    }
+
+    private async Task SaveConfirmedAsync()
+    {
+        if (busy || project is null || module is null || !await IsAdministratorAsync()) return;
+        busy = true; error = null;
+        try
+        {
+            var payload = Payload();
+            if (project.Id == 0)
+                await module.InvokeVoidAsync("createProject", payload);
+            else
+                await module.InvokeVoidAsync("updateProject", project.Id, payload);
+            // Pending files are now committed and should not be discarded.
+            stagedImages.Clear(); removedImages.Clear();
+            project = null; confirmSave = false; managing = true;
+            await LoadLibraryAsync();
+        }
+        catch (JSException) { error = "No se pudo guardar. Revisá los datos o actualizá si hubo cambios simultáneos."; }
+        finally { busy = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private void AskPublication(LibraryItem item)
+    {
+        if (busy) return;
+        confirmationItem = item; confirmDelete = false; managing = false;
+        error = null;
+    }
+
+    private void AskDelete(LibraryItem item)
+    {
+        if (busy) return;
+        confirmationItem = item; confirmDelete = true; managing = false;
+        error = null;
+    }
+
+    private async Task ConfirmActionAsync()
+    {
+        if (confirmationItem is null || module is null || busy || !await IsAdministratorAsync()) return;
+        busy = true; error = null;
+        try
+        {
+            if (confirmDelete) await module.InvokeVoidAsync("deleteProject", confirmationItem.Id, confirmationItem.Version);
+            else await module.InvokeVoidAsync("publishProject", confirmationItem.Id,
+                confirmationItem.Version, !confirmationItem.IsPublished);
+            confirmationItem = null; managing = true;
+            await LoadLibraryAsync();
+        }
+        catch (JSException) { error = "No se pudo completar. Es posible que el proyecto haya cambiado; recargá."; }
+        finally { busy = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private async Task BackToLibraryAsync()
+    {
+        if (busy) return;
+        confirmationItem = null; managing = true; error = null;
+        await LoadLibraryAsync();
+    }
+
+    private async Task DiscardStagedAsync()
+    {
+        if (module is not null)
+            foreach (var image in stagedImages)
+                try { await module.InvokeVoidAsync("discardImage", image.Token); }
+                catch (JSException) { /* pending cleanup retries after 24h */ }
+        stagedImages.Clear();
+    }
+
+    private async Task CloseAsync()
+    {
+        if (busy) return;
+        await DiscardStagedAsync();
+        project = null; confirmationItem = null; managing = false;
+        removedImages.Clear(); removeImageId = null; confirmSave = false; error = null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        callback?.Dispose();
+        if (module is null) return;
+        try
+        {
+            await DiscardStagedAsync();
+            await module.InvokeVoidAsync("detach");
+            await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+    }
+
+    public sealed class LibraryPage
+    {
+        public int Total { get; set; }
+        public List<LibraryItem> Items { get; set; } = [];
+    }
+    public sealed class LibraryItem
+    {
+        public int Id { get; set; }
+        public string Slug { get; set; } = "";
+        public string? NameEs { get; set; }
+        public string Version { get; set; } = "";
+        public int? CoverImageId { get; set; }
+        public bool IsPublished { get; set; }
+    }
+    public sealed class ProjectData
+    {
+        public int Id { get; set; }
+        public string Slug { get; set; } = "";
+        public string Version { get; set; } = "";
+        public bool IsPublished { get; set; }
+        public string TypeCode { get; set; } = "residential";
+        public string? Location { get; set; }
+        public int? DisplayOrder { get; set; }
+        public int? FeaturedOrder { get; set; }
+        public List<string> SpaceCodes { get; set; } = [];
+        public List<Translation> Translations { get; set; } = [];
+        public List<ProjectImage> Images { get; set; } = [];
+    }
+    public sealed class Translation
+    {
+        public string LanguageCode { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string? SeoTitle { get; set; }
+        public string? SeoDescription { get; set; }
+    }
+    public sealed class ProjectImage
+    {
+        public int Id { get; set; }
+        public string Role { get; set; } = "";
+        public int DisplayOrder { get; set; }
+        public string? AltEs { get; set; }
+        public string? AltEn { get; set; }
+        public string? AltDe { get; set; }
+        public int TagCount { get; set; }
+        public string Version { get; set; } = "";
+    }
+    public sealed class StagedImage
+    {
+        public string Token { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Role { get; set; } = "";
+        public int DisplayOrder { get; set; }
+        public string? AltEs { get; set; }
+        public string? AltEn { get; set; }
+        public string? AltDe { get; set; }
+    }
+}

@@ -1,0 +1,47 @@
+/* PUBLIC-PROJECTS-01C-UI01: keep contextual project controls consistent with Acabados. */
+.projects-index .featured-projects-grid > .revestik-product-add-card {
+    align-self: start;
+    overflow: hidden;
+}
+.projects-index .featured-projects-grid .revestik-product-add-button {
+    min-width: 0;
+    padding: 14px;
+    text-align: center;
+    line-height: 1.1;
+}
+.projects-index .featured-projects-grid .revestik-product-add-button > span {
+    display: block;
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.4;
+    overflow-wrap: normal;
+}
+.projects-index .revestik-projects-manage {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: 20px;
+    padding: 0;
+    background: transparent;
+}
+.projects-index .revestik-projects-manage .revestik-catalog-action {
+    max-width: 100%;
+    padding: 10px 13px;
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: left;
+}
+/* The same navy primary-action treatment already used by the Acabados modal. */
+.revestik-editor-backdrop .revestik-editor-dialog .revestik-editor-actions > button.revestik-editor-primary {
+    background: #172331;
+    color: #fff;
+    border-color: #172331;
+}
+.revestik-editor-backdrop .revestik-editor-dialog .revestik-editor-actions > button.revestik-editor-primary:hover:not(:disabled) {
+    background: #24384b;
+    border-color: #24384b;
+}
+@media (max-width: 600px) {
+    .projects-index .revestik-projects-manage .revestik-catalog-action {
+        white-space: normal;
+    }
+}
