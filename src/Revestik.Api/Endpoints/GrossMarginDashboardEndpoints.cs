@@ -4,18 +4,27 @@ namespace Revestik.Api.Endpoints;
 
 public static class GrossMarginDashboardEndpoints
 {
-    public static IEndpointRouteBuilder MapGrossMarginDashboardEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapGrossMarginDashboardEndpoints(
+        this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/dashboard/gross-margin-summary", async (
-            GrossMarginSummaryService service, CancellationToken ct) =>
+            GrossMarginSummaryService service,
+            CancellationToken ct,
+            bool refresh = false) =>
         {
             var tz = TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica");
             var today = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
-            return Results.Ok(await service.GetAsync(today.Year, today.Month, ct));
+
+            return Results.Ok(await service.GetAsync(
+                today.Year,
+                today.Month,
+                ct,
+                forceRefresh: refresh));
         })
         .WithName("GetDashboardGrossMarginSummary")
         .WithTags("Dashboard")
         .RequireAuthorization();
+
         return app;
     }
 }

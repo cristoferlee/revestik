@@ -207,6 +207,7 @@ builder.Services.AddScoped<ProjectLifecycleService>();
 builder.Services.AddScoped<ProjectDeadlineQueryService>();
 builder.Services.AddScoped<ProjectDashboardSummaryService>();
 builder.Services.AddScoped<Revestik.Api.Services.Dashboard.DashboardRecentActivityService>();
+builder.Services.AddSingleton<Revestik.Api.Services.Dashboard.DashboardFinancialCache>();
 builder.Services.AddScoped<GrossMarginSummaryService>();
 builder.Services.AddScoped<OperatingResultSummaryService>();
 builder.Services.Configure<ProjectFileStorageOptions>(builder.Configuration.GetSection(ProjectFileStorageOptions.SectionName));

@@ -4,18 +4,27 @@ namespace Revestik.Api.Endpoints;
 
 public static class OperatingResultDashboardEndpoints
 {
-    public static IEndpointRouteBuilder MapOperatingResultDashboardEndpoints(this IEndpointRouteBuilder app)
+    public static IEndpointRouteBuilder MapOperatingResultDashboardEndpoints(
+        this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/dashboard/operating-result-summary", async (
-            OperatingResultSummaryService service, CancellationToken ct) =>
+            OperatingResultSummaryService service,
+            CancellationToken ct,
+            bool refresh = false) =>
         {
             var tz = TimeZoneInfo.FindSystemTimeZoneById("America/Costa_Rica");
             var today = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
-            return Results.Ok(await service.GetAsync(today.Year, today.Month, ct));
+
+            return Results.Ok(await service.GetAsync(
+                today.Year,
+                today.Month,
+                ct,
+                forceRefresh: refresh));
         })
         .WithName("GetDashboardOperatingResultSummary")
         .WithTags("Dashboard")
         .RequireAuthorization();
+
         return app;
     }
 }
