@@ -1374,17 +1374,22 @@
 
     private async Task LoadResultsAsync()
     {
-        // Cada servicio conserva su resultado y error independiente.
-        await Task.WhenAll(LoadGrossMarginAsync(), LoadOperatingResultAsync());
+        // Refresh operating result first; it refreshes the shared gross-margin cache.
+        await LoadOperatingResultAsync(forceRefresh: true);
+        // Reuse refreshed gross margin, or refresh if operating result failed.
+        await LoadGrossMarginAsync(forceRefresh: operatingResultError is not null);
     }
 
-    private async Task LoadOperatingResultAsync()
+    private async Task LoadOperatingResultAsync(bool forceRefresh = false)
     {
         isLoadingOperatingResult = true;
         operatingResultError = null;
         try
         {
-            using var response = await Http.GetAsync("api/dashboard/operating-result-summary");
+            var url = forceRefresh
+                ? "api/dashboard/operating-result-summary?refresh=true"
+                : "api/dashboard/operating-result-summary";
+            using var response = await Http.GetAsync(url);
             response.EnsureSuccessStatusCode();
             operatingResult = await response.Content.ReadFromJsonAsync<OperatingResultSummaryResponse>()
                 ?? throw new InvalidOperationException("El resultado operativo está vacío.");
@@ -1399,13 +1404,16 @@
         }
     }
 
-    private async Task LoadGrossMarginAsync()
+    private async Task LoadGrossMarginAsync(bool forceRefresh = false)
     {
         isLoadingGrossMargin = true;
         grossMarginError = null;
         try
         {
-            using var response = await Http.GetAsync("api/dashboard/gross-margin-summary");
+            var url = forceRefresh
+                ? "api/dashboard/gross-margin-summary?refresh=true"
+                : "api/dashboard/gross-margin-summary";
+            using var response = await Http.GetAsync(url);
             response.EnsureSuccessStatusCode();
             grossMarginSummary = await response.Content.ReadFromJsonAsync<GrossMarginSummaryResponse>()
                 ?? throw new InvalidOperationException("El resumen de margen está vacío.");
