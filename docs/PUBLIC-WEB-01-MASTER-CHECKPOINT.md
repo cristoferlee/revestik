@@ -1,326 +1,259 @@
 # REVESTIK — Public Website Master Checkpoint
 
-**Active workstream:** PUBLIC-PROJECTS-01 — local verification complete; Git handoff pending
-**Next step:** Verify the final accessibility change, confirm Git synchronization, then continue the separately gated public-site release review.
 **Checkpoint date:** 2026-11-18
+**Active workstream:** `PUBLIC-AUTH-01` — approved business design; implementation NOT started
+**Next implementation block:** `PUBLIC-AUTH-01A` — internal authorization hardening, pending its own detailed approval
 **Repository:** https://github.com/cristoferlee/revestik
 **Branch:** `main`
-**Historical GitHub baseline (2026-11-10):** `581aef9c99ddb7bbc1fffcbe49ec924699c980a2`
-**Local workspace:** `C:\Projects\Revestik`
-**Owner-confirmed baseline:** 18 project source/test files plus this checkpoint prepared for synchronization; development configuration and two incidental untracked files excluded. Confirm local and remote HEAD before new work.
-**Owner communication:** Spanish. **Repository-facing documentation:** English.
-**Status:** Public Projects implemented and verified locally. Confirm repository synchronization from Git; production deployment and public launch remain unauthorized.
+**Verified GitHub source baseline (before this document update):** `75bf93d5cf26e059f0d065348ee536858df182e6`
+**Workspace:** `C:\Projects\Revestik`
+**Owner-facing conversation:** Spanish or English, as the owner prefers. **Technical documentation:** English.
+
+> **State boundary:** The Public Projects closeout is committed in the verified GitHub baseline. The owner reports the Contact/WhatsApp work is implemented and works **locally**, but it is not confirmed synchronized to GitHub. Public customer authentication, cart ownership and quotation selection are **approved/planned**, not implemented. No production/public launch has been authorized through this checkpoint.
 
 ---
 
-## 1. Purpose and maintenance policy
+## 1. Mandatory reading order and sources of truth
 
-This is the concise, authoritative **working handoff** for the next AI-assisted development session. Its purpose is to preserve the current architecture, agreed rules, approved product intent, evidence boundaries, and exactly what to investigate next.
+**Read `AGENTS.md` FIRST in every new chat, before suggesting code, files, Git operations or deployments.** Then read this checkpoint and the relevant sections of:
 
-- **Do not grow this file into a daily transcript.** Keep one current snapshot, stable decisions, an active-workstream checklist, and the next handoff.
-- Preserve historical rationale through Git commits, accepted ADRs, and previous checkpoints. Do not silently delete or rewrite accepted ADRs.
-- Once this replacement is committed, the full previous checkpoint can be recovered from Git history, including GitHub revision `581aef9c99ddb7bbc1fffcbe49ec924699c980a2`.
-- **Reality overrides memory:** inspect actual source, migrations, integration tests, runtime configuration, and current Git diff whenever a claim affects implementation.
-- Clearly label each statement as **implemented in source**, **owner-reported verified**, **production-verified**, **approved design**, or **pending investigation**. Never equate these.
-- Do not assume documentation edits in a local working tree have already been pushed to GitHub; inspect the commit first.
+1. `docs/ARCHITECTURE.md`, `docs/BUSINESS_RULES.md`, `docs/SECURITY.md`, `docs/DEVELOPMENT.md`, `docs/OPERATIONS.md`, and `docs/ROADMAP.md`.
+2. Accepted ADRs in `docs/adr/`, especially `002-authentication.md` and database architecture decisions.
+3. Current repository code, authorization policies, data model, migrations, tests, CI and the user's **actual local Git state**.
+4. External official framework/provider documentation only when current behavior, security requirements or package versions need verification.
 
-### Documents to consult, in order
+**Precedence:** actual source and measured execution evidence > accepted owner decisions and ADRs > current checkpoint > older checkpoint claims > AI memory or assumptions. Never invent missing endpoints, database tables, test passes, Azure state or source synchronization. Keep this document a maintainable handoff, **not a transcript**.
 
-1. `AGENTS.md` — mandatory collaboration and change-control rules.
-2. This checkpoint — current phase and constraints.
-3. `docs/ARCHITECTURE.md`, `docs/BUSINESS_RULES.md`, `docs/SECURITY.md`, `docs/DEVELOPMENT.md`, `docs/OPERATIONS.md`, and `docs/ROADMAP.md`.
-4. `docs/adr/` — accepted, historical architecture decisions.
-5. Current code, tests, migration history, Git status, and only then external reference sites when research is warranted.
+### Evidence labels
 
-Do not treat a stale statement in an older checkpoint as a reason to reintroduce an abandoned implementation.
+Always distinguish **owner-approved design**, **implemented in source**, **owner-reported locally tested**, **GitHub-synchronized**, **production-verified**, and **publicly enabled**. One status never implies another. An uploaded ZIP, successful build, Git commit or HTTP 401 alone is not proof of a secure deployed feature.
 
-## 2. Current solution and hosting
+## 2. Architecture and existing application boundaries
 
-REVESTIK is a **.NET 10 modular monolith**, not a SaaS or microservice architecture. There are **four application projects** and a separate test project:
+REVESTIK is a **.NET 10 modular monolith** with one intended deployment/origin, not a distributed application:
 
-| Project | Current responsibility |
+| Project | Responsibility |
 | --- | --- |
-| `src/Revestik.Api` | Single ASP.NET Core host; Minimal APIs, Identity, authorization, EF Core/SQL Server, business services, media, integrations, SSR hosting, and administration static assets |
-| `src/Revestik.Client` | Blazor WebAssembly **internal administration** under `/administracion`; authenticated business workflows |
-| `src/Revestik.Public` | Public marketing site using Razor Components/SSR; limited interactive server components for authorized inline editing |
-| `src/Revestik.Shared` | Shared transport contracts; **not** the database domain model |
-| `tests/Revestik.Api.Tests` | xUnit/API/SQL integration and security tests, including Testcontainers scenarios |
+| `src/Revestik.Api` | Single ASP.NET Core host; Minimal APIs, Identity/Google OAuth, role policies, EF Core/SQL Server, business services, integrations, public SSR hosting and admin assets |
+| `src/Revestik.Client` | Authenticated administration with Blazor WebAssembly under `/administracion` |
+| `src/Revestik.Public` | Public multilingual website built on Razor Components/SSR with carefully scoped authorized editing |
+| `src/Revestik.Shared` | Shared HTTP contracts/DTOs, not a competing domain/persistence layer |
+| `tests/Revestik.Api.Tests` | Test project, not a fifth app; xUnit, HTTP/API and SQL/Testcontainers coverage |
 
-### One origin, one host
+- Intended domain: `https://revestikcr.com`. The earlier separate admin subdomain and iframe editing bridge are **historical** and must not be reintroduced as architecture.
+- Current local standard: run **`Revestik.Api` only**, which serves both public SSR and admin WASM. Check `Properties/launchSettings.json` for the actual local port; the previously used development base is `https://localhost:7126`.
+- The owner previously reported `/administracion` working in Azure and the public root returning 401 before launch. Those are **historical environment observations**; independently verify real ingress and deployment before any release claim.
+- Legacy iframe/`postMessage` editor code may still be present. Removing it requires its **own approved and tested cleanup block**; never mix removal with authentication.
+- Public marketing products are independent of internal inventory products. Shared classification uses existing product categories, subcategories and units, but public publishing must not affect FIFO stock, pricing, sales, internal quotation identity, payments or Hacienda documents.
+- The internal `Customer` entity represents business/fiscal customers and carries different validation/identification requirements. **Do not automatically create it for public signups**.
 
-- The intended unified origin is `https://revestikcr.com`.
-- The internal application is accessed through `https://revestikcr.com/administracion`, including Google OAuth login.
-- The former `app.revestikcr.com` origin was superseded by the unified-domain decision; **do not design new cross-domain bridges**.
-- The owner reports that the root public website remains restricted with **HTTP 401**, while administration is operational. This is a reported environment state; recheck the live environment before production claims.
-- `Revestik.Api` hosts the public SSR site and administrative Blazor WASM assets in one deployment. **Do not start three independent servers for normal local development.**
-- The legacy iframe/preview bridge still appears in repository code. It is **technical debt**, not the target architecture. Remove it only after replacement behavior is demonstrably safe, as an explicitly approved block.
-- A repository commit is **not** proof that the corresponding image/revision is deployed to Azure.
+## 3. Verified workstream baseline and pending local reconciliation
 
-### Local development baseline
+### 3.1 Internal business application (existing)
 
-From `C:\Projects\Revestik`, with configured SQL Server, development secrets, and .NET 10 SDK:
+Includes authorized users/roles, customers, quotations, sales, partial payments, FIFO inventory, purchasing/accounts payable, suppliers, expenses, tax document handling, projects, dashboard/reports and external integrations. These remain protected business modules; PUBLIC-AUTH must not change their financial, inventory or domain rules.
 
-```powershell
-dotnet run --project src/Revestik.Api/Revestik.Api.csproj --launch-profile https
-```
+### 3.2 Public site, catalog and projects (implemented in source)
 
-- API origin: `https://localhost:7126` (verify `src/Revestik.Api/Properties/launchSettings.json` if changed).
-- Admin: `https://localhost:7126/administracion`.
-- Public site: same origin, with locale-based routes.
-- `https://localhost:7081` and `http://localhost:5181` belong to the former separately launched client profile; they are **not** the recommended unified-host workflow.
-- Some SQL integration tests require Docker Desktop/WSL2 and Testcontainers.
+Existing public website includes Home, localized ES/EN/DE routes, navigation, public Acabados/Finishes, shared taxonomy, image galleries, editorial content and restricted inline editing. The owner has considered earlier public-site workstreams complete subject to the remaining release gates. Do not reopen functioning features without a reproduced defect or approved scope.
 
-## 3. Completed baseline and evidence boundaries
+**Public Projects** are separate editorial portfolio records, not internal customer projects. GitHub `main` commit `75bf93d5cf26e059f0d065348ee536858df182e6` contains 19 changed files including the prior checkpoint revision and source/test changes. Implemented design:
 
-### Internal application — existing business platform
+- Public-project foundation migration `20261111221243_AddPublicProjectsFoundation` and persisted project, translation, space, image and material-tag models.
+- Administrator-only create/edit/publish/unpublish/delete, version validation, media upload and publication checks; anonymous API and SSR read only **published/eligible** content.
+- Project listing/details in ES/EN/DE with stable slugs, localization, responsive gallery, proper missing-project 404 and existing image viewer.
+- Up to five photographs per project; material hotspots up to five per photograph; links only to eligible public Acabados products, retaining safe name snapshots when products become unavailable.
+- Material-tag changes use individual concurrency safeguards and do not require matching photograph image metadata versions. Keyboard-accessible coordinate editing was included in the local verification scope.
+- Public media never discloses unpublished/private records or internal projects, customer contact details, balances, payments or project documents.
 
-The internal application already includes customers, quotations, sales, partial payments, FIFO inventory, suppliers, purchasing and accounts payable, expenses, received electronic tax documents (Hacienda XML), projects, reports/dashboard, users/roles, and external integrations. Its business rules are **out of scope** for public Projects unless a reviewed shared component can be reused without compromising separation.
+**Owner-reported verification for 2026-11-17:** full regression 1,244 passed / 0 failed / 0 skipped (duration 883.2 s); 44 broader Projects/hosting tests; 17 earlier focused tagging tests (subsets, not extra distinct tests); 7/7 HTTP routes; 6/6 material-tag smoke checks; persistence after restart; staged integrity checks and targeted Gitleaks scans without detected leaks. These are historical **local** reports, not current CI/production attestations.
 
-### Public website — prior workstreams closed by owner
+### 3.3 PUBLIC-CONTACT-01 / 01B (owner-confirmed LOCAL ONLY)
 
-- Public site shell, Home, navigation, common visual design, responsive presentation, and localized routes.
-- Public catalog/Finishes, product image presentation, category/subcategory sharing, and admin editing experience.
-- Unified hosting and inline public-site editor with an Administrator security boundary.
-- The owner states that the previously active flows have been completed. **Do not reopen Home, Finishes, catalog, or prior infrastructure work without a concrete defect or explicit new scope.**
-- Main branch snapshot inspected for this handoff: `581aef9c99ddb7bbc1fffcbe49ec924699c980a2`, whose commit message concerns the Finishes editor and separate hero.
-- Historic owner-reported test evidence includes `1,199/1,199` local regressions and `17/17` manual security scenarios. These are **historical reports**, not a fresh test run against the next Projects implementation or an Azure production attestation.
+The owner confirmed that the Home and navbar WhatsApp contact buttons work locally, that the Home's bottom section now has one contact CTA, and that the updated solution built successfully (39.1 s) with a manual browser smoke test. **Do not repeat or store phone numbers/email addresses in checkpoints.** The local changes were not part of the verified GitHub source baseline. Do not overwrite them or claim they are deployed/committed without checking local and remote Git.
 
-### Public Projects — implemented and verified locally
+At the last owner-reported Git status, unrelated `src/Revestik.Api/appsettings.Development.json` changes and two malformed incidental untracked files existed. **Never stage, delete, modify, clean or overwrite these incidentally.** The owner must supply fresh Git status/diff before any coding or archive extraction.
 
-The original illustrative Projects implementation has been replaced in the local working tree by persisted public portfolio content.
+### 3.4 Remaining public release gates
 
-**Implemented locally:**
+Production media durability; content ownership/consent; privacy/legal text; accessibility/responsive/performance; Google/cloud config and sign-in; complete public route and API permissions; SEO/canonical/noindex; verified production revision/image, migrations and backups; public enablement only by **separate owner authorization**. A source commit does not deploy itself.
 
-- Public-project foundation migration `20261111221243_AddPublicProjectsFoundation`, with project, translation, space, image and material-tag tables.
-- Separate public editorial projects, independent of internal customer/project records.
-- Administrator-only project management with creation, editing, publication, unpublication, deletion and validated photograph uploads.
-- Published-only anonymous project APIs and media access.
-- SSR listing and project detail components backed by `PublicProjectsReader`.
-- Spanish, English and German routing, localized metadata and language navigation.
-- Responsive gallery with up to five photographs per project.
-- Material hotspots with up to five tags per photograph, linked to published Acabados products.
-- Product-name snapshots retained when linked products become unavailable.
-- Material-tag writes no longer require matching photograph `ImageVersion`; individual tag concurrency protection remains.
-- Real HTTP 404 responses for unknown project routes.
+## 4. Rules for writing and reviewing code
 
-**Evidence:**
+1. **INVESTIGATE BEFORE WRITING:** Trace actual endpoints, role policies, services, EF entities/configurations/migrations, DTO contracts, UI, test fixtures, runtime paths, Git state and existing reusable components.
+2. **KISS / DRY / YAGNI:** Small, maintainable vertical changes; reuse before adding abstractions. Remove only *proven* duplication in separately approved refactors; avoid speculative infrastructure.
+3. **One modular monolith:** No invented microservices, CQRS, second app host, generic repositories, brokers, custom authentication/session engines, parallel catalogs or extra databases unless a real requirement and separate approval justify them.
+4. **Use official mature .NET libraries:** ASP.NET Core Identity/Google external authentication/cookies, authorization, EF Core/SQL Server, existing xUnit/Testcontainers, QuestPDF only when a PDF feature is approved. Prefer maintained .NET 10 packages; coordinate upgrades as an independent, tested change.
+5. **Server is authoritative:** Browser hiding, route names, claims supplied by clients or editor preferences never grant permissions. Enforce roles, resource ownership, publication eligibility, business validation, CSRF, rate limits, and file access in trusted API/host code.
+6. **Separate domains:** Public visitors, public editorial content, private business customers, official quotations, inventory cost/stock, sales and internal projects must never be conflated. Preserve all FIFO, fiscal, transaction and historical invariants.
+7. **EF and database correctness:** Explicit relationships/constraints/indexes when needed; deterministic pagination; safe concurrency/transactions; no N+1 query proliferation. Review every migration and real data impact before execution. Shared taxonomy migration `20261104230000_ConsolidateSharedProductTaxonomy` forbids automatic rollback assumptions.
+8. **Secure by default:** Least privilege, authenticated-user vs employee-role distinction, Google provider ID verification, secure same-origin Identity cookies, antiforgery on state changes, safe redirects, session revocation, minimal OAuth scopes, sanitized logs and no secrets in source.
+9. **Clean production-quality C#:** Descriptive names, clear methods, nullable correctness, typed contracts, cancellation tokens for I/O, explicit validation, helpful deterministic errors, appropriate tests, no unnecessary framework wrappers, no dead/duplicate implementations.
+10. **Stable UX:** Preserve ES/EN/DE localization, SSR navigation, accessibility (keyboard, focus, labels), responsive layouts, SEO and existing editor controls. No unrelated redesign in a security block.
+11. **Minimal diffs:** Change only preapproved files; do not include unrelated refactors, formatting-only sweeps, generated artifacts, backups or configuration edits. Never clobber changed local files.
+12. **No unverified claims:** A passing compilation is not a passing test suite, a static source review is not a penetration test, and Git synchronization is not production verification. Report limitations explicitly.
 
-The owner reports successful local persistence, public smoke tests, routing checks and full regression. See Section 9.
+## 5. Mandatory workflow — EVERY block, no exceptions
 
-**Boundary:**
+**INVESTIGATE → PLAN → APPROVE → IMPLEMENT → VERIFY → STOP**
 
-These are local implementation and verification claims, not production deployment or public-launch evidence. Confirm GitHub synchronization from the actual Git state.
+| Stage | Required output and boundary |
+| --- | --- |
+| **INVESTIGATE** | Read `AGENTS.md`, current sources, docs, migrations, tests and Git. Identify existing functionality, evidence and uncertainty. **No code or packaging**. |
+| **PLAN** | Name a small block ID, its goal, exact proposed files, security/data effects, exclusions, dependencies and acceptance tests. No speculative functionality. |
+| **APPROVE** | Owner explicitly approves **that implementation block**. Approval of overall product rules does not authorize every block or its successors. |
+| **IMPLEMENT** | Only the approved change, with complete reviewed files when requested. Preserve uncommitted local work and secrets. No scripts/installers. |
+| **VERIFY** | User/local build and focused + appropriate SQL/HTTP/security tests, full regression where justified, sequential browser smoke, `git diff --check`, exact diff and source inventory. |
+| **STOP** | Report implemented vs tested vs pending; halt for owner acceptance. Never automatically start next block, stage/commit/push, migrate production, change OAuth Cloud settings, deploy or enable indexing. |
 
-## 4. Non-negotiable engineering rules
+**Critical:** Git operations that alter source control, production changes, data migrations and deployment each require their own specific authorization. The owner may authorize a **documentation-only** GitHub update without approving application code changes.
 
-1. **Reuse first:** inspect and reuse existing services, components, DTO patterns, EF configurations, validators, media storage, localization, SEO, error handling, tests, and styles. No duplicated catalog, taxonomy, image pipeline, or editor infrastructure without evidence of necessity.
-2. **Simple architecture:** retain the modular monolith. Do not introduce a new app host, microservice, CQRS framework, message broker, generic repository layer, additional identity system, or new dependency just to build the public Projects page.
-3. **Server authority:** frontend visibility is not security. Enforce role, resource scope, validation, publication state, upload checks, and mutations in the API/host.
-4. **Domain boundaries:** internal `Projects` are private commercial/customer records; public portfolio projects are reviewed editorial content. **Never expose the internal Projects table, its documents, contact details, balances, payments, or customer records through anonymous site routes.**
-5. **Explicit public read model:** anonymous APIs and media routes must return **published and approved public records only**. No business DTOs or internal entity serialization by accident.
-6. **No silent financial/inventory effects:** publishing a public project or listing its materials must not create sales, move inventory, modify FIFO costs, register payments, or alter purchasing/fiscal workflows.
-7. **Data integrity:** use EF Core/SQL Server conventions, suitable keys/FKs/constraints/indexes, optimistic concurrency where needed, transaction boundaries for multi-record writes, and reviewed migrations. **No destructive migration or automatic rollback assumption.**
-8. **Security by design:** Identity/Google OAuth, secure cookies, Administrator-only editing, CSRF validation, upload validation, audit of privileged changes, rate limits where applicable, and private persistent media storage.
-9. **KISS/DRY/YAGNI:** avoid abstractions or options with no demonstrated V1 use; prefer the simplest maintainable extension of current code.
-10. **Production-aware quality:** clean code, descriptive naming, nullable correctness, cancellation tokens, bounded queries/pagination, no N+1 media reads, accessibility, responsive layouts, and predictable error states.
-11. **Respect existing behavior:** avoid unrelated refactors, redesigns, formatting-only edits, reorganization, dependency upgrades, and configuration changes in a Projects block.
-12. **Evidence-driven:** no invented routes, tests, tables, deployed revisions, successful results, or customer/project claims. Investigate first and state uncertainty.
+## 6. Source deliveries, ZIP protocol, PowerShell and Git discipline
 
-## 5. Mandatory collaboration workflow
+- The owner does **not** want installers or apply scripts. **Never** send `.ps1`, installers, generated binaries or scripts that automate applying a patch. This includes scripts embedded in archives.
+- When an implementation block has been **specifically approved and the owner requests a ZIP**, deliver **one incremental ZIP for that block** containing the **complete contents only of the approved changed/new files**. Retain exact paths relative to `C:\Projects\Revestik` (e.g. `src/Revestik.Api/...`); no extra top-level parent folder, snippets masquerading as complete files, `bin/`, `obj/`, `.git/`, secrets, private data, backups or unrelated files.
+- Before delivering a ZIP, examine archive inventory, compare reviewed base commit to the user's actual local file changes, and identify conflicts. **Do not recommend unconditional overwrite if the file differs**; a preflight error means STOP and reconcile, not continue to extract. The assistant cannot directly edit the owner's Windows filesystem.
+- If the owner requests plain PowerShell instructions, send short, directly copy/pasteable, **non-destructive** commands, no placeholders requiring manual substitutions. Avoid variables that collide case-insensitively with read-only PowerShell automatic variables (e.g. `$home` is `$HOME`). Do not use guessed hashes or keep executing after a guard fails.
+- For **documentation-only** changes, use a complete standalone `.md` file (or an explicitly approved direct GitHub file edit), **not** a ZIP. Document Git write failures honestly.
+- Begin code work with `git status -sb`, `git rev-parse HEAD`, GitHub HEAD and affected file diffs. GitHub does not show local uncommitted changes. Never use `git reset --hard`, `git clean -fd`, broad extraction overwrites, blanket `git add .`/`git add -A`, or staging unrelated files. Stage only explicitly approved paths after diff/security review.
+- Do not publish secrets or personal/customer/staff data in public GitHub, logs, issue descriptions, example code, tests or screenshots. Public business contact details are *not automatically credentials*, but their inclusion in Git/docs requires an explicit owner publication decision. Reference configuration keys rather than embedding real numbers/email addresses. Store Google client secrets and other credentials in environment secrets/secure cloud configuration.
+- Preserve `appsettings.Development.json` and any unrelated unknown/untracked local files. Never delete them automatically. A green local test does not authorize a commit; a Git commit does not authorize a deployment.
 
-**INVESTIGATE → PLAN → APPROVE → IMPLEMENT → VERIFY → STOP** is required for every coherent implementation block.
+## 7. PUBLIC-AUTH-01 — owner-approved business rules
 
-### INVESTIGATE — read-only
+**Approval recorded 2026-11-18:** Login is **optional** for anonymous catalog viewing and the future quotation-request action; **Google OAuth only** for public registration. Rules PUB-AUTH-001 through PUB-AUTH-008 accepted as the design baseline. Any ambiguity or widened scope returns to PLAN/APPROVE.
 
-- Read latest GitHub `main`, relevant checkpoint/docs/ADRs, real source and test fixtures. Record the **actual commit SHA**.
-- Review the user's local `git status -sb`/diff when supplied and identify unrelated modified/untracked files.
-- Trace data model, routes, API authorization, editor components, image storage, translations, SEO, and existing tests before proposing code.
-- Research public-project portfolio UX only to resolve an open design question. Distinguish inspiration from requirements.
-- Present findings, conflicts, reuse opportunities, risks, and **specific decisions the owner must make**.
-- **Do not write code, generate ZIPs, migrate databases, edit GitHub, or deploy.**
+- **PUB-AUTH-001 — Registration:** A public visitor may register through Google with a verified email *once public registration is separately enabled*; no local public passwords.
+- **PUB-AUTH-002 — Identity:** Reuse existing `ApplicationUser`, Identity and secure cookies; public accounts have a distinct `PublicCustomer` role, without another auth database/system.
+- **PUB-AUTH-003 — Least privilege:** Public accounts never gain employee, admin, editor, finance, inventory, internal project or internal customer permissions merely from authentication.
+- **PUB-AUTH-004 — Minimal data:** Initial registration needs only user ID, display name and verified email. Province is for future quotation requests; phone is not required for WhatsApp text requests.
+- **PUB-AUTH-005 — Optional authentication:** All eligible published catalog, projects and Home reads remain anonymous; future quotation-by-WhatsApp requests may be sent without signing in.
+- **PUB-AUTH-006 — Cart isolation (future):** A persisted cart, if later approved, belongs to exactly one authenticated public account. Every server operation checks ownership.
+- **PUB-AUTH-007 — Request isolation (future):** Saved requests/history are private to their Identity owner; a visitor cannot read or modify another customer's requests.
+- **PUB-AUTH-008 — Staff separation:** Public signup never creates, links into, modifies, merges with or promotes staff accounts.
 
-### PLAN — bounded proposal, no implementation
+### Design-time security invariants for block implementation
 
-- Define a small coherent scope with stable task ID (`PUBLIC-PROJECTS-01A`, `01B`, etc.).
-- List exact files expected to change, database/schema impact, security and API effects, dependencies, alternatives, and acceptance criteria.
-- Explicitly flag anything requiring a migration or a new table/index. Avoid implementation details being presented as already approved.
-- Prefer a vertical slice that can be independently built, tested, and smoke-tested.
+These are **required engineering checks**, not already-implemented or separately tested facts:
 
-### APPROVE — explicit owner decision
+- Resolve Google identities using provider + stable provider key, rather than automatically linking to a privileged staff identity solely by verified email. Handle collisions safely.
+- Public registration can assign only `PublicCustomer`. Existing `RoleNames.All` refers to **internal** Administrator, Accountant, Sales and Warehouse roles; never append `PublicCustomer` to that array or reuse staff policies.
+- Require explicit employee-only authorization for private endpoints. Audit ASP.NET Core **DefaultPolicy vs FallbackPolicy** and every unqualified `.RequireAuthorization()`/group authorization; ordinary authentication is insufficient after public users exist.
+- Session validation, inactivity/disabled-user rejection, safe OAuth state and redirects, CSRF on cookie-authenticated mutations, rate limits, no publicly cached private identity markup, no broad OAuth scopes or token disclosure.
+- For future cart/request models, derive user ID **from the authenticated server principal**, never trust a browser-supplied owner ID; enforce SQL query scoping and mutation authorization; test accounts A/B.
+- Do not use existing fiscal/commercial internal `Customer` as an anonymous/public registration profile.
 
-- Obtain the owner's clear approval of the proposed block **before** implementation.
-- Approval for one block does not authorize adjacent features, migrations on real environments, commits, pushes, deletions, DNS, or Azure deployment.
-- If investigation uncovers changed scope, return to PLAN and obtain approval again.
+### Confirmed source review (not a security penetration test)
 
-### IMPLEMENT — minimal approved changes
+- `src/Revestik.Api/Endpoints/AuthenticationEndpoints.cs`: Google challenge/callback, staff authorized user or bootstrap admin; provider-key lookup followed by fallback email lookup; redirect restriction currently oriented to `/administracion`.
+- `src/Revestik.Api/Extensions/AuthenticationExtensions.cs`: existing Identity, secure cookie, Google middleware and authorization policies; default/fallback semantics need an employee/public audit.
+- Several internal dashboards and related read endpoints have bare `.RequireAuthorization()`; they must not become accessible to an authenticated public customer.
+- `src/Revestik.Api/Services/Users/UserAdministrationService.cs`: user listing and role assumptions are staff-oriented; new public identities must not silently enter staff management.
+- `src/Revestik.Public/Hosting/PublicSiteHostingExtensions.cs`: public Razor component mapping is anonymous. Protect private user-specific routes/operations explicitly, never assume a UI attribute overrides globally anonymous mapping.
+- Microsoft identity packages already exist. Coordinated supported .NET 10 updates belong in a **separate tested dependency-maintenance block**, not an opportunistic auth refactor.
 
-- Change only approved paths. Preserve local edits, backups, secrets, unknown files, and current public-site behavior.
-- No speculative schema, duplicated UI, temporary bridges, new packages, or security shortcuts.
-- Do not silently overwrite a file that differs from the reviewed repository version.
+## 8. PUBLIC-AUTH-01 — bounded implementation checklist
 
-### VERIFY — evidence before claims
+**Every checklist block is independently INVESTIGATED, PLANNED, APPROVED, IMPLEMENTED, VERIFIED, then STOPPED.** A checkbox stays empty until supported by actual source/test evidence. Changes outside each named block return to explicit approval. File paths below are *investigation candidates*, not advance authorization to edit all of them.
 
-- User applies the reviewed changes locally and runs build, focused tests, relevant integration/security tests, sequential smoke tests, and full regression when appropriate.
-- Compare exact results with the expected behavior, review `git diff --check`, and inspect the file list.
-- State what ran, what passed, what failed, what was not run, and which commit/environment was tested. Never declare `passed`, `deployed`, or `secure` without supporting evidence.
+### PUBLIC-AUTH-01A — employee-only API boundary (FIRST)
 
-### STOP — controlled closure
+**Goal:** Prevent an authenticated `PublicCustomer`-like principal from accessing internal services **before** public registration exists.
 
-- Summarize delivered files, verifications, known defects, remaining tasks, and the next block.
-- **Do not commit, push, create branches, merge, run production migrations, delete files, change DNS, or deploy** unless the owner separately authorizes that action.
-- Do not continue to another block automatically.
+- [ ] Inventory every API endpoint/group and relevant middleware; classify routes as anonymous, shared-authenticated, employee-only or admin-only; inspect explicit and fallback/default policies.
+- [ ] Find bare `.RequireAuthorization()` and accidental generic authentication checks; document the effective authorization matrix.
+- [ ] Apply minimal employee-only policies to private routes while retaining more restrictive existing named policies, correct shared `/api/auth` semantics and public read access.
+- [ ] Review `RoleNames.All` and staff administration assumptions; ensure they cannot incorporate public roles. Do **not** provision public accounts yet.
+- [ ] Write focused HTTP tests: anonymous private = 401; public-role principal private = 403; authorized employee succeeds; anonymous public catalog works; editor still requires Administrator.
+- [ ] Build/test approved files, inspect diff, report residual unknowns and STOP for acceptance before 01B.
 
-## 6. File deliveries, ZIPs, Git, and safety
+**Review candidates:** `Extensions/AuthenticationExtensions.cs`, `Authorization/PolicyNames.cs`, selected API endpoints, `Services/Users/UserAdministrationService.cs` if proven necessary, focused authentication/endpoint tests.
+**Explicit exclusions:** public registration, new database tables/migrations, public UI, carts, PDFs, WhatsApp, quotation workflow, dependency upgrades, Azure/Google Cloud changes.
+**Acceptance:** complete reviewed route inventory and evidence that private routes deny public principals without regression of employee/admin/anonymous reads.
 
-### Approved source-code changes
+### PUBLIC-AUTH-01B — public Google Identity backend (AFTER 01A)
 
-- Deliver **one complete, incremental ZIP for each explicitly approved coherent code block**, when a ZIP is the requested delivery form.
-- Package **complete contents of only changed/new source files**, preserving exact paths relative to `C:\Projects\Revestik` (for example `src/Revestik.Public/...`).
-- No extra parent directory; no partial file snippets presented as replacements.
-- No installer, `.ps1`, automated apply script, generated binary, `bin/`, `obj/`, `.git/`, private data, backups, secrets, or unrelated files.
-- Before delivery, inspect the archive's file inventory and verify it contains only approved paths. Identify any local conflict before telling the user to extract.
-- Let the owner extract into the repository, inspect the diff, and run the verification commands. **Do not imply the assistant has edited the owner's Windows filesystem.**
-- For documentation-only updates, provide a **complete individual `.md` file**, not a ZIP or executable, unless requested otherwise.
+**Goal:** Reuse existing Google middleware and Identity, with distinct safe public signup and no implicit staff account linking.
 
-### Git discipline
+- [ ] Trace current challenge/callback, provider-key and email-verified claims, bootstrap admin, rate limiting, correlation state, cookies, return paths and environment configuration.
+- [ ] Implement clearly differentiated public vs internal login intent; reuse existing middleware; validate safe return destinations and OAuth state.
+- [ ] Resolve identities by Google provider/stable subject. On email/provider conflicts with existing accounts, fail closed; never auto-attach a new Google identity to staff by email alone.
+- [ ] Provision only `PublicCustomer` with safe transactions/constraints for duplicate or concurrent signups and failed role linking; check inactive accounts, audit and session revocation.
+- [ ] Keep public signup **disabled by default** in all environments pending explicit release approval; test disabled and enabled modes.
+- [ ] Add focused Identity/SQL/HTTP/Google test coverage, verify existing staff Google login and CSRF/logout behaviors, then STOP.
 
-- Start with `git status -sb` and `git rev-parse HEAD`; compare the reviewed GitHub SHA.
-- Never use `git reset --hard`, `git clean -fd`, broad overwrites, or blanket staging (`git add .` / `git add -A`).
-- Stage only explicitly approved paths. Review secrets, diff, and test evidence before any authorized commit or push.
-- A committed source change is not necessarily deployed. Log the image digest/container revision and smoke-test outcome for release claims.
-- User-controlled local configuration (including `src/Revestik.Api/appsettings.Development.json`) and backup files must not be altered incidentally.
+**Review candidates:** `Endpoints/AuthenticationEndpoints.cs`, `Extensions/AuthenticationExtensions.cs`, `Data/IdentitySeeder.cs`, role/policy declarations, focused tests and minimal configuration. Reuse `ApplicationUser` unchanged if adequate.
+**Explicit exclusions:** password/JWT auth, second user system/table, fiscal `Customer` data, cart, quote/PDF, UI redesign, production OAuth settings/deployment.
+**Acceptance:** public signup cannot impersonate/link to employees; only public role is assigned; staff flow survives; production signup remains disabled.
 
-## 7. PUBLIC-PROJECTS-01 — implemented architecture and accepted boundaries
+### PUBLIC-AUTH-01C — public navbar login/session UX (AFTER 01B)
 
-### Product goal
+**Goal:** Minimal public sign-in, signed-in user indicator and sign-out; no public portal/cart.
 
-Provide a small, elegant, responsive public portfolio of owner-approved work, with project photographs, relevant materials and a contact path.
+- [ ] Add accessible ES/EN/DE Google login entry; anonymous browsing remains unchanged.
+- [ ] Add name/account indication and CSRF-protected logout with safe session-expired behavior; keep identity markup out of shared public caches.
+- [ ] Preserve Home, navbar WhatsApp, Finishes, Projects, restricted inline editor and `/administracion` behavior.
+- [ ] Run focused UI/security tests and desktop/mobile three-locale smoke; review exact diff and STOP.
 
-This is not a marketplace, customer portal, or duplicate of the internal project-management module.
+**Review candidates:** `src/Revestik.Public/Components/Layout/`, narrowly required public SSR components/styles, small auth endpoints/contracts only if justified, tests.
+**Explicit exclusions:** saved carts/quotes, profile table, province form, password pages, customer dashboard, PDF, general redesign.
+**Acceptance:** anonymous browsing works; verified Google account sees only its own identity and can log out; internal app remains protected.
 
-### Implemented architecture
+### PUBLIC-AUTH-01D — integrated local security and regression acceptance (AFTER 01C)
 
-- Reuse the existing .NET modular monolith, SQL Server, public SSR site and administrative security model.
-- Keep public editorial projects independent of internal Projects, customers, inventory transactions and financial records.
-- Use `PublicProjectReader` on the API for published-only data and `PublicProjectsReader` on the public SSR site.
-- Reuse the existing public media storage and image validation pipeline.
-- Retain the existing localized routes:
-  - `/es/proyectos/{slug}`
-  - `/en/projects/{slug}`
-  - `/de/projekte/{slug}`
-- Project slugs remain stable after creation. Language switching preserves project context.
-- Use one project cover and up to five photographs in total, with localized alternative text.
-- Reuse the existing gallery/image viewer and contextual Administrator editing.
-- Use fixed project types and space classifications; do not create unnecessary category infrastructure.
-- Use material hotspots positioned relative to photographs, with a maximum of five tags per image.
-- Link hotspots to public Acabados products through `ProductId` and the current published slug.
-- Do not display product thumbnails inside the material-tag selector.
-- The backend currently requires a registered product-cover record for product selection and public product availability.
-- Retain the last published product name when a referenced product is deleted or unpublished; never expose unpublished product details.
-- Keep optimistic concurrency for individual material tags.
-- Offer keyboard-accessible numeric coordinates as an alternative to mouse/touch dragging in the tag editor; verify this interaction manually before publication.
-- Photograph metadata versions are not required for independent tag writes.
-- Keep Administrator authorization, antiforgery validation, publication filtering, upload limits and auditing.
+**Goal:** Independently verify the completed auth feature and report release blockers.
 
-### Explicitly excluded
+- [ ] Release build, relevant Identity/role tests, HTTP authorization tests, SQL/Testcontainers tests and complete regression on the exact source revision.
+- [ ] Verify anonymous, public customer A/B, staff and Administrator matrix: private dashboard/customer/inventory/finance/user endpoints, editor denial, published public reads, 401/403 semantics.
+- [ ] Test Google verified/unverified identity, email/provider collision, concurrent signup, callback/correlation, hostile redirects, CSRF/logout, cookie settings, expired/disabled sessions and rate limits.
+- [ ] Execute local real Google login smoke, mobile/desktop ES/EN/DE, inspect `git diff --check`, file inventory, secrets and selective Git scope.
+- [ ] Document actual passed/failed/unrun tests, owner smoke approval and STOP. Fix only verified in-scope defects; request approval for scope changes.
 
-- Internal project/customer data exposure.
-- A second product catalog or independent material inventory.
-- A new tagging service, manually maintained product URLs or external translation API.
-- Unrelated application refactoring.
-- Production changes without separate approval.
+**Explicit exclusions:** invented fake cart/request tables simply to pass ownership tests, production migration/deployment and unrelated refactors.
+**Acceptance:** owner-reviewed evidence-based local security matrix and appropriate regression. Actual cart/request A-vs-B tests are mandatory later **when those resources exist**, not now.
 
-## 8. Local completion and remaining release gates
+### PUBLIC-AUTH-01E — production readiness REVIEW ONLY (independent gate)
 
-**Completed locally:**
+**Goal:** Recommend or block release; **not** enable registration or deploy.
 
-Public-project persistence, administrative editing, photographs, material hotspots, public reading, localization, responsive presentation and routing verification.
+- [ ] Verify real Azure revision/digest, HTTPS/proxy trust, secure cookies, persistent private Data Protection keys, database migration/backup state and environment separation.
+- [ ] Verify Google Cloud external consent/eligibility, redirect URIs, secrets storage, account disable/rollout mechanism, rate limits, privacy/legal notices and production behavior.
+- [ ] Produce rollout/rollback and production-smoke plan. Obtain distinct approval for any cloud setting change, registration enablement, migration, Git operation or deployment.
+- [ ] Record verified evidence and STOP; no public indexing or removal of prelaunch access restrictions without separate authorization.
 
-**Source-control status:**
+**Explicit exclusions:** live OAuth changes, feature enabling, Azure deployment, SQL migration, DNS/indexing changes under a design/checkpoint approval.
+**Acceptance:** explicit owner-approved release decision, target revision and evidence plan. Local success never implies production security.
 
-At handoff preparation, 19 intended files were staged: 18 project source/test files and this checkpoint. Verify the actual committed state using Git.
+## 9. Deferred workstreams — NOT included in PUBLIC-AUTH-01
 
-**Repository closure checks (verify against Git):**
+- **PUBLIC-QUOTE-01:** Later choose one or more **published public catalog** products and quantities in existing selling units, collect name/province as appropriate, prepare readable itemized **WhatsApp `wa.me` text**. Login remains optional. No WhatsApp API, automatic PDF attachment, internal COT, price/tax guarantee or inventory reservation by default.
+- **PUBLIC-CART-01:** Only if persistent customer carts are approved separately: model `ApplicationUser.Id` ownership, SQL FK/unique/indexes/concurrency, row-scoped reads/writes, A/B isolation tests and data cleanup. No shared carts or client-supplied owner IDs.
+- **PUBLIC-WEB-RELEASE:** Full public-site smoke, real imagery/content, legal/privacy, accessibility/performance/SEO and independent Azure production/public-indexing approval.
+- **ARCHITECTURE-REFACTOR:** Comprehensive evidence-driven codebase review and removal of verified duplication **after** core features are complete, in separately approved changes with full regression.
+- **DEPENDENCY-MAINTENANCE:** Confirm current supported .NET 10 patch versions and review coordinated upgrade separately; do not blend updates into PUBLIC-AUTH security behavior changes.
 
-- Review the complete staged diff and updated checkpoint.
-- Re-run staged integrity and secret checks after documentation is added.
-- Commit and push only with owner approval.
-- Verify GitHub synchronization after pushing.
+## 10. Verification commands and evidence policy
 
-**Still pending before production/public launch:**
-
-- Separate approval for production database changes and deployment.
-- Verification of production media persistence, authentication and health.
-- Review of actual project content, permissions and privacy requirements.
-- Final accessibility, performance and public SEO/indexing review.
-- Explicit approval before changing prelaunch access or `noindex` rules.
-
-The comprehensive codebase refactoring and duplicate-code removal remain a separate later workstream.
-
-## 9. Verification and acceptance checklist
-
-### Local verification evidence — 2026-11-17
-
-**Owner-reported results:**
-
-- Full regression: **1,244 passed, 0 failed, 0 skipped**.
-- Full test run duration: 883.2 seconds; successful build reported in 896.9 seconds.
-- Broader Projects/hosting tests: **44 passed**.
-- Earlier focused tagging tests: **17 passed**. These are subsets, not additional independent tests.
-- HTTP routing: **7/7 passed** for published ES/EN/DE pages and missing project/API routes.
-- Public material-tag smoke tests: **6/6 passed**, including link behavior, editing, deletion, mobile usability and persistence.
-- Material-tag persistence was also verified after restarting localhost.
-- Selective Git staging: 18 project source/test files.
-- `git diff --cached --check`: passed.
-- Gitleaks 8.30.1 staged scan: no leaks reported; output indicated zero commits and approximately 39.81 KB inspected.
-- Four independent Gitleaks source/file scans: no leaks reported in the inspected targets.
-
-These results apply to the inspected local environment.
-
-They do not establish production readiness, complete security assurance or a separate Release-configuration build.
-
-### Engineering verification (for subsequent changes)
-
-From the repository root, run the commands appropriate to the approved block:
+From the repository root, use **only** commands appropriate to the approved block; commands below are reference commands, **not a script to apply changes**:
 
 ```powershell
 git status -sb
+git rev-parse HEAD
 git diff --check
 dotnet restore Revestik.sln
 dotnet build Revestik.sln --configuration Release
 dotnet test tests/Revestik.Api.Tests/Revestik.Api.Tests.csproj --configuration Release --no-restore
 ```
 
-- Add focused tests by specific filter/project when appropriate; retain SQL Server integration tests for data constraints and API behavior.
-- Verify optimistic concurrency, bad input, unauthorized/forbidden requests, CSRF, image limits, and cleanup/rollback of failed multi-record operations.
-- Smoke-test **in sequence**, record result per step: anonymous view, published-only listing, invalid slug 404, language switching, gallery, mobile layout, admin edit, non-admin denial, CSRF denial, persistence after reload, unpublish, and relevant media.
-- Verify that no internal customer/project/file endpoint or record becomes anonymously readable.
-- Confirm no unrelated files, secrets, or environment configuration changed and that the delivered ZIP contains only approved files.
-- Re-run full regression and public website smoke tests before any release request. Do not invent passing counts.
+Run focused test filters and SQL/Testcontainers scenarios where relevant, then full regression before release. Validate auth HTTP codes, anti-CSRF, concurrency, publication filters and owner-specific resource permissions. Report exact environment, revision, test names and actual counts; distinguish historical results from fresh execution. Never stage unrelated files or publish secrets.
 
-### Production and publication gate
+## 11. Exact next-chat handoff
 
-- **No public launch and no production migration/deployment based merely on this checkpoint.**
-- Confirm real content ownership/consent, privacy/cookie/legal text, accessibility, security, SEO, responsive presentation, performance, correct public indexing policy, and all public pages together.
-- Require separate owner approval for each production migration and Azure rollout; verify deployed revision, health, admin login, and public behavior afterward.
-- Remove prelaunch `noindex`/access restrictions only through the planned and approved site launch procedure; do not silently make unfinished pages publicly indexable.
+1. **READ `AGENTS.md` FIRST**, then this complete checkpoint and relevant docs/ADRs. Inspect actual GitHub `main` and the user's local Git status/diffs; do not infer the user's workspace from GitHub.
+2. Preserve owner-verified local WhatsApp changes, `appsettings.Development.json` and unknown/untracked files. If the checkpoint is not yet synchronized, reconcile the **documentation file only** before auth code work.
+3. Treat PUB-AUTH-001 through 008 as **business decisions already approved**. Treat 01A–01E as the ordered **plan only**; each implementation block still requires specific owner approval.
+4. **Next:** investigate/plan `PUBLIC-AUTH-01A` completely, especially all bare authenticated internal endpoints, DefaultPolicy vs FallbackPolicy, roles and tests. Present exact changed files, tests and no-schema boundary. **WAIT FOR APPROVAL BEFORE CODE.**
+5. For each approved block: implement minimal source, reuse official .NET facilities, deliver source files as requested (ZIP only when requested and with exact full relative files), verify local build/tests/smoke/diff, **STOP**.
+6. Never commit/push application changes, change Azure/Google Cloud, run production migrations, deploy, alter DNS or enable public access/indexing without **separate express authorization**.
 
-## 10. Exact next-chat starting instruction
-
-Resume from the **PUBLIC-PROJECTS-01 repository handoff**, not the original investigation phase.
-
-1. Read `AGENTS.md`, this checkpoint, the current Git status and staged diff.
-2. Preserve the verified implementation and existing architectural boundaries.
-3. Confirm the 19 intended files are staged or committed and the development configuration remains excluded.
-4. Review this checkpoint alongside the implementation.
-5. Validate the final diff, tests and security checks before a commit.
-6. Request explicit owner approval before committing and pushing.
-7. Verify local and remote commit identifiers match before considering repository handoff complete.
-
-Do not add new architecture, reopen completed Projects functionality, remove unrelated files, migrate production, deploy or enable public indexing as part of this handoff.
-
-**Current state:**
-
-Public Projects are functionally verified locally.
-
-Repository synchronization must be verified from Git; production release remains separately gated.
+**End state recorded:** Projects source Git-synchronized at the verified baseline; Contact improvements owner-reported locally verified but not confirmed Git-synced; public login/carts/quotation request are NOT implemented; current actionable step is the independently approved `PUBLIC-AUTH-01A` planning/authorization gate.
