@@ -1,15 +1,15 @@
 # REVESTIK — Public Website Master Checkpoint
 
-**Active workstream:** `PUBLIC-PROJECTS-01`
-**Next step:** `INVESTIGATE` — no implementation authorized
-**Checkpoint date:** 2026-11-10
+**Active workstream:** PUBLIC-PROJECTS-01 — local verification complete; Git handoff pending
+**Next step:** Verify the final accessibility change, confirm Git synchronization, then continue the separately gated public-site release review.
+**Checkpoint date:** 2026-11-18
 **Repository:** https://github.com/cristoferlee/revestik
 **Branch:** `main`
-**GitHub HEAD verified for this checkpoint:** `581aef9c99ddb7bbc1fffcbe49ec924699c980a2`
+**Historical GitHub baseline (2026-11-10):** `581aef9c99ddb7bbc1fffcbe49ec924699c980a2`
 **Local workspace:** `C:\Projects\Revestik`
-**Owner-confirmed baseline:** GitHub is synchronized with the local project at the handoff. This statement is the owner's confirmation, not an independent inspection of the local Windows worktree. Recheck `git status -sb` and `git rev-parse HEAD` before starting another work block.
+**Owner-confirmed baseline:** 18 project source/test files plus this checkpoint prepared for synchronization; development configuration and two incidental untracked files excluded. Confirm local and remote HEAD before new work.
 **Owner communication:** Spanish. **Repository-facing documentation:** English.
-**Status:** Earlier public-site workstreams are considered closed by the owner; the next development focus is the **public Projects section**. The public website is **not yet authorized for public launch**.
+**Status:** Public Projects implemented and verified locally. Confirm repository synchronization from Git; production deployment and public launch remain unauthorized.
 
 ---
 
@@ -85,18 +85,31 @@ The internal application already includes customers, quotations, sales, partial 
 - Main branch snapshot inspected for this handoff: `581aef9c99ddb7bbc1fffcbe49ec924699c980a2`, whose commit message concerns the Finishes editor and separate hero.
 - Historic owner-reported test evidence includes `1,199/1,199` local regressions and `17/17` manual security scenarios. These are **historical reports**, not a fresh test run against the next Projects implementation or an Azure production attestation.
 
-### Public Projects — existing scaffolding, not a finished content system
+### Public Projects — implemented and verified locally
 
-Current source contains:
+The original illustrative Projects implementation has been replaced in the local working tree by persisted public portfolio content.
 
-- `src/Revestik.Public/Components/Pages/Projects.razor`
-- `src/Revestik.Public/Components/Pages/ProjectDetail.razor`
-- `src/Revestik.Public/Components/Pages/ProjectGallery.razor`
-- `src/Revestik.Public/PublicProjectCatalog.cs`
-- `src/Revestik.Public/PublicSeo.cs`
-- `src/Revestik.Public/SiteLinks.cs`
+**Implemented locally:**
 
-The current gallery and detail pages use **illustrative, hard-coded records**, example slugs, and photograph placeholders. `PublicProjectCatalog.cs` explicitly says not to read the internal customer/project database and anticipates a reviewed published-only read model. This is the starting point: **reuse the existing views and routing; investigate persistence and administration before changing them**.
+- Public-project foundation migration `20261111221243_AddPublicProjectsFoundation`, with project, translation, space, image and material-tag tables.
+- Separate public editorial projects, independent of internal customer/project records.
+- Administrator-only project management with creation, editing, publication, unpublication, deletion and validated photograph uploads.
+- Published-only anonymous project APIs and media access.
+- SSR listing and project detail components backed by `PublicProjectsReader`.
+- Spanish, English and German routing, localized metadata and language navigation.
+- Responsive gallery with up to five photographs per project.
+- Material hotspots with up to five tags per photograph, linked to published Acabados products.
+- Product-name snapshots retained when linked products become unavailable.
+- Material-tag writes no longer require matching photograph `ImageVersion`; individual tag concurrency protection remains.
+- Real HTTP 404 responses for unknown project routes.
+
+**Evidence:**
+
+The owner reports successful local persistence, public smoke tests, routing checks and full regression. See Section 9.
+
+**Boundary:**
+
+These are local implementation and verification claims, not production deployment or public-launch evidence. Confirm GitHub synchronization from the actual Git state.
 
 ## 4. Non-negotiable engineering rules
 
@@ -177,63 +190,96 @@ The current gallery and detail pages use **illustrative, hard-coded records**, e
 - A committed source change is not necessarily deployed. Log the image digest/container revision and smoke-test outcome for release claims.
 - User-controlled local configuration (including `src/Revestik.Api/appsettings.Development.json`) and backup files must not be altered incidentally.
 
-## 7. PUBLIC-PROJECTS-01 — product goal and accepted boundaries
+## 7. PUBLIC-PROJECTS-01 — implemented architecture and accepted boundaries
 
-### Goal
+### Product goal
 
-Turn the existing public Projects section into a **small, elegant, responsive, maintainable portfolio of real, owner-approved work**. Visitors should see what REVESTIK has done, view photographs and relevant materials, and contact the business. **This is not a marketplace, customer portal, or a mirror of the internal project-management module.**
+Provide a small, elegant, responsive public portfolio of owner-approved work, with project photographs, relevant materials and a contact path.
 
-### Approved or previously established design intent
+This is not a marketplace, customer portal, or duplicate of the internal project-management module.
 
-- **Existing public routes must be reused**:
-  - `/es/proyectos` and `/es/proyectos/{slug}`
-  - `/en/projects` and `/en/projects/{slug}`
-  - `/de/projekte` and `/de/projekte/{slug}`
-- Preserve the established site branding, responsive layout, typography, navbar/footer, and **Glassy image viewer**. Avoid an unrelated redesign.
-- Use real project cards and a simple detail page; the administrator's inline mode should provide contextual **Edit** controls and a final neutral **“+ Agregar nuevo proyecto”** card, consistent with the existing visual editor.
-- **Option A is the V1 direction:** a project detail may contain **up to five images** and a list of materials/finishes. The principal image is visually prominent. A visitor can inspect the gallery with the existing image viewer.
-- **Option B (image hotspots)** was discussed but is **deferred**. Do not implement it without a new design approval.
-- A project may show a category/type, title, description, editorial details, materials, and a contact CTA. Display location, company/client names, and project-specific claims **only with verified permission and accuracy**.
-- Spanish is the default content language. Existing source provides English and German routes; preserve those paths. Requirements for translations, missing-language fallback, and per-language SEO text must be verified during INVESTIGATE.
-- The public content must be independently reviewed/published; do not fabricate customer projects, photographs, completion claims, prices, product availability, or business participation.
-- Admin editing is **within the public page**, not in a second admin application or a cross-origin iframe. Editor actions must remain invisible and inaccessible to anonymous users and unauthorized roles.
-- The existing public products system may be reused for material/product references **only if investigation confirms an appropriate relationship**. Never link directly to private inventory or internal cost/stock information.
+### Implemented architecture
 
-### Current code versus what remains to be designed
+- Reuse the existing .NET modular monolith, SQL Server, public SSR site and administrative security model.
+- Keep public editorial projects independent of internal Projects, customers, inventory transactions and financial records.
+- Use `PublicProjectReader` on the API for published-only data and `PublicProjectsReader` on the public SSR site.
+- Reuse the existing public media storage and image validation pipeline.
+- Retain the existing localized routes:
+  - `/es/proyectos/{slug}`
+  - `/en/projects/{slug}`
+  - `/de/projekte/{slug}`
+- Project slugs remain stable after creation. Language switching preserves project context.
+- Use one project cover and up to five photographs in total, with localized alternative text.
+- Reuse the existing gallery/image viewer and contextual Administrator editing.
+- Use fixed project types and space classifications; do not create unnecessary category infrastructure.
+- Use material hotspots positioned relative to photographs, with a maximum of five tags per image.
+- Link hotspots to public Acabados products through `ProductId` and the current published slug.
+- Do not display product thumbnails inside the material-tag selector.
+- The backend currently requires a registered product-cover record for product selection and public product availability.
+- Retain the last published product name when a referenced product is deleted or unpublished; never expose unpublished product details.
+- Keep optimistic concurrency for individual material tags.
+- Offer keyboard-accessible numeric coordinates as an alternative to mouse/touch dragging in the tag editor; verify this interaction manually before publication.
+- Photograph metadata versions are not required for independent tag writes.
+- Keep Administrator authorization, antiforgery validation, publication filtering, upload limits and auditing.
 
-**Already in source:** localized listing/detail routes, SSR components, an example-only `PublicProjectCatalog`, placeholder cards/gallery, SEO helper, language switch behavior for known example slugs, and shared image viewer.
+### Explicitly excluded
 
-**Not established by this checkpoint as implemented:** persistent public-project entities, real published-project API, project management editor, image upload/delete for projects, verified production project content, project-specific database migration, or validated new indexing strategy. These require investigation, an approved plan, and tests.
+- Internal project/customer data exposure.
+- A second product catalog or independent material inventory.
+- A new tagging service, manually maintained product URLs or external translation API.
+- Unrelated application refactoring.
+- Production changes without separate approval.
 
-### Open design questions — resolve in INVESTIGATE, not by assumption
+## 8. Local completion and remaining release gates
 
-1. **Public persistence:** extend the existing public content model or introduce a minimal `PublicProject` read/write model? Which tables, translations, images, relations, slugs, uniqueness constraints, and indexes are justified?
-2. **Categories:** are a small set of editorial labels sufficient, or is a reusable category entity needed? Do **not** duplicate inventory/product taxonomy merely because both are named categories.
-3. **Materials:** descriptive list versus optional references to existing **published public catalog products**; what should happen if a product is unpublished or deleted?
-4. **Publication lifecycle:** create-and-publish confirmation, unpublish, edit, archive/delete, concurrency, and visibility on public routes. Reuse existing patterns where applicable rather than inventing drafts.
-5. **Images:** principal image, gallery (maximum five total), existing validated upload/storage/cleanup, ordering, localized alt text, and replacement behavior.
-6. **Localized URLs:** immutable shared slug versus language-specific slug; existing `SiteLinks.LanguagePath` assumes recognized example slugs. Define behavior before changing URLs.
-7. **Editorial data:** which real projects, images, participation descriptions, client permissions, and optional location details may legally and accurately be published?
-8. **Presentation:** should Projects reuse the Home/Finishes hero or keep the current header? Decide only after reviewing the existing visual hierarchy and owner's preference.
-9. **SEO:** metadata, canonical/hreflang, 404 for unknown slugs, performance, image sizes, accessible cards/gallery, and prelaunch `noindex,follow` handling.
-10. **Security:** Administrator authorization, antiforgery, concurrency, media access, audit events, error leakage, safe input/output, and anonymous published-only reads.
+**Completed locally:**
 
-## 8. Proposed work sequence (not authorization)
+Public-project persistence, administrative editing, photographs, material hotspots, public reading, localization, responsive presentation and routing verification.
 
-| Block | Target | Exit evidence |
-| --- | --- | --- |
-| `PUBLIC-PROJECTS-01-INVESTIGATE` | Inspect current repo, editor/catalog/media patterns, public routes, internal/public separation, and owner UX decisions | Written investigation + unresolved decisions; **no code** |
-| `PUBLIC-PROJECTS-01A` | Minimal public-project domain/schema and approved migration, if needed | Reviewed schema/constraints/indexes, focused SQL tests; no production migration |
-| `PUBLIC-PROJECTS-01B` | Secure admin mutations and published-only public reads, using established media pipeline | Auth/CSRF/validation/concurrency/publishing tests |
-| `PUBLIC-PROJECTS-01C` | Inline administration within public pages: contextual edit and add card, images and materials | Local admin/non-admin/anonymous UI smoke tests |
-| `PUBLIC-PROJECTS-01D` | SSR listing, detail, responsive gallery, locale navigation, SEO, link to Contact | ES/EN/DE, missing slug 404, published-only, mobile/desktop verification |
-| `PUBLIC-PROJECTS-01E` | Accessibility, privacy/content approval, security and performance verification, full regression | Release-candidate evidence; deployment remains separately gated |
+**Source-control status:**
 
-The block breakdown is **provisional**. After INVESTIGATE, collapse or reorder blocks if that reduces duplication and unnecessary complexity. Each implementation block still requires its own approved PLAN.
+At handoff preparation, 19 intended files were staged: 18 project source/test files and this checkpoint. Verify the actual committed state using Git.
+
+**Repository closure checks (verify against Git):**
+
+- Review the complete staged diff and updated checkpoint.
+- Re-run staged integrity and secret checks after documentation is added.
+- Commit and push only with owner approval.
+- Verify GitHub synchronization after pushing.
+
+**Still pending before production/public launch:**
+
+- Separate approval for production database changes and deployment.
+- Verification of production media persistence, authentication and health.
+- Review of actual project content, permissions and privacy requirements.
+- Final accessibility, performance and public SEO/indexing review.
+- Explicit approval before changing prelaunch access or `noindex` rules.
+
+The comprehensive codebase refactoring and duplicate-code removal remain a separate later workstream.
 
 ## 9. Verification and acceptance checklist
 
-### Engineering verification (after an approved implementation)
+### Local verification evidence — 2026-11-17
+
+**Owner-reported results:**
+
+- Full regression: **1,244 passed, 0 failed, 0 skipped**.
+- Full test run duration: 883.2 seconds; successful build reported in 896.9 seconds.
+- Broader Projects/hosting tests: **44 passed**.
+- Earlier focused tagging tests: **17 passed**. These are subsets, not additional independent tests.
+- HTTP routing: **7/7 passed** for published ES/EN/DE pages and missing project/API routes.
+- Public material-tag smoke tests: **6/6 passed**, including link behavior, editing, deletion, mobile usability and persistence.
+- Material-tag persistence was also verified after restarting localhost.
+- Selective Git staging: 18 project source/test files.
+- `git diff --cached --check`: passed.
+- Gitleaks 8.30.1 staged scan: no leaks reported; output indicated zero commits and approximately 39.81 KB inspected.
+- Four independent Gitleaks source/file scans: no leaks reported in the inspected targets.
+
+These results apply to the inspected local environment.
+
+They do not establish production readiness, complete security assurance or a separate Release-configuration build.
+
+### Engineering verification (for subsequent changes)
 
 From the repository root, run the commands appropriate to the approved block:
 
@@ -261,20 +307,20 @@ dotnet test tests/Revestik.Api.Tests/Revestik.Api.Tests.csproj --configuration R
 
 ## 10. Exact next-chat starting instruction
 
-**Start at `PUBLIC-PROJECTS-01-INVESTIGATE` only.**
+Resume from the **PUBLIC-PROJECTS-01 repository handoff**, not the original investigation phase.
 
-Read `AGENTS.md`, this checkpoint, the current `main` commit, relevant architecture/business/security/operations docs, and the existing `Projects.razor`, `ProjectDetail.razor`, `ProjectGallery.razor`, `PublicProjectCatalog.cs`, `SiteLinks.cs`, `PublicSeo.cs`, editor components, public catalog/media endpoints, EF configurations/migrations, and available tests.
+1. Read `AGENTS.md`, this checkpoint, the current Git status and staged diff.
+2. Preserve the verified implementation and existing architectural boundaries.
+3. Confirm the 19 intended files are staged or committed and the development configuration remains excluded.
+4. Review this checkpoint alongside the implementation.
+5. Validate the final diff, tests and security checks before a commit.
+6. Request explicit owner approval before committing and pushing.
+7. Verify local and remote commit identifiers match before considering repository handoff complete.
 
-Produce, **in Spanish**:
+Do not add new architecture, reopen completed Projects functionality, remove unrelated files, migrate production, deploy or enable public indexing as part of this handoff.
 
-1. What can be **reused unchanged**, what must be extended, and what is demonstrably placeholder or duplicated.
-2. The minimum feasible public-project data model, with alternatives and practical index/relationship considerations **without executing or creating a migration**.
-3. Security, privacy, localization, SEO, mobile, media, and test implications.
-4. The few consequential owner decisions needed before planning; present concrete UX alternatives where necessary.
-5. A proposed short phased PLAN with affected files and acceptance criteria **for approval only**.
+**Current state:**
 
-**Do not implement, generate source ZIPs, commit, push, migrate databases, deploy, or reopen completed Home/Finishes work during this investigation. STOP after the investigation and proposed plan.**
+Public Projects are functionally verified locally.
 
----
-
-**Checkpoint closure:** previous public-site workstreams are considered complete by the owner; the only active feature-development target is the public Projects portfolio. The GitHub HEAD above is the verified read baseline; local synchronization is owner-confirmed. Maintain this document as a compact working snapshot, not an accumulating history log.
+Repository synchronization must be verified from Git; production release remains separately gated.

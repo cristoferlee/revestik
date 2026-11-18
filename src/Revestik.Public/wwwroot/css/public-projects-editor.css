@@ -45,3 +45,64 @@
         white-space: normal;
     }
 }
+
+/* PUBLIC-PROJECTS-01C-UI02: reuse existing controls without changing Acabados. */
+.projects-index .featured-projects-grid > .revestik-product-add-card {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+}
+.projects-index .featured-projects-grid .revestik-product-add-button:focus-visible {
+    outline: 3px solid #99500a;
+    outline-offset: -4px;
+}
+
+/* The library's primary button sits outside the standard .revestik-editor-actions footer. */
+.revestik-editor-dialog[aria-labelledby="project-manager-title"] > .revestik-editor-fields > button.revestik-editor-primary {
+    justify-self: start;
+    padding: 9px 14px;
+    border: 1px solid #172331;
+    border-radius: 6px;
+    background: #172331;
+    color: #fff;
+    font: 600 14px/1.4 system-ui, sans-serif;
+}
+.revestik-editor-dialog[aria-labelledby="project-manager-title"] > .revestik-editor-fields > button.revestik-editor-primary:hover:not(:disabled) {
+    border-color: #24384b;
+    background: #24384b;
+}
+
+/* Wrap photo and library-row controls instead of pushing them beyond the dialog. */
+.revestik-editor-dialog[aria-labelledby="project-editor-title"] .revestik-product-image-row,
+.revestik-editor-dialog[aria-labelledby="project-manager-title"] .revestik-product-image-row {
+    flex-wrap: wrap;
+    min-width: 0;
+}
+.revestik-editor-dialog[aria-labelledby="project-editor-title"] .revestik-product-image-row > div {
+    flex: 1 1 180px;
+    min-width: 0;
+}
+.revestik-editor-dialog[aria-labelledby="project-editor-title"] .revestik-product-image-row > div input {
+    box-sizing: border-box;
+    max-width: 100%;
+}
+.revestik-editor-dialog[aria-labelledby="project-manager-title"] .revestik-product-image-row > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+    .revestik-editor-dialog[aria-labelledby="project-editor-title"] .revestik-product-image-row,
+    .revestik-editor-dialog[aria-labelledby="project-manager-title"] .revestik-product-image-row {
+        padding: 10px 0;
+        border-bottom: 1px solid #e0e4e8;
+        gap: 10px;
+    }
+    .revestik-editor-dialog[aria-labelledby="project-editor-title"] .revestik-product-image-row > button,
+    .revestik-editor-dialog[aria-labelledby="project-manager-title"] .revestik-product-image-row > button {
+        min-height: 44px;
+    }
+    .revestik-editor-dialog[aria-labelledby="project-editor-title"] .revestik-product-image-row > div {
+        flex-basis: calc(100% - 90px);
+    }
+}

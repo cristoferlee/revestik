@@ -5,7 +5,7 @@ namespace Revestik.Api.Tests.PublicProjects;
 public sealed class PublicProjectTagValidationTests
 {
     private static PublicProjectTagEndpoints.TagWrite Valid() =>
-        new(100, .33m, .20m, .54m, .26m, 0, "Piso 60x60", null, null, null, "version");
+        new(100, .33m, .20m, .54m, .26m, 0, "Piso 60x60", null, null, null);
 
     [Fact]
     public void ValidPositionsAndShortNamesAreAccepted()

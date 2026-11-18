@@ -1,4 +1,4 @@
-// PUBLIC-PROJECTS-01C.1 — authorized contextual editor only.
+// PUBLIC-PROJECTS-01D: authorized contextual controls for persisted projects.
 // API authorization, antiforgery, validation and concurrency remain server-side.
 let inserted = [];
 let active = false;
@@ -48,6 +48,26 @@ export function attach(dotnet) {
     const grid = document.querySelector('.projects-index .featured-projects-grid');
     if (!grid) return;
 
+    for (const card of grid.querySelectorAll('.featured-project[data-editor-project-id]')) {
+        const id = Number(card.dataset.editorProjectId);
+        if (!Number.isSafeInteger(id) || id <= 0) continue;
+        const actions = document.createElement('div');
+        actions.className = 'revestik-catalog-admin-actions';
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'revestik-catalog-action';
+        edit.textContent = '✎ Editar proyecto';
+        edit.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!active) return;
+            void dotnet.invokeMethodAsync('EditProjectAsync', id).catch(() => {});
+        });
+        actions.append(edit);
+        card.append(actions);
+        inserted.push(actions);
+    }
+
     const add = document.createElement('div');
     add.className = 'revestik-product-add-card';
     const button = action('+', () =>
@@ -60,8 +80,7 @@ export function attach(dotnet) {
     grid.append(add);
     inserted.push(add);
 
-    // Temporary inline management entry while the public gallery uses its
-    // illustrative preview data. 01D replaces this with per-project actions.
+    // Keep the manager in the page header; cards stay compact like Acabados.
     const manage = document.createElement('div');
     manage.className = 'revestik-projects-manage';
     const manageButton = document.createElement('button');
@@ -74,7 +93,9 @@ export function attach(dotnet) {
         void dotnet.invokeMethodAsync('ManageProjectsAsync').catch(() => {});
     });
     manage.append(manageButton);
-    grid.insertAdjacentElement('afterend', manage);
+    const heading = document.querySelector('.projects-index .projects-index-header');
+    if (heading) heading.append(manage);
+    else grid.insertAdjacentElement('beforebegin', manage);
     inserted.push(manage);
 }
 

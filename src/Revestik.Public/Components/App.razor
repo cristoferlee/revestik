@@ -20,6 +20,7 @@
     <meta name="color-scheme" content="light" />
     <link rel="icon" type="image/svg+xml" href="/assets/revestik-rk.svg" />
     <link rel="stylesheet" href="/css/public.css" />
+    <link rel="stylesheet" href="/css/public-projects.css?v=PROJECTS-01D-FIX01" />
     <link rel="stylesheet" href="/css/catalog.css?v=ACABADOS-RECOVERY-02" />
     @if (isEditingSite)
     {
@@ -27,13 +28,13 @@
     }
     @if (isEditingSite && currentPath.TrimEnd('/') == SiteLinks.Path(language, 1))
     {
-        <link rel="stylesheet" href="/css/public-project-tags-editor.css?v=PROJECTS-01C2" />
+        <link rel="stylesheet" href="/css/public-project-tags-editor.css?v=PROJECTS-01D-A11Y01" />
     }
     @if (isEditingSite && currentPath.TrimEnd('/') == SiteLinks.Path(language, 1))
     {
-        <link rel="stylesheet" href="/css/public-projects-editor.css?v=PROJECTS-01C-UI01" />
+        <link rel="stylesheet" href="/css/public-projects-editor.css?v=PROJECTS-01C-UI02" />
     }
-    @if (publicBase is not null && knownRoute && !isEditingSite)
+    @if (publicBase is not null && knownRoute && !isEditingSite && RequestContext?.Response.StatusCode != StatusCodes.Status404NotFound)
     {
         <link rel="canonical" href="@(publicBase + currentPath)" />
         @foreach (var alternate in new[] { "es", "en", "de" })

@@ -1,34 +1,82 @@
+@using Revestik.Public.Services
+@inject PublicProjectsReader Projects
+@inject NavigationManager Navigation
+
 <div class="featured-projects-grid">
-    @foreach (var project in PublicProjectCatalog.GetExamples(Language))
+    @foreach (var project in items)
     {
-        <article class="featured-project">
-            <a class="featured-project-link" href="@(SiteLinks.Path(Language, 1) + "/" + project.Slug)" aria-label="@project.Title">
-                <div class="featured-project-image" role="img" aria-label="@project.ImageLabel">
-                    <span class="featured-project-image-icon" aria-hidden="true">&#9633;</span>
-                    <span class="featured-project-image-label">@ImagePending</span>
+        var src = $"/api/public/projects/images/{project.CoverImageId}";
+        <article class="featured-project" data-editor-project-id="@project.Id" @key="project.Id">
+            <a class="featured-project-link" href="@(SiteLinks.Path(Language, 1) + "/" + Uri.EscapeDataString(project.Slug))" aria-label="@project.Name">
+                <div class="featured-project-image">
+                    <img class="revestik-project-preview-photo" src="@src" alt="@project.CoverAlt"
+                         loading="lazy" decoding="async" width="680" height="510" />
                 </div>
                 <div class="featured-project-description">
-                    <p class="featured-project-category">@project.Category</p>
-                    <h3>@project.Title</h3>
+                    <p class="featured-project-category">@ProjectTypeLabel.Get(project.TypeCode, Language)</p>
+                    <h3>@project.Name</h3>
                     <p>@project.Description</p>
                 </div>
             </a>
-            <PublicZoomAction Language="@Language"
-                              Gallery="@($"project-previews-{Language}")"
-                              ImageLabel="@project.ImageLabel"
-                              PlaceholderNote="@ImagePending" />
+            <PublicZoomAction Language="@Language" Gallery="@($"projects-{Language}")"
+                              ImageLabel="@project.CoverAlt" FullSrc="@src" />
         </article>
     }
 </div>
+@if (loadFailed)
+{
+    <p role="alert">@L("No se pudieron cargar los proyectos. Intentá de nuevo.", "Projects could not be loaded. Please try again.", "Projekte konnten nicht geladen werden. Bitte erneut versuchen.")</p>
+}
+else if (items.Count == 0 && !IsFeatured)
+{
+    <p>@L("Todavía no hay proyectos publicados.", "No projects have been published yet.", "Es wurden noch keine Projekte veröffentlicht.")</p>
+}
+@if (!IsFeatured && !loadFailed && total > pageSize)
+{
+    <nav class="catalog-pagination" aria-label="@L("Páginas de proyectos", "Project pages", "Projektseiten")">
+        @if (CurrentPage > 1)
+        {
+            <a href="@(SiteLinks.Path(Language, 1) + "?page=" + (CurrentPage - 1))">← @L("Anterior", "Previous", "Zurück")</a>
+        }
+        <span>@CurrentPage / @((total + pageSize - 1) / pageSize)</span>
+        @if (CurrentPage * pageSize < total)
+        {
+            <a href="@(SiteLinks.Path(Language, 1) + "?page=" + (CurrentPage + 1))">@L("Siguiente", "Next", "Weiter") →</a>
+        }
+    </nav>
+}
 
 @code {
-    [Parameter, EditorRequired]
-    public string Language { get; set; } = "es";
+    [Parameter, EditorRequired] public string Language { get; set; } = "es";
+    [Parameter] public int Page { get; set; } = 1;
+    private readonly List<ProjectPreviewDto> items = [];
+    private int total;
+    private int pageSize = 12;
+    private bool loadFailed;
+    private bool IsFeatured => SiteLinks.PageFromUri(Navigation.Uri) == 0;
+    private int CurrentPage => Math.Clamp(Page, 1, 10000);
+    private string L(string es, string en, string de) => Language switch { "en" => en, "de" => de, _ => es };
 
-    private string ImagePending => Language switch
+    protected override async Task OnParametersSetAsync()
     {
-        "en" => "Image pending approval",
-        "de" => "Bild muss noch freigegeben werden",
-        _ => "Imagen pendiente de aprobación"
-    };
+        items.Clear();
+        total = 0;
+        loadFailed = false;
+        try
+        {
+            if (IsFeatured)
+            {
+                items.AddRange(await Projects.Featured(Language));
+            }
+            else
+            {
+                var result = await Projects.List(Language, CurrentPage);
+                items.AddRange(result.Items);
+                total = result.Total;
+                pageSize = Math.Max(1, result.PageSize);
+            }
+        }
+        catch (HttpRequestException) { loadFailed = true; }
+        catch (TaskCanceledException) { loadFailed = true; }
+    }
 }

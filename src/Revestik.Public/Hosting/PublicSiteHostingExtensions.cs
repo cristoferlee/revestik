@@ -26,6 +26,11 @@ public static class PublicSiteHostingExtensions
             client.BaseAddress = PublicApiAddress(configuration, environment);
             client.Timeout = TimeSpan.FromSeconds(10);
         });
+        services.AddHttpClient<PublicProjectsReader>(client =>
+        {
+            client.BaseAddress = PublicApiAddress(configuration, environment);
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
         return services;
     }
 
@@ -56,8 +61,8 @@ public static class PublicSiteHostingExtensions
         return origin;
     }
 
-    // Preserve the existing real 404 behavior for demonstration projects in
-    // both hosts, without routing any private project resources to the site.
+    // An unknown or unpublished project must retain an actual HTTP 404.
+    // Resolve using only the anonymous, published-only API; never use internal projects.
     public static IApplicationBuilder UseRevestikPublicProjectStatus(this IApplicationBuilder app)
     {
         app.Use(async (context, next) =>
@@ -67,12 +72,32 @@ public static class PublicSiteHostingExtensions
             if (segments is { Length: 3 } &&
                 ((segments[0] == "es" && segments[1] == "proyectos") ||
                  (segments[0] == "en" && segments[1] == "projects") ||
-                 (segments[0] == "de" && segments[1] == "projekte")) &&
-                !PublicProjectCatalog.IsKnownSlug(segments[2]))
+                 (segments[0] == "de" && segments[1] == "projekte")))
             {
-                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                if (!SiteLinks.IsProjectSlug(segments[2]))
+                {
+                    context.Response.StatusCode = StatusCodes.Status404NotFound;
+                }
+                else
+                {
+                    try
+                    {
+                        var reader = context.RequestServices.GetRequiredService<PublicProjectsReader>();
+                        if (await reader.Detail(segments[2], segments[0], context.RequestAborted) is null)
+                            context.Response.StatusCode = StatusCodes.Status404NotFound;
+                    }
+                    catch (HttpRequestException)
+                    {
+                        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                        return;
+                    }
+                    catch (TaskCanceledException) when (!context.RequestAborted.IsCancellationRequested)
+                    {
+                        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                        return;
+                    }
+                }
             }
-
             await next(context);
         });
         return app;

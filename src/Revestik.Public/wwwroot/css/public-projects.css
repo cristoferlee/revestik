@@ -1,0 +1,113 @@
+/* PUBLIC-PROJECTS-01D: published project imagery and material positions. */
+.featured-project-image { overflow: hidden; padding: 0; }
+.featured-project-image > .revestik-project-preview-photo {
+    display: block; width: 100%; height: 100%; min-height: 235px;
+    aspect-ratio: 4 / 3; object-fit: cover;
+}
+.project-detail-photos { align-items: start; }
+.revestik-project-photo-stage { position: relative; min-width: 0; width: 100%; border-radius: 8px; overflow: hidden; background: #172331; }
+.project-detail-photos > .revestik-project-photo-stage.is-cover { grid-column: 1 / -1; }
+.revestik-project-photo-stage > .project-detail-photo {
+    position: absolute; inset: 0; width: 100%; height: 100%; padding: 0;
+    display: block; border-radius: 8px; overflow: hidden; aspect-ratio: auto;
+}
+.revestik-project-photo-stage > .project-detail-photo:hover { transform: none; box-shadow: none; }
+.revestik-project-photo-stage > .project-detail-photo img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.revestik-project-photo-stage .public-photo-zoom {
+    display: flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+    right: 10px; bottom: 10px; border-radius: 8px; background: #172331bb; color: white;
+}
+.revestik-project-tag-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.revestik-project-tag-lines line { stroke: white; stroke-width: 2; vector-effect: non-scaling-stroke; filter: drop-shadow(0 1px 2px #000b); }
+.revestik-project-tag-lines circle { fill: #fff; stroke: none; }
+.revestik-project-tag-overlays { position: absolute; inset: 0; pointer-events: none; }
+.revestik-project-tag-pill {
+    pointer-events: auto; position: absolute; transform: translate(-50%, -50%); z-index: 2;
+    display: inline-flex; align-items: center; justify-content: center;
+    max-width: 32%; padding: 7px 10px; color: #111820; background: #fff;
+    border: 1.5px solid #bf912d; border-radius: 18px; text-align: center;
+    font: 600 12px/1.35 system-ui, sans-serif; overflow-wrap: anywhere;
+    box-shadow: 0 2px 10px #0005;
+}
+.revestik-project-tag-pill:hover { background: #fffaf0; }
+.revestik-project-tag-pill:focus-visible { outline: 3px solid #f6d184; outline-offset: 3px; }
+.revestik-project-tag-pill.is-unavailable { background: #f7f7f7; color: #374151; border-color: #bf912d; }
+.revestik-project-mobile-tags { display: none; }
+@media (max-width: 860px) {
+    .project-detail-photos { grid-template-columns: minmax(0, 1fr); }
+    .revestik-project-tag-lines, .revestik-project-tag-overlays { display: none; }
+    .revestik-project-mobile-tags { display: flex; flex-direction: column; gap: 7px; margin: 0; padding: 8px 0 16px 23px; }
+    .revestik-project-mobile-tags li { line-height: 1.5; font-size: .87rem; overflow-wrap: anywhere; }
+    .revestik-project-mobile-tags a { text-decoration: underline; text-underline-offset: 3px; color: #99500a; }
+    .project-detail-photos > .revestik-project-photo-stage.is-cover { grid-column: auto; }
+}
+@media (max-width: 600px) {
+    .featured-project-image > .revestik-project-preview-photo { min-height: 220px; }
+}
+
+/* PUBLIC-PROJECTS-01D-FIX01: apply the existing Acabados card rhythm to Projects. */
+.projects-index .featured-projects-grid {
+    grid-template-columns: repeat(auto-fill, minmax(172px, 220px));
+    gap: 22px;
+    justify-content: start;
+    align-items: start;
+}
+.projects-index .featured-project {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    width: 100%;
+}
+.projects-index .featured-project-link { height: auto; }
+.projects-index .featured-project-image,
+.projects-index .featured-project-image > .revestik-project-preview-photo {
+    min-height: 0;
+    aspect-ratio: 4 / 3;
+}
+.projects-index .featured-project-description { padding: 12px 2px 0; }
+.projects-index .featured-project-description h3 { font-size: 1.06rem; }
+.projects-index .featured-project-description > p:last-child {
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+.projects-index .featured-project .revestik-catalog-admin-actions {
+    margin-top: 10px;
+    padding: 0;
+    gap: 6px;
+}
+.projects-index .featured-project .revestik-catalog-admin-actions button {
+    min-height: 36px;
+    font-size: 12px;
+}
+.projects-index .featured-projects-grid > .revestik-product-add-card {
+    align-self: stretch;
+    min-width: 0;
+    min-height: 220px;
+    width: 100%;
+    max-width: none;
+}
+.projects-index .revestik-projects-manage {
+    margin-top: 18px;
+    padding: 0;
+}
+.projects-index .revestik-projects-manage .revestik-catalog-action {
+    min-height: 40px;
+    font-size: 12px;
+}
+@media (max-width: 530px) {
+    .projects-index .featured-projects-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 15px;
+    }
+    .projects-index .featured-project-image,
+    .projects-index .featured-project-image > .revestik-project-preview-photo {
+        min-height: 0;
+    }
+    .projects-index .featured-projects-grid > .revestik-product-add-card {
+        min-height: 200px;
+    }
+    .projects-index .featured-projects-grid .revestik-product-add-button { min-height: 200px; }
+}
+@media (max-width: 350px) {
+    .projects-index .featured-projects-grid { grid-template-columns: minmax(0, 1fr); }
+}

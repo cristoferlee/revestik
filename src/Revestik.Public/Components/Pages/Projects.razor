@@ -8,7 +8,7 @@
 }
 <PageTitle>@seo.Title</PageTitle>
 <HeadContent>
-    <meta name="description" content="@seo.Description" />
+    <meta name="description" content="@Description(lang)" />
     <meta name="robots" content="noindex,follow" />
 </HeadContent>
 <main id="main" class="subpage projects-index">
@@ -16,18 +16,26 @@
         <header class="projects-index-header">
             <p class="eyebrow">REVESTIK &middot; COSTA RICA</p>
             <h1>@seo.Heading</h1>
-            <p class="projects-index-intro">@GetIntroduction(lang)</p>
+            <p class="projects-index-intro">@Introduction(lang)</p>
         </header>
-        <ProjectGallery Language="@lang" />
+        <ProjectGallery Language="@lang" Page="@(Page ?? 1)" />
     </div>
 </main>
 
 @code {
-    // Explicitly identify the entries as examples until projects are reviewed and published.
-    private static string GetIntroduction(string language) => language switch
+    [SupplyParameterFromQuery(Name = "page")] public int? Page { get; set; }
+
+    private static string Introduction(string language) => language switch
     {
-        "en" => "Explore illustrative project categories. Photographs and details of verified projects will appear here after approval.",
-        "de" => "Entdecken Sie beispielhafte Projektkategorien. Fotos und Details geprüfter Projekte folgen nach Freigabe.",
-        _ => "Explorá nuestras categorías de proyectos de ejemplo. Las fotografías y los detalles de obras verificadas se publicarán después de su aprobación."
+        "en" => "Explore selected published projects and discover the materials used in their spaces.",
+        "de" => "Entdecken Sie ausgewählte veröffentlichte Projekte und die verwendeten Materialien.",
+        _ => "Explorá nuestros proyectos publicados y conocé los materiales utilizados en sus espacios."
+    };
+
+    private static string Description(string language) => language switch
+    {
+        "en" => "Explore published REVESTIK projects, photographs and selected architectural finishes in Costa Rica.",
+        "de" => "Entdecken Sie veröffentlichte REVESTIK-Projekte, Fotos und ausgewählte Oberflächen in Costa Rica.",
+        _ => "Conocé proyectos publicados, fotografías y acabados seleccionados de REVESTIK en Costa Rica."
     };
 }

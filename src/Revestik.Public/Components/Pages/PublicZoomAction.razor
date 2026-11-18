@@ -3,6 +3,7 @@
         class="public-zoom-action"
         data-public-image
         data-gallery="@Gallery"
+        data-full-src="@FullSrc"
         data-image-label="@ImageLabel"
         data-placeholder-note="@PlaceholderNote"
         aria-haspopup="dialog"
@@ -15,7 +16,8 @@
     [Parameter, EditorRequired] public string Language { get; set; } = "es";
     [Parameter, EditorRequired] public string Gallery { get; set; } = string.Empty;
     [Parameter, EditorRequired] public string ImageLabel { get; set; } = string.Empty;
-    [Parameter, EditorRequired] public string PlaceholderNote { get; set; } = string.Empty;
+    [Parameter] public string PlaceholderNote { get; set; } = string.Empty;
+    [Parameter] public string? FullSrc { get; set; }
 
     private static string GetZoomLabel(string language, string label) => language switch
     {

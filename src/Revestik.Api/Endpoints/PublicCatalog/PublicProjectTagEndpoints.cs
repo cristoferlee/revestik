@@ -20,7 +20,7 @@ public static class PublicProjectTagEndpoints
     public sealed record TagWrite(int? ProductId,
         decimal AnchorX, decimal AnchorY, decimal LabelX, decimal LabelY,
         int DisplayOrder, string? CustomLabelEs, string? CustomLabelEn,
-        string? CustomLabelDe, string? Version, string? ImageVersion);
+        string? CustomLabelDe, string? Version);
 
     public static IEndpointRouteBuilder MapPublicProjectTagEndpoints(this IEndpointRouteBuilder app)
     {
@@ -137,15 +137,14 @@ public static class PublicProjectTagEndpoints
     private static async Task<IResult> CreateTag(int imageId, TagWrite input,
         RevestikDbContext db, ClaimsPrincipal user, CancellationToken ct)
     {
-        if (!ValidTagWrite(input) || input.ProductId is not > 0 ||
-            string.IsNullOrWhiteSpace(input.ImageVersion))
-            return Bad("A published public-catalog product and a current image version are required.");
+        if (!ValidTagWrite(input) || input.ProductId is not > 0)
+            return Bad("A published public-catalog product is required.");
         try
         {
             await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
             var image = await db.Set<PublicProjectImage>().SingleOrDefaultAsync(i => i.Id == imageId, ct);
             if (image is null) return Results.NotFound();
-            if (!Matches(input.ImageVersion, image.RowVersion)) return Conflict("Photograph changed. Reload.");
+
             if (!await HasTagCapacityAsync(db, imageId, ct))
                 return Bad("A photograph supports at most five material tags.");
             var product = await SelectableProducts(db).Include(p => p.Translations)
@@ -168,15 +167,14 @@ public static class PublicProjectTagEndpoints
     private static async Task<IResult> UpdateTag(int imageId, int tagId, TagWrite input,
         RevestikDbContext db, ClaimsPrincipal user, CancellationToken ct)
     {
-        if (!ValidTagWrite(input) || string.IsNullOrWhiteSpace(input.Version) ||
-            string.IsNullOrWhiteSpace(input.ImageVersion))
+        if (!ValidTagWrite(input) || string.IsNullOrWhiteSpace(input.Version))
             return Bad("Invalid material tag or concurrency version.");
         try
         {
             await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
             var image = await db.Set<PublicProjectImage>().SingleOrDefaultAsync(i => i.Id == imageId, ct);
             if (image is null) return Results.NotFound();
-            if (!Matches(input.ImageVersion, image.RowVersion)) return Conflict("Photograph changed. Reload.");
+
             var tag = await db.Set<PublicProjectImageTag>()
                 .SingleOrDefaultAsync(t => t.Id == tagId && t.ImageId == imageId, ct);
             if (tag is null) return Results.NotFound();

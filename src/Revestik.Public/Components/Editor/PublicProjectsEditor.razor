@@ -6,7 +6,7 @@
 
 @if (tagImage is { } selectedImage)
 {
-    <PublicProjectTagEditor @key="selectedImage.Id" ImageId="selectedImage.Id" ImageVersion="selectedImage.Version"
+    <PublicProjectTagEditor @key="selectedImage.Id" ImageId="selectedImage.Id"
                             OnClose="CloseTagEditor" OnCountChanged="TagCountChanged" />
 }
 else if (managing)
@@ -227,7 +227,7 @@ else if (project is not null)
         try
         {
             if (!await IsAdministratorAsync()) return;
-            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/public-projects-editor.js?v=PROJECTS-01C1");
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/public-projects-editor.js?v=PROJECTS-01D-FIX01");
             callback = DotNetObjectReference.Create(this);
             await module.InvokeVoidAsync("attach", callback);
         }
@@ -287,7 +287,8 @@ else if (project is not null)
         await LoadLibraryAsync();
     }
 
-    private async Task EditProjectAsync(int id)
+    [JSInvokable]
+    public async Task EditProjectAsync(int id)
     {
         if (busy || module is null || !await IsAdministratorAsync()) return;
         busy = true; error = null;
@@ -363,18 +364,44 @@ else if (project is not null)
         }
     }
 
-    private void BeginTagEditor(ProjectImage image)
+    private async Task BeginTagEditor(ProjectImage image)
     {
-        if (busy || project is null || project.Id <= 0 || removedImages.Contains(image.Id)) return;
-        tagImage = image;
+        if (busy || module is null || project is null || project.Id <= 0 ||
+            removedImages.Contains(image.Id)) return;
+        busy = true;
         error = null;
+        try
+        {
+            // Read the current photo rowversion without modifying unsaved project changes.
+            var latest = await module.InvokeAsync<ProjectData>("getProject", project.Id);
+            var latestImage = latest.Images.FirstOrDefault(i => i.Id == image.Id);
+            if (latestImage is null)
+            {
+                error = "La fotografía ya no está disponible. Recargá el proyecto.";
+                return;
+            }
+            tagImage = latestImage;
+        }
+        catch (JSException)
+        {
+            error = "No se pudo consultar la versión actual de la fotografía. Volvé a intentarlo.";
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private void CloseTagEditor() => tagImage = null;
 
     private void TagCountChanged(int count)
     {
-        if (tagImage is not null) tagImage.TagCount = count;
+        if (tagImage is null) return;
+        tagImage.TagCount = count;
+        // Update the visible count, not the image concurrency token on the unsaved form.
+        var inForm = project?.Images.FirstOrDefault(i => i.Id == tagImage.Id);
+        if (inForm is not null) inForm.TagCount = count;
     }
 
     private void AskRemoveImage(int id)
@@ -459,6 +486,7 @@ else if (project is not null)
             stagedImages.Clear(); removedImages.Clear();
             project = null; confirmSave = false; managing = true;
             await LoadLibraryAsync();
+            await module.InvokeVoidAsync("refreshPage");
         }
         catch (JSException) { error = "No se pudo guardar. Revisá los datos o actualizá si hubo cambios simultáneos."; }
         finally { busy = false; await InvokeAsync(StateHasChanged); }
@@ -489,6 +517,7 @@ else if (project is not null)
                 confirmationItem.Version, !confirmationItem.IsPublished);
             confirmationItem = null; managing = true;
             await LoadLibraryAsync();
+            await module.InvokeVoidAsync("refreshPage");
         }
         catch (JSException) { error = "No se pudo completar. Es posible que el proyecto haya cambiado; recargá."; }
         finally { busy = false; await InvokeAsync(StateHasChanged); }

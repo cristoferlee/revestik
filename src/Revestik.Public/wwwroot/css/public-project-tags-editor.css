@@ -30,3 +30,152 @@
 .revestik-tags-selection { overflow-wrap: anywhere; }
 .revestik-tags-confirm { border: 1px solid #bc7373; border-radius: 8px; padding: .8rem; }
 @media (max-width: 800px) { .revestik-tags-layout { grid-template-columns: 1fr; } .revestik-tags-dialog { width: 96vw; } .revestik-tags-canvas > img { max-height: 46vh; } }
+
+/* PUBLIC-PROJECTS-01C-UI02: dialog sizing and touch targets, scoped to tags. */
+.revestik-tags-dialog {
+    width: min(100%, 1120px);
+    max-width: 100%;
+    min-width: 0;
+}
+.revestik-tags-dialog button.revestik-editor-primary {
+    padding: 9px 14px;
+    border: 1px solid #172331;
+    border-radius: 6px;
+    color: #fff;
+    background: #172331;
+    font: 600 14px/1.4 system-ui, sans-serif;
+}
+.revestik-tags-dialog button.revestik-editor-primary:hover:not(:disabled) {
+    border-color: #24384b;
+    background: #24384b;
+}
+.revestik-tags-dialog button:focus-visible {
+    outline: 3px solid #99500a;
+    outline-offset: 2px;
+}
+.revestik-tags-side,
+.revestik-tags-heading-row,
+.revestik-tags-form {
+    min-width: 0;
+}
+.revestik-tags-search button {
+    min-height: 44px;
+}
+@media (max-width: 800px) {
+    .revestik-tags-dialog { width: 100%; }
+}
+@media (max-width: 600px) {
+    .revestik-tags-dialog {
+        max-height: calc(100dvh - 32px);
+    }
+    .revestik-tags-handle-anchor {
+        width: 44px;
+        height: 44px;
+    }
+    .revestik-tags-handle-label,
+    .revestik-tags-existing {
+        min-height: 44px;
+    }
+    .revestik-tags-heading-row > button,
+    .revestik-tags-list-row button,
+    .revestik-tags-form .revestik-editor-actions > button {
+        min-height: 44px;
+    }
+    .revestik-tags-coordinates input {
+        box-sizing: border-box;
+        min-width: 0;
+    }
+}
+@media (max-width: 380px) {
+    .revestik-tags-coordinates {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* PUBLIC-PROJECTS-01D-FIX01: simplify spatial tagging; coordinates stay in the model. */
+.revestik-tags-layout {
+    grid-template-columns: minmax(0, 1.65fr) minmax(270px, 1fr);
+}
+.revestik-tags-canvas {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    margin: 0 auto;
+}
+.revestik-tags-canvas > img {
+    width: 100%;
+    height: auto;
+    max-height: none;
+}
+.revestik-tags-lines line,
+.revestik-tags-lines line[data-tag-draft-line] {
+    stroke: #fff;
+    stroke-width: 1.6;
+    stroke-dasharray: none;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.65));
+}
+/* The dragging area remains finger-sized; the visible target is only a white dot. */
+.revestik-tags-handle-anchor {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    font-size: 0;
+}
+.revestik-tags-handle-anchor::before {
+    content: "";
+    display: block;
+    width: 10px;
+    height: 10px;
+    margin: auto;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 1px 4px rgba(0,0,0,.7);
+}
+.revestik-tags-existing-anchor {
+    width: 10px;
+    height: 10px;
+    border: none;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.7);
+}
+.revestik-tags-handle-label,
+.revestik-tags-existing {
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1.5px solid #bf912d;
+    border-radius: 14px;
+    background: #fff;
+    color: #111820;
+    font-weight: 650;
+    box-shadow: 0 2px 8px rgba(0,0,0,.18);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+.revestik-tags-handle-label:hover,
+.revestik-tags-existing:hover {
+    background: #fffaf0;
+}
+/* Keyboard placement is an optional collapsed alternative to touch and mouse dragging. */
+.revestik-tags-keyboard { margin: .75rem 0; }
+.revestik-tags-keyboard summary { cursor: pointer; font-weight: 600; }
+.revestik-tags-keyboard .revestik-tags-coordinates { display: grid; margin-top: .5rem; }
+.revestik-tags-keyboard input:focus-visible { outline: 3px solid #99500a; outline-offset: 2px; }
+.revestik-tags-form .revestik-tags-note { margin: 0; }
+.revestik-tags-selection { margin: 0; }
+.revestik-tags-success {
+    color: #186238;
+    border: 1px solid #aad6bd;
+    background: #edf8f0;
+    border-radius: 6px;
+    padding: 9px 12px;
+}
+.revestik-tags-hint { color: #68512a; font-size: .86rem; line-height: 1.5; }
+@media (max-width: 800px) {
+    .revestik-tags-layout { grid-template-columns: minmax(0, 1fr); }
+    .revestik-tags-dialog { width: 100%; }
+    .revestik-tags-canvas > img { max-height: none; }
+}

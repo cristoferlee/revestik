@@ -1,5 +1,7 @@
 using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Revestik.Public.Services;
 
 namespace Revestik.Api.Tests.Hosting;
 
@@ -44,13 +46,53 @@ public sealed class PublicSiteHostingTests(ProductionHttpHostFixture fixture)
     [Fact]
     public async Task UnknownExampleProject_RetainsNotFoundStatus()
     {
-        using var client = fixture.Factory.CreateClient(new WebApplicationFactoryClientOptions
+        // The production app uses loopback HTTP; TestServer has no listener on
+        // that port. Stub only the public project reader's HTTP transport.
+        using var factory = CreateProjectHost(simulateOutage: false);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             BaseAddress = new Uri("https://localhost"),
             AllowAutoRedirect = false
         });
         using var response = await client.GetAsync("/es/proyectos/inexistente-prueba-404");
+
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UnknownExampleProject_PublicApiUnavailable_ReturnsServiceUnavailable()
+    {
+        using var factory = CreateProjectHost(simulateOutage: true);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost"),
+            AllowAutoRedirect = false
+        });
+        using var response = await client.GetAsync("/es/proyectos/inexistente-prueba-404");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    private static RevestikWebApplicationFactory CreateProjectHost(bool simulateOutage) =>
+        new("Production", customizeTestServices: services =>
+            services.AddHttpClient<PublicProjectsReader>()
+                .ConfigurePrimaryHttpMessageHandler(() =>
+                    new ProjectDetailHttpHandler(simulateOutage)));
+
+    private sealed class ProjectDetailHttpHandler(bool simulateOutage) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal(HttpMethod.Get, request.Method);
+            Assert.Equal("/api/public/projects/inexistente-prueba-404", request.RequestUri?.AbsolutePath);
+            Assert.Equal("?language=es", request.RequestUri?.Query);
+
+            if (simulateOutage)
+                throw new HttpRequestException("Simulated public projects API outage.");
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
     }
 
     [Fact]
