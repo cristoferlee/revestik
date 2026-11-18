@@ -1,0 +1,18 @@
+/* PUBLIC-AUTH-01C: compact controls in the existing public header. */
+.public-auth-controls { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.public-auth-login,
+.public-auth-logout { appearance: none; display: inline-flex; align-items: center; justify-content: center; padding: 9px 11px; border: 1px solid #d1d5db; border-radius: 5px; background: #fff; color: #1f2937; font: inherit; font-size: 12px; font-weight: 700; line-height: 1.35; text-decoration: none; white-space: nowrap; cursor: pointer; }
+.public-auth-login:hover, .public-auth-logout:hover { background: #f3f4f6; border-color: #9ca3af; }
+.public-auth-logout:disabled { opacity: .55; cursor: wait; }
+.public-auth-identity { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 650; max-width: 155px; min-width: 0; }
+.public-auth-identity > span:first-child { color: #15803d; font-size: 9px; }
+.public-auth-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.public-auth-feedback { font-size: 12px; color: #991b1b; }
+.public-auth-feedback:empty { display: none; }
+.public-auth-error { position: absolute; top: calc(100% + 2px); right: 16px; z-index: 21; color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; border-radius: 5px; padding: 10px 16px; margin: 0; max-width: min(90vw, 380px); font-size: 13px; }
+@media (max-width: 1220px) { .public-auth-identity { max-width: 110px; } }
+@media (max-width: 640px) {
+  .public-auth-controls { flex-wrap: nowrap; }
+  .public-auth-login, .public-auth-logout { padding: 8px; font-size: 11px; }
+  .public-auth-identity { max-width: 100px; }
+}

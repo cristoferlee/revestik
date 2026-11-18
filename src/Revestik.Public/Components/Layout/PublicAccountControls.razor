@@ -1,0 +1,73 @@
+@using System.Security.Claims
+@using Microsoft.AspNetCore.WebUtilities
+@using Microsoft.Extensions.Configuration
+@using Microsoft.Extensions.Hosting
+@inject NavigationManager Navigation
+@inject IConfiguration Configuration
+@inject IHostEnvironment HostEnvironment
+@{
+    var language = Locale.FromUri(Navigation.Uri);
+    var labels = GetLabels(language);
+    var principal = RequestContext?.User;
+    var signedIn = principal?.Identity?.IsAuthenticated == true;
+    var email = principal?.FindFirstValue(ClaimTypes.Email) ?? principal?.Identity?.Name ?? labels.Account;
+    var publicLoginEnabled = !HostEnvironment.IsProduction() &&
+        Configuration.GetValue<bool>("Authentication:PublicGoogleRegistrationEnabled");
+    var query = QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);
+    var errorCode = query.TryGetValue("authError", out var errorValues)
+        ? errorValues.ToString()
+        : string.Empty;
+}
+@if (signedIn || publicLoginEnabled)
+{
+    <div class="public-auth-controls">
+        @if (signedIn)
+        {
+            <span class="public-auth-identity" title="@email" aria-label="@($"{labels.Account}: {email}")">
+                <span aria-hidden="true">&#9679;</span>
+                <span class="public-auth-email">@email</span>
+            </span>
+            <button type="button" class="public-auth-logout" data-public-logout
+                    data-error-text="@labels.LogoutError">
+                @labels.Logout
+            </button>
+            <span class="public-auth-feedback" role="status" aria-live="polite" data-public-auth-feedback></span>
+        }
+        else
+        {
+            <a class="public-auth-login" href="@($"/api/auth/public/login/google?language={language}")"
+               data-enhance-nav="false">@labels.Login</a>
+        }
+    </div>
+}
+@if (!string.IsNullOrWhiteSpace(errorCode))
+{
+    <p class="public-auth-error" role="alert">@GetErrorText(language, errorCode)</p>
+}
+
+@code {
+    [CascadingParameter] private HttpContext? RequestContext { get; set; }
+
+    private static (string Account, string Login, string Logout, string LogoutError) GetLabels(string language) =>
+        language switch
+        {
+            "en" => ("Account", "Sign in with Google", "Sign out", "Unable to sign out. Please try again."),
+            "de" => ("Konto", "Mit Google anmelden", "Abmelden", "Abmeldung fehlgeschlagen. Bitte erneut versuchen."),
+            _ => ("Cuenta", "Entrar con Google", "Salir", "No se pudo cerrar la sesión. Intentá nuevamente.")
+        };
+
+    private static string GetErrorText(string language, string code)
+    {
+        var conflict = code == "account_conflict";
+        var disabled = code == "account_disabled";
+        return language switch
+        {
+            "en" => conflict ? "This Google account cannot be linked to an existing account." :
+                disabled ? "This account is disabled." : "Google sign-in could not be completed.",
+            "de" => conflict ? "Dieses Google-Konto kann nicht mit einem bestehenden Konto verknüpft werden." :
+                disabled ? "Dieses Konto ist deaktiviert." : "Die Anmeldung mit Google konnte nicht abgeschlossen werden.",
+            _ => conflict ? "Esta cuenta de Google no se puede vincular a una cuenta existente." :
+                disabled ? "Esta cuenta está desactivada." : "No se pudo completar el inicio de sesión con Google."
+        };
+    }
+}

@@ -10,6 +10,9 @@ public static class RoleNames
 
     public const string Warehouse = "Warehouse";
 
+    // Public site identity only. Never include in employee-role policies.
+    public const string PublicCustomer = "PublicCustomer";
+
     public static readonly string[] All =
     [
         Administrator,

@@ -118,4 +118,21 @@ public sealed class PublicCatalogEndpointAuthorizationTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Fact]
+    public async Task PublicCustomer_CanReadPublishedCatalog_ButNotEditorData()
+    {
+        using var factory = new RevestikWebApplicationFactory("Development");
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add(
+            TestAuthenticationHandler.UserHeaderName, "public-catalog-auth-test");
+        client.DefaultRequestHeaders.Add(
+            TestAuthenticationHandler.RoleHeaderName, "PublicCustomer");
+
+        using var publicResponse = await client.GetAsync("/api/public/catalog/categories");
+        Assert.Equal(HttpStatusCode.OK, publicResponse.StatusCode);
+
+        using var adminResponse = await client.GetAsync("/api/admin/public-catalog/products");
+        Assert.Equal(HttpStatusCode.Forbidden, adminResponse.StatusCode);
+    }
+
 }

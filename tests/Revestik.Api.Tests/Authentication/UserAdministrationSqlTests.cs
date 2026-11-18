@@ -132,4 +132,43 @@ public sealed class UserAdministrationSqlTests : IClassFixture<SqlServerIntegrat
         Assert.Equal(400, error.StatusCode);
         Assert.Null(await users.FindByEmailAsync(email));
     }
+
+    [Fact]
+    public async Task PublicOnlyIdentityUser_IsNotAnEmployeeAdministrationRecord()
+    {
+        await using var provider = BuildServices();
+        await using var scope = provider.CreateAsyncScope();
+        var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var service = scope.ServiceProvider.GetRequiredService<UserAdministrationService>();
+        await EnsureRolesAsync(roles);
+        if (!await roles.RoleExistsAsync("PublicCustomer"))
+            Assert.True((await roles.CreateAsync(new IdentityRole("PublicCustomer"))).Succeeded);
+
+        var email = $"public-only-{Guid.NewGuid():N}@example.test";
+        var publicUser = new ApplicationUser
+        {
+            UserName = email,
+            Email = email,
+            EmailConfirmed = true,
+            DisplayName = "Public test account",
+            IsActive = true
+        };
+        Assert.True((await users.CreateAsync(publicUser)).Succeeded);
+        Assert.True((await users.AddToRoleAsync(publicUser, "PublicCustomer")).Succeeded);
+
+        var employeeRecords = await service.ListAsync(CancellationToken.None);
+        Assert.DoesNotContain(employeeRecords, u => u.Id == publicUser.Id);
+        Assert.Null(await service.GetAsync(publicUser.Id, CancellationToken.None));
+
+        var error = await Assert.ThrowsAsync<UserAdministrationException>(() =>
+            service.UpdateAsync(publicUser.Id, new UpdateManagedUserRequest
+            {
+                DisplayName = "Public test account",
+                IsActive = true,
+                Role = RoleNames.Sales,
+                Version = publicUser.ConcurrencyStamp ?? string.Empty
+            }, "internal-admin", CancellationToken.None));
+        Assert.Equal(409, error.StatusCode);
+    }
 }

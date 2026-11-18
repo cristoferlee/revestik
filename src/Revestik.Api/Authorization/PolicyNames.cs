@@ -2,6 +2,10 @@ namespace Revestik.Api.Authorization;
 
 public static class PolicyNames
 {
+    // Valid Identity session without employee-role requirements.
+    // Only for identity/session operations shared with future public users.
+    public const string AuthenticatedUser = "AuthenticatedUser";
+
     public const string AdministratorOnly =
         "AdministratorOnly";
 

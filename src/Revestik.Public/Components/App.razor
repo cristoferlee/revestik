@@ -10,6 +10,11 @@
     var currentPath = new Uri(Navigation.Uri).AbsolutePath;
     var language = Locale.FromUri(Navigation.Uri);
     var isEditingSite = PublicEditorAccess.CanEditPublicSite(RequestContext);
+    if (RequestContext?.User.Identity?.IsAuthenticated == true &&
+        RequestContext is not null && !RequestContext.Response.HasStarted)
+    {
+        RequestContext.Response.Headers.CacheControl = "private, no-store";
+    }
 }
 <!DOCTYPE html>
 <html lang="@Locale.FromUri(Navigation.Uri)">
@@ -20,6 +25,7 @@
     <meta name="color-scheme" content="light" />
     <link rel="icon" type="image/svg+xml" href="/assets/revestik-rk.svg" />
     <link rel="stylesheet" href="/css/public.css" />
+    <link rel="stylesheet" href="/css/public-auth.css?v=PUBLIC-AUTH-01C" />
     <link rel="stylesheet" href="/css/public-projects.css?v=PROJECTS-01D-FIX01" />
     <link rel="stylesheet" href="/css/catalog.css?v=ACABADOS-RECOVERY-02" />
     @if (isEditingSite)
@@ -78,6 +84,7 @@
         </div>
     </dialog>
     <script src="/js/public-nav.js" defer></script>
+    <script src="/js/public-auth.js?v=PUBLIC-AUTH-01C" defer></script>
     <script src="/js/public-hero.js" defer></script>
     <script src="/js/public-catalog-search.js?v=ACABADOS-RECOVERY-02" defer></script>
     <script src="/js/public-featured-products.js" defer></script>

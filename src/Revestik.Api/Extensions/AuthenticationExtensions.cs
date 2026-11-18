@@ -83,11 +83,21 @@ public static class AuthenticationExtensions
                     });
         }
 
+        // A valid session is not sufficient to access Revestik's internal APIs.
+        // PublicCustomer is deliberately NOT included in RoleNames.All.
+        var internalUserPolicy = new AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .RequireRole(RoleNames.All)
+            .Build();
+
+        services.AddScoped<Revestik.Api.Services.Authentication.PublicGoogleSignInService>();
+
         services.AddAuthorizationBuilder()
-            .SetFallbackPolicy(
-                new AuthorizationPolicyBuilder()
-                    .RequireAuthenticatedUser()
-                    .Build())
+            .SetDefaultPolicy(internalUserPolicy)
+            .SetFallbackPolicy(internalUserPolicy)
+            .AddPolicy(
+                PolicyNames.AuthenticatedUser,
+                policy => policy.RequireAuthenticatedUser())
             .AddPolicy(
                 PolicyNames.AdministratorOnly,
                 policy => policy.RequireRole(

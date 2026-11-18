@@ -10,6 +10,7 @@ using Revestik.Api.Authorization;
 using Revestik.Api.Data;
 using Revestik.Api.Services.Audit;
 using Revestik.Api.Models.Identity;
+using Revestik.Api.Services.Authentication;
 using Revestik.Shared.Authentication;
 
 namespace Revestik.Api.Endpoints;
@@ -66,7 +67,7 @@ public static class AuthenticationEndpoints
                             tokens.RequestToken));
                 })
             .WithName("GetCsrfToken")
-            .RequireAuthorization();
+            .RequireAuthorization(PolicyNames.AuthenticatedUser);
 
         group.MapGet(
             "/login/google",
@@ -101,6 +102,7 @@ public static class AuthenticationEndpoints
                             .ConfigureExternalAuthenticationProperties(
                                 GoogleDefaults.AuthenticationScheme,
                                 callbackUrl);
+                    GoogleLoginFlow.SetIntent(properties, GoogleLoginFlow.Internal);
 
                     return Results.Challenge(
                         properties,
@@ -114,6 +116,43 @@ public static class AuthenticationEndpoints
                 "/external-callback",
                 HandleExternalCallbackAsync)
             .WithName("HandleExternalAuthentication")
+            .AllowAnonymous();
+
+        // Public and employee OAuth use the same Google provider but separate
+        // application callbacks. The login intent travels in protected OAuth state.
+        group.MapGet(
+                "/public/login/google",
+                async (
+                    string? language,
+                    SignInManager<ApplicationUser> signInManager,
+                    IAuthenticationSchemeProvider schemeProvider,
+                    IConfiguration configuration,
+                    IHostEnvironment environment) =>
+                {
+                    if (!GoogleLoginFlow.PublicRegistrationEnabled(configuration, environment))
+                        return Results.NotFound();
+
+                    if (await schemeProvider.GetSchemeAsync(GoogleDefaults.AuthenticationScheme) is null)
+                        return Results.Problem(
+                            title: "Google authentication is unavailable.",
+                            statusCode: StatusCodes.Status503ServiceUnavailable);
+
+                    var properties = signInManager.ConfigureExternalAuthenticationProperties(
+                        GoogleDefaults.AuthenticationScheme,
+                        "/api/auth/public/external-callback");
+                    GoogleLoginFlow.SetIntent(properties, GoogleLoginFlow.Public);
+                    GoogleLoginFlow.SetPublicLanguage(properties, language);
+                    return Results.Challenge(properties, [GoogleDefaults.AuthenticationScheme]);
+                })
+            .RequireRateLimiting(RevestikRateLimiting.Login)
+            .WithName("PublicGoogleLogin")
+            .AllowAnonymous();
+
+        group.MapGet(
+                "/public/external-callback",
+                HandlePublicExternalCallbackAsync)
+            .RequireRateLimiting(RevestikRateLimiting.Login)
+            .WithName("PublicGoogleExternalCallback")
             .AllowAnonymous();
 
         group.MapGet(
@@ -141,7 +180,7 @@ public static class AuthenticationEndpoints
                             roles.ToArray()));
                 })
             .WithName("GetCurrentUser")
-            .RequireAuthorization();
+            .RequireAuthorization(PolicyNames.AuthenticatedUser);
 
         group.MapPost(
                 "/logout",
@@ -164,7 +203,7 @@ public static class AuthenticationEndpoints
                 })
             .AddEndpointFilter<AntiforgeryValidationFilter>()
             .WithName("Logout")
-            .RequireAuthorization();
+            .RequireAuthorization(PolicyNames.AuthenticatedUser);
 
         return endpoints;
     }
@@ -194,7 +233,8 @@ public static class AuthenticationEndpoints
                 !string.Equals(
                     externalLogin.LoginProvider,
                     GoogleDefaults.AuthenticationScheme,
-                    StringComparison.Ordinal))
+                    StringComparison.Ordinal) ||
+                !GoogleLoginFlow.HasIntent(externalLogin, GoogleLoginFlow.Internal))
             {
                 logger.LogWarning(
                     "Google authentication callback did not contain valid external login information.");
@@ -311,8 +351,26 @@ public static class AuthenticationEndpoints
                     "account_disabled");
             }
 
+            var internalRoles = await userManager.GetRolesAsync(user);
+            if (!GoogleLoginFlow.HasEmployeeRole(internalRoles))
+            {
+                logger.LogWarning("Administrative Google login rejected: account has no valid employee role.");
+                return RedirectWithError(clientBaseUrl, "account_not_authorized");
+            }
+
             var existingLogins =
                 await userManager.GetLoginsAsync(user);
+
+            // A pre-authorized employee may link Google on their first login.
+            // An employee already linked to a DIFFERENT Google subject must not
+            // silently attach another subject merely because its email matches.
+            if (existingLogins.Any(login =>
+                string.Equals(login.LoginProvider, GoogleDefaults.AuthenticationScheme, StringComparison.Ordinal) &&
+                !string.Equals(login.ProviderKey, externalLogin.ProviderKey, StringComparison.Ordinal)))
+            {
+                logger.LogWarning("Administrative Google login rejected: provider subject mismatch.");
+                return RedirectWithError(clientBaseUrl, "account_not_authorized");
+            }
 
             var hasGoogleLogin = existingLogins.Any(login =>
                 string.Equals(
@@ -386,6 +444,57 @@ public static class AuthenticationEndpoints
             return Results.Redirect(loginUrl);
         }
     }
+
+    private static async Task<IResult> HandlePublicExternalCallbackAsync(
+        SignInManager<ApplicationUser> signInManager,
+        IConfiguration configuration,
+        IHostEnvironment environment,
+        PublicGoogleSignInService publicGoogleSignIn,
+        RevestikDbContext db,
+        UserManager<ApplicationUser> userManager,
+        HttpContext context,
+        CancellationToken ct)
+    {
+        if (!GoogleLoginFlow.PublicRegistrationEnabled(configuration, environment))
+            return Results.NotFound();
+
+        var externalLogin = await signInManager.GetExternalLoginInfoAsync();
+        var language = GoogleLoginFlow.GetPublicLanguage(externalLogin);
+        if (!GoogleLoginFlow.HasIntent(externalLogin, GoogleLoginFlow.Public))
+            return PublicLoginError("external_login_failed", language);
+
+        var result = await publicGoogleSignIn.ResolveAsync(externalLogin!, ct);
+        if (result.User is null)
+        {
+            var error = result.Status switch
+            {
+                PublicGoogleAccountStatus.Disabled => "account_disabled",
+                PublicGoogleAccountStatus.InvalidIdentity => "external_login_failed",
+                PublicGoogleAccountStatus.Conflict => "account_conflict",
+                _ => "registration_failed"
+            };
+            return PublicLoginError(error, language);
+        }
+
+        result.User.LastLoginAtUtc = DateTime.UtcNow;
+        if (!(await userManager.UpdateAsync(result.User)).Succeeded)
+            return PublicLoginError("registration_failed", language);
+
+        // Persist the successful-login audit before issuing the browser session.
+        // If audit persistence fails, the app authentication cookie is not issued.
+        SecurityAudit.Record(db, "PublicLoginSucceeded", "User", result.User.Id, result.User.Id);
+        await db.SaveChangesAsync(ct);
+        await context.SignOutAsync(IdentityConstants.ExternalScheme);
+        await signInManager.SignInAsync(
+            result.User,
+            GoogleLoginFlow.PublicSessionProperties(DateTimeOffset.UtcNow),
+            GoogleDefaults.AuthenticationScheme);
+
+        return Results.Redirect($"/{language}");
+    }
+
+    private static IResult PublicLoginError(string errorCode, string language) =>
+        Results.Redirect(QueryHelpers.AddQueryString($"/{language}", "authError", errorCode));
 
     private static string GetClientBaseUrl(
         IConfiguration configuration,

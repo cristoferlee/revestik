@@ -16,7 +16,9 @@ public sealed class UserAdministrationService(
 {
     public async Task<IReadOnlyList<ManagedUserResponse>> ListAsync(CancellationToken ct)
     {
+        var internalUserIds = InternalUserIds();
         var users = await db.Users.AsNoTracking()
+            .Where(u => internalUserIds.Contains(u.Id))
             .OrderBy(u => u.Email).ToListAsync(ct);
         var userIds = users.Select(u => u.Id).ToArray();
         var roleLinks = await (from link in db.UserRoles.AsNoTracking()
@@ -30,7 +32,10 @@ public sealed class UserAdministrationService(
 
     public async Task<ManagedUserResponse?> GetAsync(string id, CancellationToken ct)
     {
-        var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == id, ct);
+        var internalUserIds = InternalUserIds();
+        var user = await db.Users.AsNoTracking()
+            .Where(u => internalUserIds.Contains(u.Id))
+            .SingleOrDefaultAsync(u => u.Id == id, ct);
         if (user is null) return null;
         return Map(user, await userManager.GetRolesAsync(user));
     }
@@ -124,6 +129,15 @@ public sealed class UserAdministrationService(
             user.Id, actorId, currentRole, request.Role, user.IsActive);
         return Map(user, [request.Role]);
     }
+
+    // Restrict the employee-administration view to accounts with an internal
+    // role. Public-only Identity users must never appear in this interface.
+    private IQueryable<string> InternalUserIds() =>
+        from link in db.UserRoles.AsNoTracking()
+        join role in db.Roles.AsNoTracking()
+            on link.RoleId equals role.Id
+        where role.Name != null && RoleNames.All.Contains(role.Name)
+        select link.UserId;
 
     private static ManagedUserResponse Map(ApplicationUser user, IEnumerable<string> roles) =>
         new(user.Id, user.Email ?? string.Empty, user.DisplayName,

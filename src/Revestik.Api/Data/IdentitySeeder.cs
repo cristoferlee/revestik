@@ -35,7 +35,8 @@ public static class IdentitySeeder
             }
         }
 
-        foreach (var roleName in RoleNames.All)
+        // PublicCustomer is seeded separately; RoleNames.All remains employee-only.
+        foreach (var roleName in RoleNames.All.Append(RoleNames.PublicCustomer))
         {
             if (await roleManager.RoleExistsAsync(roleName))
             {

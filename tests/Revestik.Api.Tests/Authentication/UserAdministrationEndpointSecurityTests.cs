@@ -81,4 +81,19 @@ public sealed class UserAdministrationEndpointSecurityTests(DevelopmentHttpHostF
         using var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Theory]
+    [InlineData("GET", "/api/settings/users")]
+    [InlineData("GET", "/api/settings/users/test-user")]
+    [InlineData("POST", "/api/settings/users")]
+    [InlineData("PUT", "/api/settings/users/test-user")]
+    public async Task PublicCustomer_CannotAccessEmployeeAdministration(
+        string method, string path)
+    {
+        using var client = CreateClient("public-auth-test", "PublicCustomer");
+        using var request = new HttpRequestMessage(new HttpMethod(method), path);
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
 }
