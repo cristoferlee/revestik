@@ -1,6 +1,7 @@
 using System.Data;
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Authorization;
 using Revestik.Api.Data;
@@ -65,7 +66,9 @@ public static class PublicCatalogEndpoints
         publicGroup.MapGet("/categories",PublicCategories);
         publicGroup.MapGet("/categories/{slug}",PublicCategory);
         publicGroup.MapGet("/products",PublicProducts);
-        publicGroup.MapGet("/featured-products",PublicFeaturedProducts);
+        publicGroup.MapGet("/featured-products",PublicFeaturedProducts)
+            .CacheOutput(policy => policy.Expire(TimeSpan.FromMinutes(30))
+                .SetVaryByQuery("slugs").Tag("revestik-public-home"));
         publicGroup.MapGet("/products/{slug}",PublicProduct);
         publicGroup.MapGet("/images/{id:int}",GetPublicImage);
         return app;

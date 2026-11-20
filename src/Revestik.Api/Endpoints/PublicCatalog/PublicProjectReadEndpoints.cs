@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Data;
 using Revestik.Api.Models.PublicProjects;
@@ -15,7 +16,9 @@ public static class PublicProjectReadEndpoints
         var group = app.MapGroup("/api/public/projects")
             .AllowAnonymous().WithTags("Public projects");
         group.MapGet("", List);
-        group.MapGet("/featured", Featured);
+        group.MapGet("/featured", Featured)
+            .CacheOutput(policy => policy.Expire(TimeSpan.FromMinutes(30))
+                .SetVaryByQuery("language").Tag("revestik-public-home"));
         group.MapGet("/images/{id:int}", Image);
         group.MapGet("/{slug}", Detail);
         return app;
