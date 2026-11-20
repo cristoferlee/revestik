@@ -1,5 +1,6 @@
 using System.Data;
 using System.Security.Claims;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Authorization;
 using Revestik.Api.Data;
@@ -27,7 +28,8 @@ public static class PublicHomeHeroEndpoints
         publicGroup.MapGet("", async (RevestikDbContext db, CancellationToken ct) =>
             Results.Ok((await db.PublicHomeHeroSlides.AsNoTracking()
                 .Where(x => x.Slot > offset && x.Slot <= offset + 3)
-                .OrderBy(x => x.Slot).ToListAsync(ct)).Select(x => ToDto(x, offset))));
+                .OrderBy(x => x.Slot).ToListAsync(ct)).Select(x => ToDto(x, offset))))
+            .CacheOutput(policy => policy.Expire(TimeSpan.FromMinutes(30)).Tag("revestik-public-home"));
         publicGroup.MapGet("/media/{slot:int}", (int slot, RevestikDbContext db, PublicCatalogMediaStorage storage, CancellationToken ct) =>
             ReadImage(slot, offset, db, storage, ct));
 

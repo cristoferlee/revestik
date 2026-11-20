@@ -1,6 +1,7 @@
 using System.Data;
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Authorization;
 using Revestik.Api.Data;
@@ -21,7 +22,8 @@ public static class PublicHomeSectionEndpoints
     {
         var publicGroup = app.MapGroup("/api/public/site/home-sections").AllowAnonymous().WithTags("Public site");
         publicGroup.MapGet("", async (RevestikDbContext db, CancellationToken ct) =>
-            Results.Ok((await db.PublicHomeSections.AsNoTracking().ToListAsync(ct)).Select(ToDto).ToList()));
+            Results.Ok((await db.PublicHomeSections.AsNoTracking().ToListAsync(ct)).Select(ToDto).ToList()))
+            .CacheOutput(policy => policy.Expire(TimeSpan.FromMinutes(30)).Tag("revestik-public-home"));
         publicGroup.MapGet("/solutions/media", ReadSolutionsImage);
         var admin = app.MapGroup("/api/admin/public-site/home-sections")
             .RequireAuthorization(PolicyNames.AdministratorOnly).WithTags("Public site administration");

@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.Extensions.FileProviders;
 using System.Net;
 using QuestPDF.Infrastructure;
@@ -42,6 +43,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddRevestikRateLimiting();
+builder.Services.AddOutputCache(options =>
+{
+    // Only small, anonymous, public JSON responses are cached.
+    options.SizeLimit = 8 * 1024 * 1024;
+    options.MaximumBodySize = 256 * 1024;
+});
 
 // Explicit proxy IPs remain the default. A separate, opt-in Azure Container Apps
 // mode exists for dynamic ingress proxies, but MUST NOT be enabled until the
@@ -321,6 +328,30 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
+app.UseOutputCache();
+
+// Invalidate the public Home cache after successful authorized content mutations.
+// This also covers shared catalog classifications that affect featured products.
+app.Use(async (context, next) =>
+{
+    await next(context);
+
+    if (context.Request.Method is not ("POST" or "PUT" or "PATCH" or "DELETE") ||
+        context.Response.StatusCode is < 200 or >= 300)
+        return;
+
+    var path = context.Request.Path;
+    if (path.StartsWithSegments("/api/admin/public-site") ||
+        path.StartsWithSegments("/api/admin/public-catalog") ||
+        path.StartsWithSegments("/api/admin/public-projects") ||
+        path.StartsWithSegments("/api/product-categories") ||
+        path.StartsWithSegments("/api/product-subcategories") ||
+        path.StartsWithSegments("/api/units-of-measure"))
+    {
+        await context.RequestServices.GetRequiredService<IOutputCacheStore>()
+            .EvictByTagAsync("revestik-public-home", CancellationToken.None);
+    }
+});
 app.UseAntiforgery();
 app.MapGet("/api/health", async (RevestikDbContext dbContext, CancellationToken cancellationToken) =>
 {
