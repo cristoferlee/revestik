@@ -26,6 +26,7 @@
     <link rel="icon" type="image/svg+xml" href="/assets/revestik-rk.svg" />
     <link rel="stylesheet" href="/css/public.css" />
     <link rel="stylesheet" href="/css/public-auth.css?v=PUBLIC-AUTH-01C" />
+    <link rel="stylesheet" href="/css/public-cart.css?v=PUBLIC-CART-01D" />
     <link rel="stylesheet" href="/css/public-projects.css?v=PROJECTS-01D-FIX01" />
     <link rel="stylesheet" href="/css/catalog.css?v=ACABADOS-RECOVERY-02" />
     @if (isEditingSite)
@@ -56,6 +57,10 @@
        visitors retain the default enhanced-navigation behavior. *@
 <body data-enhance-nav="@(isEditingSite ? "false" : null)">
     <Routes />
+    <div id="public-cart-notice" class="public-cart-notice" role="status" aria-live="polite" hidden>
+        <span data-public-cart-notice-text></span>
+        <button type="button" data-public-cart-notice-close aria-label="Close notification">&times;</button>
+    </div>
     @if (isEditingSite)
     {
         <PublicInlineEditor @rendermode="new InteractiveServerRenderMode(prerender: false)" />
@@ -85,6 +90,7 @@
     </dialog>
     <script src="/js/public-nav.js" defer></script>
     <script src="/js/public-auth.js?v=PUBLIC-AUTH-01C" defer></script>
+    <script src="/js/public-cart.js?v=PUBLIC-CART-01D" defer></script>
     <script src="/js/public-hero.js" defer></script>
     <script src="/js/public-catalog-search.js?v=ACABADOS-RECOVERY-02" defer></script>
     <script src="/js/public-featured-products.js" defer></script>

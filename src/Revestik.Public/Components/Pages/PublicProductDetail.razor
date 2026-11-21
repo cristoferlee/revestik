@@ -43,6 +43,15 @@
       </div>
       <p class="catalog-description">@(Product.Text(Lang)?.Description)</p>
       @if (Product.Price is decimal price) { <p class="catalog-price">@price.ToString("N2") @Product.Currency / @Product.SalesUnit</p> }
+      <form class="public-cart-add-form" data-public-cart-add-form data-product-id="@Product.Id" data-product-slug="@Product.Slug">
+        <label for="public-cart-detail-quantity">@L("Cantidad", "Quantity", "Menge") @(string.IsNullOrWhiteSpace(Product.SalesUnit) ? "" : $"({Product.SalesUnit})")</label>
+        <div class="public-cart-add-controls">
+          <input id="public-cart-detail-quantity" type="number" name="quantity" value="1"
+                 min="0.001" max="10000" step="0.001" inputmode="decimal" required />
+          <button type="submit" data-public-cart-activate disabled>@L("Agregar al carrito", "Add to cart", "In den Warenkorb")</button>
+        </div>
+        <p class="public-cart-inline-hint">@L("Las cantidades y precios están sujetos a confirmación.", "Quantities and prices are subject to confirmation.", "Mengen und Preise müssen bestätigt werden.")</p>
+      </form>
       <a class="back-home" href="@SiteLinks.Path(Lang,5)">@L("Consultar este producto", "Ask about this product", "Dieses Produkt anfragen") →</a>
     }
   </div>

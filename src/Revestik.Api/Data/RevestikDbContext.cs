@@ -35,6 +35,7 @@ public sealed class RevestikDbContext(DbContextOptions<RevestikDbContext> option
     public DbSet<PublicHomeHeroSlide> PublicHomeHeroSlides => Set<PublicHomeHeroSlide>();
     public DbSet<PublicHomeSection> PublicHomeSections => Set<PublicHomeSection>();
     public DbSet<PublicCatalogProduct> PublicCatalogProducts => Set<PublicCatalogProduct>();
+    public DbSet<PublicCartItem> PublicCartItems => Set<PublicCartItem>();
     public DbSet<PublicCatalogProductSubcategory> PublicCatalogProductSubcategories => Set<PublicCatalogProductSubcategory>();
     public DbSet<PublicCatalogProductTranslation> PublicCatalogProductTranslations => Set<PublicCatalogProductTranslation>();
     public DbSet<Product> Products => Set<Product>();

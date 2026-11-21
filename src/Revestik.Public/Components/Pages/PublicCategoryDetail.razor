@@ -63,7 +63,12 @@
           <article class="catalog-card" data-editor-product-id="@product.Id"><a href="@($"{SiteLinks.Path(Lang,2)}/{product.Slug}")">
               @if(product.CoverImageId is int cover){<img src="@($"/media/catalog/{cover}")" alt="@(product.Text(Lang)?.Name ?? product.Slug)" loading="lazy" width="720" height="540" />}
               <div class="catalog-card-copy"><h3>@(product.Text(Lang)?.Name ?? product.Slug)</h3></div>
-            </a></article>
+            </a>
+            <button type="button" class="public-cart-quick-add" data-public-cart-add data-public-cart-activate disabled
+                    data-product-id="@product.Id" data-product-slug="@product.Slug" aria-label="@L($"Agregar {product.Text(Lang)?.Name ?? product.Slug} al carrito", $"Add {product.Text(Lang)?.Name ?? product.Slug} to cart", $"{product.Text(Lang)?.Name ?? product.Slug} zum Warenkorb hinzufügen")">
+              @L("Agregar al carrito", "Add to cart", "Zum Warenkorb")
+            </button>
+          </article>
         }
       </div>
       @if(Products.Items.Count==0){<p>@L("Todavía no hay productos publicados.","No products published yet.","Noch keine Produkte veröffentlicht.")</p>}

@@ -4,6 +4,9 @@
     var lang = Locale.FromUri(Navigation.Uri);
     var t = Locale.Get(lang);
     var activePage = SiteLinks.PageFromUri(Navigation.Uri);
+    var publicSession = RequestContext?.User.Identity?.IsAuthenticated == true
+        ? RequestContext.User.IsInRole("PublicCustomer") ? "customer" : "forbidden"
+        : "guest";
 }
 <a class="skip-link" href="#main">@t.Skip</a>
 <header class="site-header">
@@ -23,13 +26,23 @@
         </nav>
         <div class="header-tools">
             <PublicAccountControls />
+            <a class="public-cart-link" href="@SiteLinks.CartPath(lang)" data-public-cart-link data-public-cart-session="@publicSession"
+               aria-label="@(lang == "en" ? "Cart" : lang == "de" ? "Warenkorb" : "Carrito")"
+               aria-current="@(SiteLinks.IsCartRoute(Navigation.Uri) ? "page" : null)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round" width="21" height="21" aria-hidden="true">
+                    <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+                    <path d="M1 1h4l2.6 13.1a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6L23 6H6"/>
+                </svg>
+                <span class="public-cart-count" data-public-cart-count hidden></span>
+            </a>
             <nav class="languages" aria-label="@t.Language">
                 @foreach (var language in new[] { "es", "en", "de" })
                 {
                     <a href="@SiteLinks.LanguagePath(language, Navigation.Uri)" lang="@language" aria-current="@(lang == language ? "true" : null)">@language.ToUpperInvariant()</a>
                 }
             </nav>
-            <a class="header-cta" href="@SiteLinks.Path(lang, 5)">@t.Inquiry</a>
+            <WhatsAppContactLink Language="@lang" CssClass="header-cta" Label="@t.Nav[5]" />
         </div>
     </div>
 </header>
@@ -50,3 +63,7 @@
         <div class="footer-bottom"><small>© @DateTime.UtcNow.Year REVESTIK</small><small>Costa Rica</small></div>
     </div>
 </footer>
+
+@code {
+    [CascadingParameter] private HttpContext? RequestContext { get; set; }
+}

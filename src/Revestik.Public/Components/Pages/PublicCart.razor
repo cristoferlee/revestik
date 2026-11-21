@@ -1,0 +1,155 @@
+@page "/es/carrito"
+@page "/en/cart"
+@page "/de/warenkorb"
+@using Microsoft.Extensions.Hosting
+@using Microsoft.Extensions.Configuration
+@inject NavigationManager Navigation
+@inject IConfiguration Configuration
+@inject IHostEnvironment HostEnvironment
+
+@{
+    var language = Locale.FromUri(Navigation.Uri);
+    var whatsappPhone = Configuration["PublicSite:WhatsAppNumber"]?.Trim();
+    if (whatsappPhone is null || whatsappPhone.Length is < 8 or > 15 ||
+        whatsappPhone[0] == '0' || whatsappPhone.Any(c => !char.IsAsciiDigit(c)))
+    {
+        whatsappPhone = "";
+    }
+    var publicLoginEnabled = !HostEnvironment.IsProduction() &&
+        Configuration.GetValue<bool>("Authentication:PublicGoogleRegistrationEnabled");
+}
+<PageTitle>@L("Mi carrito | REVESTIK", "My cart | REVESTIK", "Mein Warenkorb | REVESTIK")</PageTitle>
+<HeadContent>
+    <meta name="description" content="@L("Revisá los productos seleccionados para tu consulta.", "Review products selected for your inquiry.", "Prüfen Sie Ihre ausgewählten Produkte für Ihre Anfrage.")" />
+    <meta name="robots" content="noindex,nofollow" />
+</HeadContent>
+<main id="main" class="public-cart-page" data-public-cart-view data-public-cart-whatsapp-number="@whatsappPhone">
+    <div class="public-cart-shell">
+        <nav class="public-cart-breadcrumb" aria-label="@L("Ruta de navegación", "Breadcrumb", "Brotkrumennavigation")">
+            <a href="@SiteLinks.Path(language, 2)">@L("Acabados", "Finishes", "Oberflächen")</a>
+            <span aria-hidden="true">/</span>
+            <span aria-current="page">@L("Carrito", "Cart", "Warenkorb")</span>
+        </nav>
+        <div class="public-cart-heading">
+            <div>
+                <p class="public-cart-eyebrow">REVESTIK · @L("SELECCIÓN", "SELECTION", "AUSWAHL")</p>
+                <h1>@L("Mi carrito", "My cart", "Mein Warenkorb")</h1>
+                <p>@L("Guardá y organizá los acabados de tu proyecto. Esto no es una compra ni una reserva de inventario.",
+                    "Save and organize finishes for your project. This is not a purchase or a stock reservation.",
+                    "Speichern und organisieren Sie Oberflächen für Ihr Projekt. Dies ist kein Kauf und keine Reservierung.")</p>
+            </div>
+        </div>
+        <p class="public-cart-loading" data-public-cart-loading role="status">
+            @L("Cargando tu carrito…", "Loading your cart…", "Warenkorb wird geladen…")
+        </p>
+        <section class="public-cart-empty" data-public-cart-empty hidden>
+            <h2>@L("Tu carrito está vacío", "Your cart is empty", "Ihr Warenkorb ist leer")</h2>
+            <p>@L("Explorá nuestros productos para comenzar tu selección.",
+                "Explore our products to start your selection.",
+                "Entdecken Sie unsere Produkte, um Ihre Auswahl zu beginnen.")</p>
+            <a class="public-cart-browse" href="@SiteLinks.Path(language, 2)">
+                @L("Ver acabados", "Browse finishes", "Oberflächen entdecken")
+            </a>
+        </section>
+        <section class="public-cart-auth" data-public-cart-login hidden>
+            <h2>@L("Tu carrito temporal está disponible", "Your guest cart is ready", "Ihr Gastwarenkorb ist bereit")</h2>
+            <p>@L("Podés agregar productos sin iniciar sesión. Para guardar la selección en tu cuenta, ingresá con Google e importala cuando quieras.",
+                "You can add products without signing in. Sign in with Google and import them when you're ready.",
+                "Sie können Produkte ohne Anmeldung hinzufügen und sie später nach der Google-Anmeldung importieren.")</p>
+            @if (publicLoginEnabled)
+            {
+                <a class="public-cart-browse" href="@($"/api/auth/public/login/google?language={language}")" data-enhance-nav="false">
+                    @L("Entrar con Google", "Sign in with Google", "Mit Google anmelden")
+                </a>
+            }
+        </section>
+        <section class="public-cart-auth" data-public-cart-forbidden hidden>
+            <h2>@L("Necesitás una cuenta de cliente", "A customer account is required", "Ein Kundenkonto ist erforderlich")</h2>
+            <p>@L("Las cuentas administrativas no tienen acceso al carrito de clientes.",
+                "Administrative accounts do not have access to customer carts.",
+                "Administrationskonten haben keinen Zugriff auf Kundenwarenkörbe.")</p>
+        </section>
+        <section class="public-cart-auth" data-public-cart-error hidden>
+            <h2>@L("No pudimos cargar el carrito", "We couldn't load your cart", "Warenkorb konnte nicht geladen werden")</h2>
+            <button type="button" class="public-cart-secondary-button" data-public-cart-retry>
+                @L("Intentar de nuevo", "Try again", "Erneut versuchen")
+            </button>
+        </section>
+        <section class="public-cart-auth public-cart-guest-intro" data-public-cart-guest-intro hidden>
+            <h2>@L("Selección temporal", "Temporary selection", "Temporäre Auswahl")</h2>
+            <p>@L("Esta selección se guarda solo en este navegador por siete días; no está asociada con ninguna cuenta.",
+                "This selection stays in this browser for seven days and isn't linked to an account.",
+                "Diese Auswahl bleibt sieben Tage in diesem Browser und gehört zu keinem Konto.")</p>
+            @if (publicLoginEnabled)
+            {
+                <a class="public-cart-browse" href="@($"/api/auth/public/login/google?language={language}")" data-enhance-nav="false">
+                    @L("Iniciar sesión para guardar", "Sign in to save", "Zum Speichern anmelden")
+                </a>
+            }
+        </section>
+        <section class="public-cart-auth public-cart-import" data-public-cart-import-panel hidden>
+            <h2>@L("Tenés una selección temporal pendiente", "You have a guest selection", "Sie haben eine Gastauswahl")</h2>
+            <p>@L("Podés importar los productos a esta cuenta. Si alguno ya está guardado, conservaremos su cantidad actual.",
+                "Import these products into this account. Existing product quantities will be kept.",
+                "Importieren Sie diese Produkte in dieses Konto. Vorhandene Mengen bleiben erhalten.")</p>
+            <button type="button" class="public-cart-browse" data-public-cart-import>
+                @L("Importar mi selección", "Import my selection", "Auswahl importieren")
+            </button>
+        </section>
+        <section class="public-cart-results" data-public-cart-results hidden aria-label="@L("Productos seleccionados", "Selected products", "Ausgewählte Produkte")">
+            <div class="public-cart-list" data-public-cart-items></div>
+            <section class="public-cart-quote" aria-label="@L("Desglose de productos", "Product breakdown", "Produktübersicht")">
+                <div class="public-cart-quote-actions">
+                    <button type="button" class="public-cart-secondary-button" data-public-cart-breakdown-toggle>
+                        @L("Ver desglose", "View breakdown", "Aufstellung ansehen")
+                    </button>
+                    <button type="button" class="public-cart-browse" data-public-cart-pdf>
+                        @L("Generar proforma PDF", "Generate quotation PDF", "Proforma-PDF erstellen")
+                    </button>
+                    <button type="button" class="public-cart-browse" data-public-cart-whatsapp>
+                        @L("Solicitar proforma por WhatsApp", "Request a quotation via WhatsApp", "Proforma über WhatsApp anfragen")
+                    </button>
+                </div>
+                <div class="public-cart-pdf-result" data-public-cart-pdf-result hidden>
+                    <p data-public-cart-pdf-ready role="status"></p>
+                    <div class="public-cart-pdf-actions">
+                        <a class="public-cart-browse" data-public-cart-pdf-download href="#" download hidden>
+                            @L("Descargar PDF carta", "Download letter-size PDF", "PDF im Letter-Format herunterladen")
+                        </a>
+                        <button type="button" class="public-cart-secondary-button" data-public-cart-pdf-share hidden>
+                            @L("Compartir PDF", "Share PDF", "PDF teilen")
+                        </button>
+                    </div>
+                </div>
+                <div class="public-cart-breakdown" data-public-cart-breakdown hidden aria-live="polite"></div>
+                <a class="public-cart-browse public-cart-whatsapp-link" data-public-cart-whatsapp-open
+                   href="#" target="_blank" rel="noopener noreferrer" hidden>
+                    @L("Abrir WhatsApp y revisar el mensaje", "Open WhatsApp and review the message", "WhatsApp öffnen und Nachricht prüfen")
+                </a>
+                <p>@L("La proforma PDF es preliminar, tamaño carta, y no se guarda en Revestik. Podés descargarla o compartirla desde dispositivos compatibles. WhatsApp continúa enviando solo el desglose en texto; confirmás el envío en la aplicación.",
+                    "The letter-size PDF is preliminary and isn't stored in Revestik. Download it or share from supported devices. WhatsApp still prepares a text breakdown only; you confirm sending it in the app.",
+                    "Das vorläufige PDF im Letter-Format wird nicht in Revestik gespeichert. Sie können es herunterladen oder auf kompatiblen Geräten teilen. WhatsApp bereitet weiterhin nur eine Textaufstellung vor.")</p>
+            </section>
+            <div class="public-cart-next">
+                <p>@L("Los precios mostrados son referencias del catálogo. La cotización final se confirmará por separado; no sumamos monedas distintas.",
+                    "Displayed prices are catalog references. A final quote will be confirmed separately; different currencies are not added together.",
+                    "Angezeigte Preise sind Katalogangaben. Ein endgültiges Angebot wird separat bestätigt; verschiedene Währungen werden nicht addiert.")</p>
+                <a class="public-cart-browse" href="@SiteLinks.Path(language, 2)">
+                    @L("Seguir explorando", "Continue browsing", "Weiter stöbern")
+                </a>
+            </div>
+        </section>
+        <noscript>
+            <p class="public-cart-noscript">@L("Activá JavaScript para administrar tu carrito.",
+                "Enable JavaScript to manage your cart.", "Aktivieren Sie JavaScript, um Ihren Warenkorb zu verwalten.")</p>
+        </noscript>
+    </div>
+</main>
+
+@code {
+    private string Lang => Locale.FromUri(Navigation.Uri);
+    private string L(string es, string en, string de) => Lang switch
+    {
+        "en" => en, "de" => de, _ => es
+    };
+}

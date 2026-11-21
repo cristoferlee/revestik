@@ -3661,6 +3661,41 @@ namespace Revestik.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCartItem", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("UserId", "ProductId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("PublicCartItems", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PublicCartItems_Quantity", "[Quantity] > 0 AND [Quantity] <= 10000");
+                        });
+                });
+
             modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicHomeHeroSlide", b =>
                 {
                     b.Property<int>("Slot")
@@ -5605,6 +5640,25 @@ namespace Revestik.Api.Data.Migrations
                     b.Navigation("Category");
 
                     b.Navigation("FallbackImage");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("Revestik.Api.Models.PublicCatalog.PublicCartItem", b =>
+                {
+                    b.HasOne("Revestik.Api.Models.Identity.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Revestik.Api.Models.PublicCatalog.PublicCatalogProduct", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
 
                     b.Navigation("Product");
                 });
