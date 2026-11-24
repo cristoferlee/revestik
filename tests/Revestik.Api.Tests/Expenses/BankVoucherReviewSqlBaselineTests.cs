@@ -1,4 +1,4 @@
-﻿using System.Data.Common;
+using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
@@ -177,6 +177,118 @@ public sealed class BankVoucherReviewSqlBaselineTests(
         Assert.Equal(BankVoucherStatus.NeedsReview, storedStatus);
     }
 
+    [Fact]
+    public async Task KnownSupplierWithoutCandidate_DoesNotQueryHistoricalIssuers()
+    {
+        var day = new DateOnly(2026, 5, 15);
+        const string merchant = "KNOWN SUPPLIER 02A4";
+
+        await using (var seed = fixture.CreateDbContext())
+        {
+            seed.Suppliers.Add(new Supplier
+            {
+                Name = merchant,
+                CommercialName = merchant,
+                ContactName = string.Empty,
+                PhoneNumber = string.Empty,
+                Email = string.Empty,
+                Address = string.Empty,
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+            var voucher = CreateVoucher(day, 0, BankVoucherStatus.NeedsReview);
+            voucher.MerchantName = merchant;
+            seed.BankVouchers.Add(voucher);
+            await seed.SaveChangesAsync();
+        }
+
+        var counter = new SqlCommandCounter();
+        await using var db = CreateMeasuredContext(counter);
+
+        var result = await new BankVoucherReviewService(db).GetAsync(
+            new BankVoucherListRequest
+            {
+                DateFrom = day,
+                DateTo = day,
+                Status = BankVoucherStatus.NeedsReview
+            },
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Items);
+        Assert.True(item.IsKnownMerchant);
+        Assert.Empty(item.MatchCandidates);
+        Assert.Equal(0, counter.HistoricalIssuerQueryCount);
+    }
+
+    [Fact]
+    public async Task UnknownSupplierWithHistoricalIssuer_StillQueriesIssuerHistory()
+    {
+        var day = new DateOnly(2026, 6, 15);
+        const string merchant = "HISTORICAL MERCHANT 02A4";
+
+        await using (var seed = fixture.CreateDbContext())
+        {
+            var user = new ApplicationUser
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                UserName = $"history-{Guid.NewGuid():N}@example.test",
+                NormalizedUserName = $"HISTORY-{Guid.NewGuid():N}@EXAMPLE.TEST"
+            };
+
+            seed.Users.Add(user);
+
+            seed.ElectronicDocuments.Add(new ElectronicDocument
+            {
+                Clave = Guid.NewGuid().ToString("N").PadRight(50, '0'),
+                NumeroConsecutivo = "00100001010000000001",
+                DocumentType = ElectronicDocumentType.Invoice,
+                Direction = ElectronicDocumentDirection.Received,
+                FechaEmision = new DateTimeOffset(
+                    2026, 5, 1, 10, 0, 0, TimeSpan.FromHours(-6)),
+                IssuerName = merchant,
+                IssuerCommercialName = merchant,
+                IssuerEconomicActivityCode = "000000",
+                ReceiverEconomicActivityCode = "000000",
+                IssuerIdentificationType = "02",
+                IssuerIdentification = "3101000000",
+                ReceiverIdentificationType = "02",
+                ReceiverIdentification = "3101000000",
+                ReceiverName = "Revestik Test",
+                CurrencyCode = "CRC",
+                ExchangeRate = 1m,
+                TotalDocument = 7243.47m,
+                SaleConditionCode = "01",
+                ProcessingStatus = ElectronicDocumentProcessingStatus.Processed,
+                OriginalXml = [1],
+                ImportedByUserId = user.Id,
+                ImportedAtUtc = DateTime.UtcNow
+            });
+
+            var voucher = CreateVoucher(day, 0, BankVoucherStatus.NeedsReview);
+            voucher.MerchantName = merchant;
+            seed.BankVouchers.Add(voucher);
+            await seed.SaveChangesAsync();
+        }
+
+        var counter = new SqlCommandCounter();
+        await using var db = CreateMeasuredContext(counter);
+
+        var result = await new BankVoucherReviewService(db).GetAsync(
+            new BankVoucherListRequest
+            {
+                DateFrom = day,
+                DateTo = day,
+                Status = BankVoucherStatus.NeedsReview
+            },
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Items);
+        Assert.True(item.IsKnownMerchant);
+        Assert.Empty(item.MatchCandidates);
+        Assert.True(counter.HistoricalIssuerQueryCount > 0);
+    }
+
     private RevestikDbContext CreateMeasuredContext(SqlCommandCounter counter)
     {
         var options = new DbContextOptionsBuilder<RevestikDbContext>()
@@ -239,8 +351,25 @@ public sealed class BankVoucherReviewSqlBaselineTests(
     private sealed class SqlCommandCounter : DbCommandInterceptor
     {
         private int count;
+        private int historicalIssuerQueryCount;
 
         public int Count => Volatile.Read(ref count);
+        public int HistoricalIssuerQueryCount =>
+            Volatile.Read(ref historicalIssuerQueryCount);
+
+        private void RecordCommand(DbCommand command)
+        {
+            Interlocked.Increment(ref count);
+
+            var sql = command.CommandText;
+            if (sql.Contains("FROM [ElectronicDocuments]", StringComparison.OrdinalIgnoreCase) &&
+                sql.Contains("[IssuerName]", StringComparison.OrdinalIgnoreCase) &&
+                sql.Contains("[IssuerCommercialName]", StringComparison.OrdinalIgnoreCase) &&
+                !sql.Contains("[TotalDocument]", StringComparison.OrdinalIgnoreCase))
+            {
+                Interlocked.Increment(ref historicalIssuerQueryCount);
+            }
+        }
 
         public override ValueTask<DbDataReader> ReaderExecutedAsync(
             DbCommand command,
@@ -248,7 +377,7 @@ public sealed class BankVoucherReviewSqlBaselineTests(
             DbDataReader result,
             CancellationToken cancellationToken = default)
         {
-            Interlocked.Increment(ref count);
+            RecordCommand(command);
             return new ValueTask<DbDataReader>(result);
         }
 
@@ -258,7 +387,7 @@ public sealed class BankVoucherReviewSqlBaselineTests(
             object? result,
             CancellationToken cancellationToken = default)
         {
-            Interlocked.Increment(ref count);
+            RecordCommand(command);
             return new ValueTask<object?>(result);
         }
 
@@ -268,7 +397,7 @@ public sealed class BankVoucherReviewSqlBaselineTests(
             int result,
             CancellationToken cancellationToken = default)
         {
-            Interlocked.Increment(ref count);
+            RecordCommand(command);
             return new ValueTask<int>(result);
         }
     }

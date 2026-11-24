@@ -293,7 +293,7 @@ public sealed class BankVoucherReviewService(RevestikDbContext dbContext)
 
             // Preserve the original historical-issuer fallback. Memoization avoids
             // repeated full-history queries for the same normalized merchant.
-            var knownIssuer = compatible.Count > 0 ||
+            var knownIssuer = compatible.Count > 0 || knownSupplier ||
                 await lookups.GetKnownIssuerAsync(merchantKey, cancellationToken);
 
             analyses.Add(new VoucherAnalysis(knownSupplier || knownIssuer, compatible));
