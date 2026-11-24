@@ -13,10 +13,88 @@
     <meta name="robots" content="noindex,follow" />
 </HeadContent>
 <main id="main" class="subpage">
-  <div class="subpage-inner">
-    <p class="eyebrow">REVESTIK &middot; COSTA RICA</p>
-    <h1>@seo.Heading</h1>
-    <p>@t.Pending</p>
-    <a class="back-home" href="@SiteLinks.Path(lang, 0)">← @t.Nav[0]</a>
-  </div>
+    <div class="subpage-inner">
+        <p class="eyebrow">REVESTIK &middot; COSTA RICA</p>
+        <h1>@seo.Heading</h1>
+        <p>@L(
+            "¿Estás construyendo, remodelando o buscando acabados para un proyecto? Contanos qué necesitás y conversemos sobre las opciones disponibles.",
+            "Building, renovating or looking for finishes for a project? Tell us what you need and let's discuss the available options.",
+            "Planen Sie einen Neubau, eine Renovierung oder suchen Sie passende Oberflächen? Erzählen Sie uns von Ihrem Vorhaben und lassen Sie uns über die verfügbaren Möglichkeiten sprechen.")</p>
+
+        <section class="editorial-cta" aria-labelledby="contact-whatsapp-heading">
+            <div>
+                <p class="home-section-eyebrow">@L("CONTACTO DIRECTO", "DIRECT CONTACT", "DIREKTER KONTAKT")</p>
+                <h2 id="contact-whatsapp-heading">@L(
+                    "Conversemos por WhatsApp",
+                    "Let's talk on WhatsApp",
+                    "Kontaktieren Sie uns über WhatsApp")</h2>
+                <p>@L(
+                    "Podés escribirnos para consultar sobre productos, formatos y acabados. La disponibilidad y los precios se confirman al atender tu solicitud.",
+                    "Ask us about products, sizes and finishes. Availability and prices are confirmed when we respond to your inquiry.",
+                    "Fragen Sie uns nach Produkten, Formaten und Oberflächen. Verfügbarkeit und Preise werden bei der Bearbeitung Ihrer Anfrage bestätigt.")</p>
+            </div>
+            <div class="editorial-cta-actions">
+                <WhatsAppContactLink Language="@lang"
+                                     CssClass=""
+                                     Label="@(L("Escribir por WhatsApp", "Message us on WhatsApp", "Nachricht über WhatsApp"))"
+                                     HideWhenUnavailable="true"
+                                     UnavailableMessage="@(L(
+                                         "El contacto por WhatsApp no está disponible en este momento.",
+                                         "WhatsApp contact is not available right now.",
+                                         "Der WhatsApp-Kontakt ist derzeit nicht verfügbar."))" />
+                <a class="editorial-cta-secondary" href="@SiteLinks.Path(lang, 2)">@t.Nav[2]</a>
+            </div>
+        </section>
+
+        <section class="editorial-offerings" aria-labelledby="contact-details-heading">
+            <div class="editorial-section-heading">
+                <h2 id="contact-details-heading">@L("Información de atención", "Contact information", "Kontaktinformationen")</h2>
+            </div>
+            <div class="editorial-rows">
+                <div class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">01</span>
+                    <div>
+                        <h3>@L("Ubicación", "Location", "Standort")</h3>
+                        <p>Parrita, Puntarenas, Costa Rica</p>
+                    </div>
+                </div>
+                <div class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">02</span>
+                    <div>
+                        <h3>@L("Teléfono y WhatsApp", "Phone and WhatsApp", "Telefon und WhatsApp")</h3>
+                        <p><a href="tel:+50661682122">+506 6168 2122</a></p>
+                    </div>
+                </div>
+                <div class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">03</span>
+                    <div>
+                        <h3>@L("Cobertura", "Coverage", "Einsatzgebiet")</h3>
+                        <p>@L("Según ubicación del proyecto", "Based on project location", "Abhängig vom Projektstandort")</p>
+                    </div>
+                </div>
+                <div class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">04</span>
+                    <div>
+                        <h3>@L("Horario", "Hours", "Öffnungszeiten")</h3>
+                        <p>@L("Lunes a sábado de 8:00 a. m. a 5:00 p. m. Domingo cerrado.", "Monday to Saturday, 8:00 AM to 5:00 PM. Closed Sunday.", "Montag bis Samstag, 8:00–17:00 Uhr. Sonntag geschlossen.")</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <p>@L(
+            "También podés explorar nuestros proyectos para conocer ejemplos de acabados en diferentes espacios.",
+            "You can also explore our projects to see finishes used in different spaces.",
+            "Entdecken Sie auch unsere Projekte und sehen Sie Oberflächen in unterschiedlichen Räumen.")</p>
+        <a class="back-home" href="@SiteLinks.Path(lang, 1)">@t.Nav[1] <span aria-hidden="true">&#8594;</span></a>
+    </div>
 </main>
+
+@code {
+    private string L(string es, string en, string de) => Locale.FromUri(Navigation.Uri) switch
+    {
+        "en" => en,
+        "de" => de,
+        _ => es
+    };
+}

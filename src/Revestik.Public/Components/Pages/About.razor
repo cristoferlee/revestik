@@ -18,9 +18,9 @@
                    Eyebrow="@(L("REVESTIK · NOSOTROS", "REVESTIK · ABOUT", "REVESTIK · ÜBER UNS"))"
                    Heading="@seo.Heading"
                    Introduction="@(L(
-                       "Un espacio para conocer nuestro enfoque y la manera en que pensamos los acabados para construcción y remodelación.",
-                       "A closer look at our approach to finishing materials for construction and renovation.",
-                       "Erfahren Sie mehr über unseren Ansatz für Materialien und Oberflächen bei Bau- und Renovierungsprojekten."))"
+                       "Una forma práctica de explorar porcelanatos, pisos y revestimientos para construir y remodelar en Costa Rica.",
+                       "A practical way to explore porcelain tiles, flooring and wall coverings for building and renovating in Costa Rica.",
+                       "Entdecken Sie Feinsteinzeug sowie Boden- und Wandbeläge für Bau- und Renovierungsprojekte in Costa Rica."))"
                    PrimaryHref="@SiteLinks.Path(lang, 2)" PrimaryLabel="@t.Nav[2]"
                    SecondaryHref="@SiteLinks.Path(lang, 5)" SecondaryLabel="@t.Nav[5]" />
 
@@ -28,39 +28,79 @@
         <section class="editorial-intro" aria-labelledby="about-intro-title">
             <div>
                 <p class="editorial-kicker">01 / @L("QUIÉNES SOMOS", "WHO WE ARE", "WER WIR SIND")</p>
-                <h2 id="about-intro-title">@L("Los detalles también construyen espacios.", "Details help shape every space.", "Details prägen jeden Raum.")</h2>
+                <h2 id="about-intro-title">@L("Acabados para proyectos reales.", "Finishes for real projects.", "Oberflächen für konkrete Projekte.")</h2>
             </div>
             <p>@L(
-                "REVESTIK presenta materiales y soluciones de acabados para quienes construyen, transforman o renuevan sus espacios. Buscamos que sea más sencillo explorar opciones y conversar sobre lo que necesita cada proyecto.",
-                "REVESTIK presents finishing materials and solutions for people building, transforming or renovating spaces. Our aim is to make it easier to explore options and discuss what each project needs.",
-                "REVESTIK präsentiert Materialien und Oberflächen für Menschen, die Räume bauen, gestalten oder renovieren. Wir möchten die Auswahl übersichtlich und das Gespräch über Projektanforderungen einfacher machen.")</p>
+                "REVESTIK se enfoca en porcelanatos, pisos y revestimientos para proyectos de construcción y remodelación. Desde Parrita, Puntarenas, presentamos opciones para distintos espacios y atendemos consultas comerciales según las características y la ubicación de cada proyecto.",
+                "REVESTIK focuses on porcelain tiles, flooring and wall coverings for construction and renovation projects. Based in Parrita, Puntarenas, we present options for different spaces and handle commercial inquiries according to each project's needs and location.",
+                "REVESTIK konzentriert sich auf Feinsteinzeug sowie Boden- und Wandbeläge für Bau- und Renovierungsprojekte. Von Parrita, Puntarenas, aus präsentieren wir Lösungen für verschiedene Räume und bearbeiten Anfragen je nach Anforderungen und Standort des Projekts.")</p>
         </section>
 
-        <section class="editorial-offerings" aria-labelledby="about-values-title">
+        <section class="editorial-offerings" aria-labelledby="about-what-heading">
             <div class="editorial-section-heading">
-                <p class="editorial-kicker">02 / @L("NUESTRO ENFOQUE", "OUR APPROACH", "UNSER ANSATZ")</p>
-                <h2 id="about-values-title">@L("Materiales, espacios y decisiones.", "Materials, spaces and choices.", "Materialien, Räume und Entscheidungen.")</h2>
+                <p class="editorial-kicker">02 / @L("QUÉ ENCONTRÁS AQUÍ", "WHAT YOU'LL FIND", "WAS SIE HIER FINDEN")</p>
+                <h2 id="about-what-heading">@L("Materiales, proyectos y contacto directo.", "Materials, projects and direct contact.", "Materialien, Projekte und direkter Kontakt.")</h2>
             </div>
             <div class="editorial-rows">
                 <article class="editorial-row">
                     <span class="editorial-row-number" aria-hidden="true">01</span>
                     <div>
-                        <h3>@L("Entender el espacio", "Understand the space", "Den Raum verstehen")</h3>
-                        <p>@L("El uso, la ubicación y el carácter del ambiente orientan la búsqueda de un acabado apropiado.", "Use, location and the character of a space help guide the choice of finishes.", "Nutzung, Lage und Charakter eines Raums helfen bei der Wahl passender Oberflächen.")</p>
+                        <h3>@L("Catálogo de acabados", "Finishes catalog", "Oberflächenkatalog")</h3>
+                        <p>@L("Explorá los productos publicados, sus fotografías, formatos y descripciones para encontrar alternativas para tu espacio.",
+                            "Browse published products, photographs, sizes and descriptions to find options for your space.",
+                            "Entdecken Sie veröffentlichte Produkte, Fotos, Formate und Beschreibungen für Ihr Projekt.")</p>
                     </div>
                 </article>
                 <article class="editorial-row">
                     <span class="editorial-row-number" aria-hidden="true">02</span>
                     <div>
-                        <h3>@L("Explorar opciones", "Explore options", "Optionen entdecken")</h3>
-                        <p>@L("Una selección clara de productos permite comparar ideas sin depender de un catálogo interminable.", "A focused selection of products makes it easier to compare ideas without an overwhelming catalog.", "Eine gezielte Produktauswahl macht den Vergleich leichter, ohne einen unübersichtlichen Katalog.")</p>
+                        <h3>@L("Proyectos publicados", "Published projects", "Veröffentlichte Projekte")</h3>
+                        <p>@L("Conocé proyectos y espacios mostrados en nuestro sitio e identificá los materiales asociados cuando estén disponibles.",
+                            "Explore projects and spaces featured on our website and identify related materials when available.",
+                            "Entdecken Sie die auf unserer Website vorgestellten Projekte und Räume sowie die zugehörigen Materialien, soweit verfügbar.")</p>
                     </div>
                 </article>
                 <article class="editorial-row">
                     <span class="editorial-row-number" aria-hidden="true">03</span>
                     <div>
-                        <h3>@L("Conversar sobre el proyecto", "Discuss the project", "Über das Projekt sprechen")</h3>
-                        <p>@L("Las dudas sobre materiales, formatos y aplicaciones merecen una conversación antes de tomar decisiones.", "Questions about materials, formats and applications deserve a conversation before making decisions.", "Fragen zu Materialien, Formaten und Anwendungen sollten vor der Entscheidung besprochen werden.")</p>
+                        <h3>@L("Consultas y cotizaciones", "Inquiries and quotations", "Anfragen und Angebote")</h3>
+                        <p>@L("Seleccioná los productos que te interesan y consultanos por cantidades, disponibilidad, precios y condiciones aplicables a tu proyecto. La selección en línea no confirma una compra.",
+                            "Select products and ask us about quantities, availability, prices and conditions for your project. An online selection does not confirm a purchase.",
+                            "Wählen Sie interessante Produkte aus und fragen Sie nach Mengen, Verfügbarkeit, Preisen und Bedingungen für Ihr Projekt. Die Online-Auswahl ist noch kein Kauf.")</p>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="editorial-offerings" aria-labelledby="about-approach-heading">
+            <div class="editorial-section-heading">
+                <p class="editorial-kicker">03 / @L("CÓMO TRABAJAMOS", "HOW WE WORK", "UNSERE ARBEITSWEISE")</p>
+                <h2 id="about-approach-heading">@L("Cada consulta parte de las necesidades del espacio.", "Every inquiry starts with the needs of the space.", "Jede Anfrage beginnt mit den Anforderungen des Raums.")</h2>
+            </div>
+            <div class="editorial-rows">
+                <article class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">01</span>
+                    <div>
+                        <h3>@L("Explorá", "Explore", "Entdecken")</h3>
+                        <p>@L("Revisá acabados y referencias de proyectos desde el sitio.", "Browse finishes and project references on the website.", "Sehen Sie sich Oberflächen und Projektreferenzen auf der Website an.")</p>
+                    </div>
+                </article>
+                <article class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">02</span>
+                    <div>
+                        <h3>@L("Contanos tu necesidad", "Tell us what you need", "Beschreiben Sie Ihr Vorhaben")</h3>
+                        <p>@L("Indicá qué tipo de espacio estás trabajando, qué materiales te interesan y dónde se encuentra el proyecto.",
+                            "Tell us about the type of space, the materials you need and your project's location.",
+                            "Beschreiben Sie den Raum, die gewünschten Materialien und den Projektstandort.")</p>
+                    </div>
+                </article>
+                <article class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">03</span>
+                    <div>
+                        <h3>@L("Confirmamos los detalles", "Confirm the details", "Details abstimmen")</h3>
+                        <p>@L("Al atender la consulta confirmamos disponibilidad, precios y cobertura según la ubicación del proyecto.",
+                            "When responding, we confirm availability, prices and service coverage based on project location.",
+                            "Bei der Bearbeitung Ihrer Anfrage bestätigen wir Verfügbarkeit, Preise und Betreuung je nach Projektstandort.")</p>
                     </div>
                 </article>
             </div>
@@ -68,9 +108,11 @@
 
         <aside class="editorial-cta" aria-labelledby="about-cta-title">
             <div>
-                <p class="editorial-kicker">@L("CONVERSEMOS", "LET'S TALK", "SPRECHEN WIR")</p>
-                <h2 id="about-cta-title">@L("Cada proyecto comienza con una idea.", "Every project starts with an idea.", "Jedes Projekt beginnt mit einer Idee.")</h2>
-                <p>@L("Explorá nuestros productos o acercanos tu consulta.", "Explore our products or get in touch with a question.", "Entdecken Sie unsere Produkte oder kontaktieren Sie uns mit Ihrer Frage.")</p>
+                <p class="editorial-kicker">@L("SIGUIENTE PASO", "NEXT STEP", "NÄCHSTER SCHRITT")</p>
+                <h2 id="about-cta-title">@L("Buscá acabados para tu proyecto.", "Find finishes for your project.", "Entdecken Sie Oberflächen für Ihr Projekt.")</h2>
+                <p>@L("Explorá los productos publicados o comunicate con nosotros. Atendemos consultas según la ubicación del proyecto.",
+                    "Explore published products or contact us. We handle inquiries based on project location.",
+                    "Entdecken Sie unsere Produkte oder kontaktieren Sie uns. Die Betreuung hängt vom Standort des Projekts ab.")</p>
             </div>
             <div class="editorial-cta-actions">
                 <a href="@SiteLinks.Path(lang, 2)">@t.Nav[2] <span aria-hidden="true">&#8594;</span></a>

@@ -55,10 +55,26 @@
         <div class="footer-columns">
             <nav aria-label="@t.FooterExplore">
                 <h2>@t.FooterExplore</h2>
-                @for (var i=1; i<5; i++) { var page = i; <a href="@SiteLinks.Path(lang,page)">@t.Nav[page]</a> }
+                @for (var i = 1; i < 5; i++)
+                {
+                    var page = i;
+                    <a href="@SiteLinks.Path(lang, page)">@t.Nav[page]</a>
+                }
             </nav>
-            <div class="footer-contact"><h2>@t.FooterContact</h2><a href="@SiteLinks.Path(lang,5)">@t.Nav[5]</a><span>@t.Email</span><span>@t.Phone</span><span>@t.Coverage</span><span>@t.Hours</span></div>
-            <div class="footer-legal"><h2>@t.FooterLegal</h2><p>@t.LegalPending</p></div>
+            <div class="footer-contact">
+                <h2>@t.FooterContact</h2>
+                <a href="@SiteLinks.Path(lang, 5)">@t.Nav[5]</a>
+                <WhatsAppContactLink Language="@lang" CssClass="" Label="WhatsApp" HideWhenUnavailable="true" />
+                <a href="tel:+50661682122">@L("Teléfono", "Phone", "Telefon"): +506 6168 2122</a>
+                <span>@L("Ubicación: Parrita, Puntarenas, Costa Rica", "Location: Parrita, Puntarenas, Costa Rica", "Standort: Parrita, Puntarenas, Costa Rica")</span>
+                <span>@L("Cobertura: según ubicación del proyecto", "Coverage: based on project location", "Einsatzgebiet: abhängig vom Projektstandort")</span>
+                <span>@L("Horario: lunes a sábado, 8:00 a. m. – 5:00 p. m.", "Hours: Monday to Saturday, 8:00 AM – 5:00 PM", "Öffnungszeiten: Montag bis Samstag, 8:00–17:00 Uhr")</span>
+                <span>@L("Domingo: cerrado", "Sunday: closed", "Sonntag: geschlossen")</span>
+            </div>
+            <div class="footer-legal">
+                <h2>@t.FooterLegal</h2>
+                <p>@t.LegalPending</p>
+            </div>
         </div>
         <div class="footer-bottom"><small>© @DateTime.UtcNow.Year REVESTIK</small><small>Costa Rica</small></div>
     </div>
@@ -66,4 +82,11 @@
 
 @code {
     [CascadingParameter] private HttpContext? RequestContext { get; set; }
+
+    private string L(string es, string en, string de) => Locale.FromUri(Navigation.Uri) switch
+    {
+        "en" => en,
+        "de" => de,
+        _ => es
+    };
 }
