@@ -17,12 +17,12 @@
 @inject AuthenticationStateProvider AuthenticationState
 @inject IJSRuntime JS
 
-@if (Embedded)
+@if (Embedded || standalone)
 {
 <div class="catalog-visual-editor catalog-visual-editor--embedded">
     @if (editing is null && !string.IsNullOrEmpty(error)) { <p role="alert" class="catalog-visual-alert">@error</p> }
     @if (!string.IsNullOrEmpty(message)) { <p role="status" class="catalog-visual-success">@message</p> }
-    @if (DisplayCatalogTools)
+    @if (DisplayCatalogTools || standalone)
     {
         <section class="catalog-visual-gallery" aria-label="Herramientas administrativas de productos">
             <div class="catalog-visual-browser-toolbar">
@@ -348,6 +348,7 @@
     private static readonly TimeSpan DraftLifetime = TimeSpan.FromHours(20);
     private int page = 1, total;
     private bool showUnpublished;
+    private bool standalone;
     [Parameter] public bool Embedded { get; set; }
     [Parameter] public bool DisplayCatalogTools { get; set; }
     [Parameter] public EventCallback OnEditorChanged { get; set; }
@@ -355,7 +356,7 @@
     [Parameter] public EventCallback OnCatalogDeleted { get; set; }
     public bool HasOpenForm => editing is not null || offeredDraft is not null || confirmSave || confirmClose || confirmDelete || publicationTarget is not null;
 
-    // The legacy /acabados admin URL is an alias. The parent owns the only public iframe.
+    // Compatibility route for recovering existing product drafts.
     public Task BeginNewProductAsync() => busy ? Task.CompletedTask : NewProduct();
     public Task BeginProductEditAsync(int id) => busy ? Task.CompletedTask : EditProduct(id);
 
@@ -383,11 +384,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (!Embedded)
-        {
-            Navigation.NavigateTo("settings/public-site/editor?view=acabados", replace: true);
-            return;
-        }
+        // Keep existing session drafts accessible until the inline editor has equivalent recovery.
+        standalone = !Embedded;
         await Load();
     }
 
