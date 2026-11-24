@@ -32,6 +32,10 @@ public sealed class PublicCatalogMediaCleanupWorker(
                 var homeSectionKeys = await db.PublicHomeSections.AsNoTracking()
                     .Where(x => x.ImageStorageKey != null).Select(x => x.ImageStorageKey!).ToListAsync(stoppingToken);
                 keys.AddRange(homeSectionKeys);
+                // The Solutions page hero has its own SQL image reference, independent of Home.
+                keys.AddRange(await db.PublicSolutionsSections.AsNoTracking()
+                    .Where(x => x.Key == "hero" && x.ImageStorageKey != null)
+                    .Select(x => x.ImageStorageKey!).ToListAsync(stoppingToken));
                 // Public project photographs use the same durable storage, but not the
                 // public catalog images table. Include them before pruning active files.
                 keys.AddRange(await db.Set<PublicProjectImage>().AsNoTracking()

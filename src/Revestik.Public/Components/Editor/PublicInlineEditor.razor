@@ -7,18 +7,18 @@
 @inject NavigationManager Navigation
 @implements IAsyncDisposable
 
-@if (!string.IsNullOrWhiteSpace(error) && editing is null && sectionEditing is null)
+@if (!string.IsNullOrWhiteSpace(error) && editing is null && sectionEditing is null && solutionsEditing is null)
 {
     <p class="revestik-editor-error" role="alert">@error</p>
 }
 
-@if (editing is not null || sectionEditing is not null)
+@if (editing is not null || sectionEditing is not null || solutionsEditing is not null)
 {
     <div class="revestik-editor-backdrop">
         <section class="revestik-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="revestik-inline-dialog-title">
             <header class="revestik-editor-dialog-header">
                 <div>
-                    <p>@(sectionEditing is null ? $"REVESTIK · Inicio · Diapositiva {editing?.Slot}" : $"REVESTIK · Inicio · {SectionLabel}")</p>
+                    <p>@(solutionsEditing is not null ? $"REVESTIK · Soluciones · {SolutionsLabel}" : sectionEditing is null ? $"REVESTIK · Inicio · Diapositiva {editing?.Slot}" : $"REVESTIK · Inicio · {SectionLabel}")</p>
                     <h2 id="revestik-inline-dialog-title">@DialogTitle</h2>
                 </div>
                 <button type="button" disabled="@busy" @onclick="CancelAsync" aria-label="Cerrar editor">×</button>
@@ -38,7 +38,56 @@
             else
             {
                 <div class="revestik-editor-fields">
-                    @if (sectionEditing is not null)
+                    @if (solutionsEditing is not null)
+                    {
+                        @if (solutionsField == "image")
+                        {
+                            @if (pendingToken is not null)
+                            {
+                                <img class="revestik-editor-photo" src="@($"/api/admin/public-catalog/images/staged/{pendingToken}")" alt="Nueva fotografía, aún sin publicar" />
+                                <p>@pendingName · Pendiente de confirmar</p>
+                            }
+                            else if (solutionsEditing.HasImage && !removeImage)
+                            {
+                                <img class="revestik-editor-photo" src="@($"/api/admin/public-site/solutions-sections/hero/media?v={Uri.EscapeDataString(solutionsEditing.Version)}")" alt="Fotografía actual del hero de Soluciones" />
+                            }
+                            else
+                            {
+                                <p>El hero de Soluciones utiliza actualmente la composición gráfica predeterminada.</p>
+                            }
+                            <label>Seleccionar imagen JPG, PNG o WebP (máximo 5 MB)
+                                <input type="file" accept="image/jpeg,image/png,image/webp" @ref="imageInput" @onchange="StageImageAsync" disabled="@busy" />
+                            </label>
+                            @if (solutionsEditing.HasImage && pendingToken is null)
+                            {
+                                <label class="revestik-editor-checkbox">
+                                    <input type="checkbox" @bind="removeImage" /> Quitar fotografía y restaurar composición predeterminada
+                                </label>
+                            }
+                        }
+                        else
+                        {
+                            <label>@SolutionsFieldLabel en español
+                            @if (solutionsField == "eyebrow") { <input maxlength="90" @bind="solutionsEditing.Es.Eyebrow" /> }
+                            else if (solutionsField == "title") { <input maxlength="180" @bind="solutionsEditing.Es.Title" /> }
+                            else { <textarea maxlength="@(SolutionsApplication ? 500 : 1000)" rows="4" @bind="solutionsEditing.Es.Description"></textarea> }
+                        </label>
+                        <details>
+                            <summary>Traducciones opcionales</summary>
+                            <label>@SolutionsFieldLabel en inglés
+                                @if (solutionsField == "eyebrow") { <input maxlength="90" @bind="solutionsEn.Eyebrow" /> }
+                                else if (solutionsField == "title") { <input maxlength="180" @bind="solutionsEn.Title" /> }
+                                else { <textarea maxlength="@(SolutionsApplication ? 500 : 1000)" rows="3" @bind="solutionsEn.Description"></textarea> }
+                            </label>
+                            <label>@SolutionsFieldLabel en alemán
+                                @if (solutionsField == "eyebrow") { <input maxlength="90" @bind="solutionsDe.Eyebrow" /> }
+                                else if (solutionsField == "title") { <input maxlength="180" @bind="solutionsDe.Title" /> }
+                                else { <textarea maxlength="@(SolutionsApplication ? 500 : 1000)" rows="3" @bind="solutionsDe.Description"></textarea> }
+                            </label>
+                        </details>
+                        }
+                    }
+                    else if (sectionEditing is not null)
                     {
                         @if (sectionField is "eyebrow" or "title" or "description")
                         {
@@ -165,6 +214,8 @@
 
 @code {
     private bool IsHomeRoute => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/') is "/es" or "/en" or "/de";
+    private bool IsSolutionsRoute => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/') ==
+        SiteLinks.Path(Locale.FromUri(Navigation.Uri), 3);
     private IJSObjectReference? module;
     private DotNetObjectReference<PublicInlineEditor>? callback;
     private ElementReference imageInput;
@@ -173,6 +224,10 @@
     private HomeSectionCopy sectionEn = new(), sectionDe = new();
     private string sectionKey = "";
     private string sectionField = "";
+    private SolutionsSectionDto? solutionsEditing;
+    private SolutionsSectionCopy solutionsEn = new(), solutionsDe = new();
+    private string solutionsKey = "";
+    private string solutionsField = "";
     private int cardIndex = -1;
     private string target = "heading";
     private string? pendingToken;
@@ -199,9 +254,33 @@
         _ => "Fotografía"
     };
 
-    private string DialogTitle => sectionEditing is not null
-        ? $"{(sectionField == "image" ? "Cambiar fotografía" : $"Editar {SectionFieldLabel.ToLowerInvariant()}")} · {SectionLabel}"
-        : target switch
+    private string SolutionsLabel => solutionsKey switch
+    {
+        "hero" => "Portada",
+        "approach" => "El enfoque",
+        "applications" => "Aplicaciones",
+        "interior-flooring" => "Pisos interiores",
+        "exterior-flooring" => "Pisos exteriores",
+        "walls-facades" => "Paredes y fachadas",
+        "cta" => "Siguiente paso",
+        _ => "Sección"
+    };
+
+    private string SolutionsFieldLabel => solutionsField switch
+    {
+        "eyebrow" => "Etiqueta",
+        "title" => "Título",
+        "image" => "Fotografía",
+        _ => "Descripción"
+    };
+
+    private bool SolutionsApplication => solutionsKey is "interior-flooring" or "exterior-flooring" or "walls-facades";
+
+    private string DialogTitle => solutionsEditing is not null
+        ? (solutionsField == "image" ? "Cambiar fotografía · Portada de Soluciones" : $"Editar {SolutionsFieldLabel.ToLowerInvariant()} · {SolutionsLabel}")
+        : sectionEditing is not null
+            ? $"{(sectionField == "image" ? "Cambiar fotografía" : $"Editar {SectionFieldLabel.ToLowerInvariant()}")} · {SectionLabel}"
+            : target switch
     {
         "description" => "Editar descripción",
         "image" => "Cambiar fotografía",
@@ -214,7 +293,7 @@
         try
         {
             if (!await IsAdministratorAsync()) return;
-            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/public-inline-editor.js?v=VERIFY02-PERSISTENCE-FIX");
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/public-inline-editor.js?v=SOLUTIONS-EDITOR-01-HERO-IMAGE");
             callback = DotNetObjectReference.Create(this);
             await module.InvokeVoidAsync("attach", callback);
         }
@@ -316,6 +395,46 @@
         }
     }
 
+    [JSInvokable]
+    public async Task BeginSolutionsEdit(string key, string field)
+    {
+        if (!IsSolutionsRoute || busy || module is null || editing is not null ||
+            sectionEditing is not null || solutionsEditing is not null ||
+            !SolutionsSectionDefaults.AllowsField(key, field) || !await IsAdministratorAsync())
+            return;
+
+        busy = true;
+        error = null;
+        try
+        {
+            var sections = await module.InvokeAsync<SolutionsSectionDto[]>("getSolutionsSections");
+            var stored = sections.FirstOrDefault(s => s.Key == key);
+            solutionsEditing = stored?.Clone() ?? SolutionsSectionDefaults.Create(key);
+            solutionsEn = solutionsEditing.En?.Clone() ??
+                (stored is null ? SolutionsSectionDefaults.Copy(key, "en") : new());
+            solutionsDe = solutionsEditing.De?.Clone() ??
+                (stored is null ? SolutionsSectionDefaults.Copy(key, "de") : new());
+            solutionsKey = key;
+            solutionsField = field;
+            pendingToken = null;
+            pendingName = null;
+            removeImage = false;
+            confirmSave = false;
+        }
+        catch (JSException ex)
+        {
+            error = ex.Message.Contains("401") || ex.Message.Contains("403")
+                ? "Tu sesión no tiene autorización para editar Soluciones."
+                : "No se pudo cargar Soluciones. Comprobá la conexión e intentá nuevamente.";
+            solutionsEditing = null;
+        }
+        finally
+        {
+            busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
     private static bool HasTranslation(HomeSectionCopy copy) =>
         !string.IsNullOrWhiteSpace(copy.Eyebrow) || !string.IsNullOrWhiteSpace(copy.Title) ||
         !string.IsNullOrWhiteSpace(copy.Description) ||
@@ -334,8 +453,11 @@
 
     private async Task StageImageAsync(ChangeEventArgs _)
     {
-        if (busy || module is null || (editing is null && !(sectionEditing is not null && sectionKey == "solutions" && sectionField == "image")) ||
-            !await IsAdministratorAsync()) return;
+        var solutionsImage = IsSolutionsRoute && solutionsEditing is not null &&
+            solutionsKey == "hero" && solutionsField == "image";
+        if (busy || module is null || (editing is null &&
+            !(sectionEditing is not null && sectionKey == "solutions" && sectionField == "image") &&
+            !solutionsImage) || !await IsAdministratorAsync()) return;
 
         busy = true;
         error = null;
@@ -360,7 +482,25 @@
 
     private void ReviewSave()
     {
-        if ((editing is null && sectionEditing is null) || busy) return;
+        if ((editing is null && sectionEditing is null && solutionsEditing is null) || busy) return;
+        if (solutionsEditing is not null)
+        {
+            if (!SolutionsSectionDefaults.ValidCopy(solutionsKey, solutionsEditing.Es, required: true) ||
+                !SolutionsSectionDefaults.ValidCopy(solutionsKey, solutionsEn, required: false) ||
+                !SolutionsSectionDefaults.ValidCopy(solutionsKey, solutionsDe, required: false))
+            {
+                error = "Revisá el título, la descripción en español y las traducciones de esta sección.";
+                return;
+            }
+            if (solutionsField == "image" && pendingToken is null && !removeImage)
+            {
+                error = "Seleccioná una fotografía o marcá la opción de quitar la actual.";
+                return;
+            }
+            error = null;
+            confirmSave = true;
+            return;
+        }
         if (sectionEditing is not null)
         {
             var copy = sectionEditing.Es;
@@ -400,13 +540,34 @@
 
     private async Task SaveAsync()
     {
-        if (!IsHomeRoute || (editing is null && sectionEditing is null) || busy || module is null ||
-            !await IsAdministratorAsync()) return;
+        if (busy || module is null || !await IsAdministratorAsync()) return;
+        if (solutionsEditing is not null)
+        {
+            if (!IsSolutionsRoute || editing is not null || sectionEditing is not null) return;
+        }
+        else if (!IsHomeRoute || (editing is null && sectionEditing is null)) return;
 
         busy = true;
         error = null;
         try
         {
+            if (solutionsEditing is not null)
+            {
+                await module.InvokeVoidAsync("saveSolutionsSection", solutionsKey, new SolutionsSectionWrite
+                {
+                    Version = solutionsEditing.Version,
+                    Es = solutionsEditing.Es,
+                    En = SolutionsSectionDefaults.HasTranslation(solutionsEn) ? solutionsEn : null,
+                    De = SolutionsSectionDefaults.HasTranslation(solutionsDe) ? solutionsDe : null,
+                    ImageToken = solutionsField == "image" ? pendingToken : null,
+                    RemoveImage = solutionsField == "image" && removeImage
+                });
+                pendingToken = null;
+                solutionsEditing = null;
+                confirmSave = false;
+                await module.InvokeVoidAsync("refreshPage");
+                return;
+            }
             if (sectionEditing is not null)
             {
                 var sectionPayload = new HomeSectionWrite
@@ -478,6 +639,11 @@
             pendingName = null;
             editing = null;
             sectionEditing = null;
+            solutionsEditing = null;
+            solutionsKey = "";
+            solutionsField = "";
+            solutionsEn = new();
+            solutionsDe = new();
             sectionKey = "";
             sectionField = "";
             cardIndex = -1;

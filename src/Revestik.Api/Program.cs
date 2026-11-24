@@ -407,6 +407,7 @@ app.MapPublicProjectAdminEndpoints();
 app.MapPublicProjectTagEndpoints();
 app.MapPublicHomeHeroEndpoints();
 app.MapPublicHomeSectionEndpoints();
+app.MapPublicSolutionsSectionEndpoints();
 app.MapProductEndpoints();
 app.MapInventoryCatalogEndpoints();
 app.MapInventoryEndpoints();
