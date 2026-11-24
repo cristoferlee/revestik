@@ -50,7 +50,7 @@
                 <p class="home-hero-description" data-hero-copy>@(HomeSlides.FirstOrDefault(x => x.Slot == 1)?.Description(lang) ?? seo.Description)</p>
                 <div class="hero-actions">
                     <a class="hero-action-primary" href="@SiteLinks.Path(lang, 2)">@t.Nav[2]</a>
-                    <a class="hero-action-secondary" href="@SiteLinks.Path(lang, 5)">@t.Inquiry</a>
+                    <WhatsAppContactLink Language="@lang" CssClass="hero-action-secondary" Label="@t.Inquiry" />
                 </div>
             </div>
             <div class="hero-gallery-controls" aria-label="@GetGalleryLabel(lang)">
@@ -135,6 +135,10 @@
                         <a class="featured-product-link" href="@productUrl">
                             <span class="featured-product-label">@name <span aria-hidden="true">&#8594;</span></span>
                         </a>
+                        <button type="button" class="public-cart-quick-add" data-public-cart-add data-public-cart-activate disabled
+                                data-product-id="@product.Id" data-product-slug="@product.Slug" aria-label="@(lang == "en" ? $"Add {name} to cart" : lang == "de" ? $"{name} zum Warenkorb hinzufügen" : $"Agregar {name} al carrito")">
+                            @(lang == "en" ? "Add to cart" : lang == "de" ? "Zum Warenkorb" : "Agregar al carrito")
+                        </button>
                     </div>
                 }
                 @if (FeaturedProducts.Count == 0)
@@ -197,8 +201,7 @@
                 <p>@SectionValue("contact", lang, "description", GetContactText(lang))</p>
             </div>
             <div class="home-contact-actions">
-                <a class="home-contact-primary" href="@SiteLinks.Path(lang, 5)">@t.Inquiry</a>
-                <a class="home-contact-secondary" href="@SiteLinks.Path(lang, 5)">@GetContactLink(lang) <span aria-hidden="true">&#8594;</span></a>
+                <WhatsAppContactLink Language="@lang" CssClass="home-contact-primary" Label="@t.Nav[5]" />
             </div>
         </div>
     </section>
@@ -354,10 +357,6 @@
         "en" => "Tell us what you're looking for. We would like to learn about your project.",
         "de" => "Erzählen Sie uns von Ihren Vorstellungen. Wir möchten Ihr Projekt kennenlernen.",
         _ => "Contanos qué estás buscando. Queremos conocer tu proyecto."
-    };
-    private static string GetContactLink(string lang) => lang switch
-    {
-        "en" => "Contact", "de" => "Kontakt", _ => "Contacto"
     };
 
     private static string GetProjectHeading(string lang) => lang switch

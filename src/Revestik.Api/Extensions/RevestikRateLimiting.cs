@@ -10,6 +10,8 @@ public static class RevestikRateLimiting
     public const string Health = "health";
     public const string GmailSync = "gmail-sync";
     public const string DocumentUpload = "document-upload";
+    public const string PublicCart = "public-cart";
+    public const string PublicProforma = "public-proforma";
 
     public static IServiceCollection AddRevestikRateLimiting(this IServiceCollection services)
     {
@@ -54,6 +56,23 @@ public static class RevestikRateLimiting
                 {
                     PermitLimit = 3,
                     Window = TimeSpan.FromMinutes(5),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                }));
+            options.AddPolicy(PublicCart, context => RateLimitPartition.GetFixedWindowLimiter(
+                UserOrAddress(context), _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 60,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    AutoReplenishment = true
+                }));
+            // Anonymous PDF generation is expensive: limit by IP, not by user session.
+            options.AddPolicy(PublicProforma, context => RateLimitPartition.GetFixedWindowLimiter(
+                Address(context), _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 6,
+                    Window = TimeSpan.FromMinutes(1),
                     QueueLimit = 0,
                     AutoReplenishment = true
                 }));

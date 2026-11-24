@@ -99,6 +99,11 @@ public static class AuthenticationExtensions
                 PolicyNames.AuthenticatedUser,
                 policy => policy.RequireAuthenticatedUser())
             .AddPolicy(
+                PolicyNames.PublicCustomerOnly,
+                policy => policy.RequireAuthenticatedUser().RequireAssertion(context =>
+                    context.User.IsInRole(RoleNames.PublicCustomer) &&
+                    RoleNames.All.All(role => !context.User.IsInRole(role))))
+            .AddPolicy(
                 PolicyNames.AdministratorOnly,
                 policy => policy.RequireRole(
                     RoleNames.Administrator))

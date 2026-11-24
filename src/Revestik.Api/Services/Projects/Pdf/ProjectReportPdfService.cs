@@ -60,8 +60,8 @@ public sealed class ProjectReportPdfService(RevestikDbContext db, ProjectMilesto
 
         return Document.Create(document => document.Page(page =>
         {
-            page.Size(PageSizes.A4);
-            page.Margin(32);
+            page.Size(PageSizes.Letter);
+            page.Margin(36);
             page.DefaultTextStyle(x => x.FontFamily("Arial").FontSize(9).FontColor(Ink));
             page.Header().Column(col =>
             {

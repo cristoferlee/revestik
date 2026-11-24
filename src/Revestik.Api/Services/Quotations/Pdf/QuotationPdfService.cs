@@ -32,8 +32,8 @@ public sealed class QuotationPdfService(
         {
             document.Page(page =>
             {
-                page.Size(PageSizes.A4);
-                page.Margin(28);
+                page.Size(PageSizes.Letter);
+                page.Margin(36);
                 page.DefaultTextStyle(text => text
                     .FontFamily("Arial")
                     .FontSize(9)

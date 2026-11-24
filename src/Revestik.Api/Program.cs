@@ -162,6 +162,8 @@ builder.Services.AddDbContext<RevestikDbContext>(options => options.UseSqlServer
 builder.Services.AddRevestikAuthentication(builder.Configuration);
 builder.Services.AddRevestikPublicSite(builder.Configuration, builder.Environment);
 builder.Services.AddScoped<UserAdministrationService>();
+builder.Services.AddScoped<PublicCartService>();
+builder.Services.AddSingleton<PublicProformaPdfService>();
 builder.Services.AddBankVoucherGmailIntegration(builder.Configuration);
 
 builder.Services.AddScoped<ICabysCatalogService, CabysCatalogService>();
@@ -398,11 +400,14 @@ app.MapOperatingResultDashboardEndpoints();
 app.MapGmailIntegrationEndpoints();
 app.MapBankVoucherGmailIntegrationEndpoints();
 app.MapPublicCatalogEndpoints();
+app.MapPublicCartEndpoints();
+app.MapPublicProformaEndpoints();
 app.MapPublicProjectReadEndpoints();
 app.MapPublicProjectAdminEndpoints();
 app.MapPublicProjectTagEndpoints();
 app.MapPublicHomeHeroEndpoints();
 app.MapPublicHomeSectionEndpoints();
+app.MapPublicSolutionsSectionEndpoints();
 app.MapProductEndpoints();
 app.MapInventoryCatalogEndpoints();
 app.MapInventoryEndpoints();

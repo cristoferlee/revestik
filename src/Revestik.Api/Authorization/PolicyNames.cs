@@ -6,6 +6,8 @@ public static class PolicyNames
     // Only for identity/session operations shared with future public users.
     public const string AuthenticatedUser = "AuthenticatedUser";
 
+    public const string PublicCustomerOnly = "PublicCustomerOnly";
+
     public const string AdministratorOnly =
         "AdministratorOnly";
 

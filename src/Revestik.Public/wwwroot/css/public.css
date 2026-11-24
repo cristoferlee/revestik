@@ -398,6 +398,7 @@ body.public-viewer-open { overflow: hidden; }
 .editorial-hero-lead { max-width: 59ch; margin: 0; color: #ebedef; font-size: clamp(.96rem,1.26vw,1.08rem); line-height: 1.8; }
 .editorial-hero .hero-actions { margin-top: 29px; }
 .editorial-hero-art { position: relative; min-height: 270px; aspect-ratio: 5 / 4; max-height: 390px; overflow: hidden; border: 1px solid rgba(255,189,89,.52); background: rgba(255,255,255,.07); box-shadow: 0 25px 55px rgba(0,0,0,.14); backdrop-filter: blur(9px); }
+.editorial-hero--solutions .editorial-hero-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .editorial-material { position: absolute; width: 54%; height: 72%; border: 1px solid rgba(255,255,255,.4); transform: skewY(-7deg) rotate(-5deg); box-shadow: 12px 18px 25px rgba(0,0,0,.13); }
 .editorial-material--one { left: 12%; top: 17%; background: linear-gradient(135deg,#a5b0ae,#5f7370); }
 .editorial-material--two { left: 29%; top: 12%; background: linear-gradient(135deg,#c0b4a1,#747167); }
@@ -430,6 +431,7 @@ body.public-viewer-open { overflow: hidden; }
 @media (max-width: 860px) {
   .editorial-hero-shell { grid-template-columns: minmax(0,1fr); padding: 65px 22px; }
   .editorial-hero-art { display: none; }
+  .editorial-hero--solutions .editorial-hero-art--photo { display: block; width: 100%; min-height: 220px; max-height: 330px; }
   .editorial-intro { grid-template-columns: minmax(0,1fr); gap: 17px; }
   .editorial-cta { flex-direction: column; align-items: flex-start; }
 }

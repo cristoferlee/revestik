@@ -11,13 +11,20 @@
                 <a class="hero-action-secondary" href="@SecondaryHref">@SecondaryLabel</a>
             </div>
         </div>
-        <div class="editorial-hero-art" aria-hidden="true">
+        <div class="editorial-hero-art @(Variant == "solutions" && !string.IsNullOrWhiteSpace(ImageSrc) ? "editorial-hero-art--photo" : "")" aria-hidden="true">
             @if (Variant == "solutions")
             {
-                <div class="editorial-material editorial-material--one"></div>
-                <div class="editorial-material editorial-material--two"></div>
-                <div class="editorial-material editorial-material--three"></div>
-                <span class="editorial-art-accent"></span>
+                @if (!string.IsNullOrWhiteSpace(ImageSrc))
+                {
+                    <img class="editorial-hero-photo" src="@ImageSrc" alt="" loading="eager" decoding="async" />
+                }
+                else
+                {
+                    <div class="editorial-material editorial-material--one"></div>
+                    <div class="editorial-material editorial-material--two"></div>
+                    <div class="editorial-material editorial-material--three"></div>
+                    <span class="editorial-art-accent"></span>
+                }
             }
             else
             {
@@ -35,6 +42,7 @@
     [Parameter, EditorRequired] public string Eyebrow { get; set; } = string.Empty;
     [Parameter, EditorRequired] public string Heading { get; set; } = string.Empty;
     [Parameter, EditorRequired] public string Introduction { get; set; } = string.Empty;
+    [Parameter] public string? ImageSrc { get; set; }
     [Parameter, EditorRequired] public string PrimaryHref { get; set; } = string.Empty;
     [Parameter, EditorRequired] public string PrimaryLabel { get; set; } = string.Empty;
     [Parameter, EditorRequired] public string SecondaryHref { get; set; } = string.Empty;

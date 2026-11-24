@@ -159,6 +159,10 @@
                                         @if (product.Price is decimal price) { <p>@price.ToString("N2") @product.Currency / @product.SalesUnit</p> }
                                     </div>
                                 </a>
+                                <button type="button" class="public-cart-quick-add" data-public-cart-add data-public-cart-activate disabled
+                                        data-product-id="@product.Id" data-product-slug="@product.Slug" aria-label="@L($"Agregar {product.Text(Lang)?.Name ?? product.Slug} al carrito", $"Add {product.Text(Lang)?.Name ?? product.Slug} to cart", $"{product.Text(Lang)?.Name ?? product.Slug} zum Warenkorb hinzufügen")">
+                                    @L("Agregar al carrito", "Add to cart", "Zum Warenkorb")
+                                </button>
                             </article>
                         }
                     </div>

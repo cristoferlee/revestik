@@ -1,0 +1,51 @@
+@inject IConfiguration Configuration
+@{
+    var href = GetHref(Language);
+    var isWhatsApp = href.StartsWith("https://wa.me/", StringComparison.Ordinal);
+}
+@if (isWhatsApp || !HideWhenUnavailable)
+{
+    <a class="@CssClass" href="@href"
+       target="@(isWhatsApp ? "_blank" : null)"
+       rel="@(isWhatsApp ? "noopener noreferrer" : null)"
+       style="display:inline-flex;align-items:center;justify-content:center;gap:8px;">
+        @if (isWhatsApp)
+        {
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                 fill="currentColor" aria-hidden="true" focusable="false">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.198.297-.767.966-.94 1.164-.173.198-.347.223-.644.075-.297-.149-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.173.198-.297.297-.495.1-.198.05-.371-.025-.52-.074-.148-.669-1.612-.916-2.206-.242-.579-.487-.5-.669-.51l-.569-.01c-.198 0-.52.074-.792.371s-1.04 1.016-1.04 2.479 1.065 2.875 1.213 3.073c.149.198 2.095 3.2 5.077 4.487.71.306 1.263.489 1.695.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.29.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.856 9.856 0 0 1-5.031-1.378l-.361-.214-3.74.981.998-3.646-.235-.374a9.846 9.846 0 0 1-1.51-5.26c.002-5.446 4.435-9.88 9.886-9.88a9.82 9.82 0 0 1 6.99 2.895 9.825 9.825 0 0 1 2.891 6.993c-.003 5.446-4.437 9.88-9.884 9.88m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.893a11.83 11.83 0 0 0 1.586 5.932L0 24l6.317-1.657a11.87 11.87 0 0 0 5.728 1.458h.005c6.557 0 11.892-5.335 11.895-11.893a11.815 11.815 0 0 0-3.48-8.42Z" />
+            </svg>
+        }
+        <span>@Label</span>
+    </a>
+}
+else if (!string.IsNullOrWhiteSpace(UnavailableMessage))
+{
+    <p role="status">@UnavailableMessage</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Language { get; set; } = "es";
+    [Parameter, EditorRequired] public string CssClass { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public bool HideWhenUnavailable { get; set; }
+    [Parameter] public string? UnavailableMessage { get; set; }
+
+    // One official contact implementation reused by the header, Home and Contact page.
+    // When the number is unavailable, the default behavior remains the Contact page.
+    private string GetHref(string language)
+    {
+        var phone = Configuration["PublicSite:WhatsAppNumber"]?.Trim();
+        if (phone is null || phone.Length is < 8 or > 15 || phone[0] == '0' ||
+            phone.Any(c => !char.IsAsciiDigit(c)))
+            return SiteLinks.Path(language, 5);
+
+        var message = language switch
+        {
+            "en" => "Hello REVESTIK, I would like information about your products.",
+            "de" => "Hallo REVESTIK, ich möchte mich zu Ihren Produkten beraten lassen.",
+            _ => "Hola REVESTIK, quisiera recibir asesoría sobre sus productos."
+        };
+        return $"https://wa.me/{phone}?text={Uri.EscapeDataString(message)}";
+    }
+}

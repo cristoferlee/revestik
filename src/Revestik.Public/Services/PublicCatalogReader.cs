@@ -10,6 +10,9 @@ public sealed class PublicCatalogReader(HttpClient http)
     public async Task<List<HomeSectionDto>> HomeSections(CancellationToken ct = default) =>
         await http.GetFromJsonAsync<List<HomeSectionDto>>("api/public/site/home-sections", ct) ?? [];
 
+    public async Task<List<SolutionsSectionDto>> SolutionsSections(CancellationToken ct = default) =>
+        await http.GetFromJsonAsync<List<SolutionsSectionDto>>("api/public/site/solutions-sections", ct) ?? [];
+
     public async Task<HttpResponseMessage> HomeSolutionsImage(CancellationToken ct = default) =>
         await http.GetAsync("api/public/site/home-sections/solutions/media", HttpCompletionOption.ResponseHeadersRead, ct);
 

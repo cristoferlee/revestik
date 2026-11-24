@@ -13,6 +13,20 @@ public static class SiteLinks
         return $"/{lang}" + (slug.Length == 0 ? "" : $"/{slug}");
     }
 
+    public static string CartPath(string lang) => (lang is "en" or "de" ? lang : "es") switch
+    {
+        "en" => "/en/cart",
+        "de" => "/de/warenkorb",
+        _ => "/es/carrito"
+    };
+
+    public static bool IsCartRoute(string uri)
+    {
+        var parts = new Uri(uri).AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 2 &&
+            string.Equals("/" + parts[0] + "/" + parts[1], CartPath(parts[0]), StringComparison.Ordinal);
+    }
+
     // Public projects have language-neutral slugs. Validate their shape, not a hard-coded example list.
     public static bool IsProjectSlug(string? slug) =>
         slug is { Length: >= 1 and <= 160 } && slug[0] != '-' && slug[^1] != '-' &&
@@ -23,6 +37,7 @@ public static class SiteLinks
     {
         var sourceUri = new Uri(currentUri);
         var current = sourceUri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (IsCartRoute(currentUri)) return CartPath(language);
         var page = PageFromUri(currentUri);
         var target = Path(language, page);
         if (page == 1 && current.Length == 3 && IsProjectSlug(current[2]))
@@ -53,6 +68,9 @@ public static class SiteLinks
         var parts = new Uri(uri).AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0 || parts[0] is not ("es" or "en" or "de")) return false;
         var current = parts[0];
+        // Cart is intentionally NOT an editable/SEO-canonical editorial page.
+        // Razor routing handles it independently; keep the editor allowlist unchanged.
+        if (IsCartRoute(uri)) return false;
         if (parts.Length == 1) return true;
         var page = PageFromUri(uri);
         if (page == 0 || Path(current, page).Trim('/').Split('/').Last() != parts[1]) return false;
@@ -71,6 +89,7 @@ public static class SiteLinks
     public static int PageFromUri(string uri)
     {
         var path = new Uri(uri).AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (IsCartRoute(uri)) return -1;
         if (path.Length < 2) return 0;
         var lang = path[0];
         var slugs = lang == "en" ? SlugsEn : lang == "de" ? SlugsDe : SlugsEs;
