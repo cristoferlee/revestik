@@ -1,5 +1,7 @@
 # REVESTIK — Public Website Master Checkpoint
 
+> **Current local checkpoint (2026-11-23):** [Solutions and editorial verification](PUBLIC-WEB-01-LOCAL-CHECKPOINT-20261123.md). The historical branch, HEAD, workstream and working-tree inventory below describe an earlier snapshot, not the present local or production state.
+
 - **Checkpoint date:** 2026-11-18
 - **Active workstream:** `PUBLIC-AUTH-01` — blocks 01A, 01B and 01C implemented and locally verified; 01D partly verified; 01E production review not started
 - **Next bounded block:** `PUBLIC-AUTH-01D` — close remaining local security/UX verification and reconcile the exact Git diff; **do not implement new features without an approved plan**
