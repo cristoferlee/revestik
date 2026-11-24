@@ -19,28 +19,24 @@ public sealed class BankVoucherReviewService(RevestikDbContext dbContext)
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // Cache is scoped to this list request, never shared across users or requests.
+        var lookups = new BatchLookupContext(dbContext);
         await RequeueAcceptedWithLateCandidatesAsync(
-            request,
-            cancellationToken);
+            request, lookups, cancellationToken);
 
         var vouchersQuery = ApplyDateRange(
-            dbContext.BankVouchers.AsNoTracking(),
-            request);
+            dbContext.BankVouchers.AsNoTracking(), request);
 
         if (request.Status.HasValue)
         {
-            vouchersQuery = vouchersQuery.Where(x =>
-                x.Status == request.Status.Value);
+            vouchersQuery = vouchersQuery.Where(x => x.Status == request.Status.Value);
         }
         else if (request.ExcludeNeedsReview)
         {
-            vouchersQuery = vouchersQuery.Where(x =>
-                x.Status != BankVoucherStatus.NeedsReview);
+            vouchersQuery = vouchersQuery.Where(x => x.Status != BankVoucherStatus.NeedsReview);
         }
 
-        var totalCount = await vouchersQuery.CountAsync(
-            cancellationToken);
-
+        var totalCount = await vouchersQuery.CountAsync(cancellationToken);
         var vouchers = await vouchersQuery
             .OrderByDescending(x => x.TransactionDate)
             .ThenByDescending(x => x.Id)
@@ -48,23 +44,15 @@ public sealed class BankVoucherReviewService(RevestikDbContext dbContext)
             .Take(request.PageSize)
             .ToListAsync(cancellationToken);
 
-        var results =
-            new List<BankVoucherReviewItemResponse>(vouchers.Count);
-
-        foreach (var voucher in vouchers)
+        var results = new List<BankVoucherReviewItemResponse>(vouchers.Count);
+        foreach (var batch in vouchers.Chunk(BatchSize))
         {
-            var analysis = await AnalyzeAsync(
-                voucher,
-                cancellationToken);
-
-            results.Add(Map(voucher, analysis));
+            var analyses = await AnalyzeBatchAsync(batch, lookups, cancellationToken);
+            for (var index = 0; index < batch.Length; index++)
+                results.Add(Map(batch[index], analyses[index]));
         }
 
-        return new BankVoucherPageResponse(
-            results,
-            totalCount,
-            request.Page,
-            request.PageSize);
+        return new BankVoucherPageResponse(results, totalCount, request.Page, request.PageSize);
     }
 
     public async Task<BankVoucherReviewItemResponse?> GetByIdAsync(
@@ -155,11 +143,12 @@ public sealed class BankVoucherReviewService(RevestikDbContext dbContext)
 
     private async Task RequeueAcceptedWithLateCandidatesAsync(
         BankVoucherListRequest request,
+        BatchLookupContext lookups,
         CancellationToken cancellationToken)
     {
+        // Deliberately preserve full date-scoped reconciliation until 02A.4.
         var acceptedQuery = ApplyDateRange(
-            dbContext.BankVouchers,
-            request)
+            dbContext.BankVouchers, request)
             .Where(x => x.Status == BankVoucherStatus.Accepted);
 
         var accepted = await acceptedQuery
@@ -167,19 +156,17 @@ public sealed class BankVoucherReviewService(RevestikDbContext dbContext)
             .ToListAsync(cancellationToken);
 
         var changed = false;
-
-        foreach (var voucher in accepted)
+        foreach (var batch in accepted.Chunk(BatchSize))
         {
-            var analysis = await AnalyzeAsync(
-                voucher,
-                cancellationToken);
-
-            if (analysis.Candidates.Count == 0)
-                continue;
-
-            voucher.Status = BankVoucherStatus.NeedsReview;
-            voucher.UpdatedAtUtc = DateTime.UtcNow;
-            changed = true;
+            var analyses = await AnalyzeBatchAsync(batch, lookups, cancellationToken);
+            for (var index = 0; index < batch.Length; index++)
+            {
+                if (analyses[index].Candidates.Count == 0)
+                    continue;
+                batch[index].Status = BankVoucherStatus.NeedsReview;
+                batch[index].UpdatedAtUtc = DateTime.UtcNow;
+                changed = true;
+            }
         }
 
         if (changed)
@@ -214,40 +201,38 @@ public sealed class BankVoucherReviewService(RevestikDbContext dbContext)
         return query;
     }
 
+    // The single-item operations retain the same matching rules as list operations.
     private async Task<VoucherAnalysis> AnalyzeAsync(
-        BankVoucher voucher,
+        BankVoucher voucher, CancellationToken cancellationToken)
+    {
+        var analyses = await AnalyzeBatchAsync(
+            [voucher], new BatchLookupContext(dbContext), cancellationToken);
+        return analyses[0];
+    }
+
+    private const int BatchSize = 25;
+
+    private async Task<IReadOnlyList<VoucherAnalysis>> AnalyzeBatchAsync(
+        IReadOnlyList<BankVoucher> vouchers,
+        BatchLookupContext lookups,
         CancellationToken cancellationToken)
     {
-        var merchantKey = NormalizeName(voucher.MerchantName);
+        if (vouchers.Count == 0)
+            return [];
 
-        var suppliers = await dbContext.Suppliers
-            .AsNoTracking()
-            .Where(x => x.IsActive)
-            .Select(x => new
-            {
-                x.Name,
-                x.CommercialName
-            })
-            .ToListAsync(cancellationToken);
+        var suppliers = await lookups.GetSuppliersAsync(cancellationToken);
+        var amounts = vouchers.Select(x => x.Amount).Distinct().ToArray();
+        var currencies = vouchers.Select(x => x.Currency).Distinct().ToArray();
+        var earliest = vouchers.Min(x => x.TransactionDate) - MatchWindow;
+        var latest = vouchers.Max(x => x.TransactionDate) + MatchWindow;
 
-        var knownSupplier = suppliers.Any(x =>
-            NamesCompatible(
-                merchantKey,
-                NormalizeName(x.Name)) ||
-            NamesCompatible(
-                merchantKey,
-                NormalizeName(x.CommercialName)));
-
-        var from = voucher.TransactionDate - MatchWindow;
-        var until = voucher.TransactionDate + MatchWindow;
-
-        var documentCandidates = await dbContext.ElectronicDocuments
-            .AsNoTracking()
+        // Superset query only. Reapply every voucher's exact amount, currency,
+        // time window, and normalized merchant compatibility below.
+        var documents = await dbContext.ElectronicDocuments.AsNoTracking()
             .Where(x =>
-                x.TotalDocument == voucher.Amount &&
-                x.CurrencyCode == voucher.Currency &&
-                x.FechaEmision >= from &&
-                x.FechaEmision <= until)
+                amounts.Contains(x.TotalDocument) &&
+                currencies.Contains(x.CurrencyCode) &&
+                x.FechaEmision >= earliest && x.FechaEmision <= latest)
             .Select(x => new
             {
                 x.Id,
@@ -265,57 +250,105 @@ public sealed class BankVoucherReviewService(RevestikDbContext dbContext)
             })
             .ToListAsync(cancellationToken);
 
-        var compatible = documentCandidates
-            .Where(x =>
-                NamesCompatible(
-                    merchantKey,
-                    NormalizeName(x.IssuerName)) ||
-                NamesCompatible(
-                    merchantKey,
-                    NormalizeName(x.IssuerCommercialName)))
-            .OrderBy(x => Math.Abs(
-                (x.FechaEmision - voucher.TransactionDate).TotalMinutes))
-            .Select(x => new BankVoucherMatchCandidateResponse(
-                x.Id,
-                x.IssuerName,
-                string.IsNullOrWhiteSpace(x.IssuerCommercialName)
-                    ? null
-                    : x.IssuerCommercialName,
-                x.FechaEmision,
-                x.TotalDocument,
-                x.CurrencyCode,
-                x.AccountingNature,
-                x.CategoryName))
-            .ToList();
-
-        var knownIssuer = compatible.Count > 0;
-
-        if (!knownIssuer)
+        var candidateKeys = documents.Select(x => new
         {
-            knownIssuer = await dbContext.ElectronicDocuments
-                .AsNoTracking()
-                .Select(x => new
-                {
-                    x.IssuerName,
-                    x.IssuerCommercialName
-                })
-                .ToListAsync(cancellationToken)
-                .ContinueWith(
-                    task => task.Result.Any(x =>
-                        NamesCompatible(
-                            merchantKey,
-                            NormalizeName(x.IssuerName)) ||
-                        NamesCompatible(
-                            merchantKey,
-                            NormalizeName(x.IssuerCommercialName))),
-                    cancellationToken,
-                    TaskContinuationOptions.ExecuteSynchronously,
-                    TaskScheduler.Default);
+            Document = x,
+            IssuerKey = NormalizeName(x.IssuerName),
+            CommercialKey = NormalizeName(x.IssuerCommercialName)
+        }).ToList();
+
+        var analyses = new List<VoucherAnalysis>(vouchers.Count);
+        foreach (var voucher in vouchers)
+        {
+            var merchantKey = NormalizeName(voucher.MerchantName);
+            var knownSupplier = suppliers.Any(x =>
+                NamesCompatible(merchantKey, x.Name) ||
+                NamesCompatible(merchantKey, x.CommercialName));
+
+            var from = voucher.TransactionDate - MatchWindow;
+            var until = voucher.TransactionDate + MatchWindow;
+
+            var compatible = candidateKeys
+                .Where(x =>
+                    x.Document.TotalDocument == voucher.Amount &&
+                    x.Document.CurrencyCode == voucher.Currency &&
+                    x.Document.FechaEmision >= from &&
+                    x.Document.FechaEmision <= until &&
+                    (NamesCompatible(merchantKey, x.IssuerKey) ||
+                     NamesCompatible(merchantKey, x.CommercialKey)))
+                .OrderBy(x => Math.Abs(
+                    (x.Document.FechaEmision - voucher.TransactionDate).TotalMinutes))
+                .Select(x => new BankVoucherMatchCandidateResponse(
+                    x.Document.Id,
+                    x.Document.IssuerName,
+                    string.IsNullOrWhiteSpace(x.Document.IssuerCommercialName)
+                        ? null
+                        : x.Document.IssuerCommercialName,
+                    x.Document.FechaEmision,
+                    x.Document.TotalDocument,
+                    x.Document.CurrencyCode,
+                    x.Document.AccountingNature,
+                    x.Document.CategoryName))
+                .ToList();
+
+            // Preserve the original historical-issuer fallback. Memoization avoids
+            // repeated full-history queries for the same normalized merchant.
+            var knownIssuer = compatible.Count > 0 ||
+                await lookups.GetKnownIssuerAsync(merchantKey, cancellationToken);
+
+            analyses.Add(new VoucherAnalysis(knownSupplier || knownIssuer, compatible));
+        }
+        return analyses;
+    }
+
+    private sealed class BatchLookupContext(RevestikDbContext db)
+    {
+        private IReadOnlyList<(string Name, string CommercialName)>? suppliers;
+        private IReadOnlyList<(string IssuerName, string CommercialName)>? issuers;
+        private readonly Dictionary<string, bool> issuerMatches = new(StringComparer.Ordinal);
+
+        public async Task<IReadOnlyList<(string Name, string CommercialName)>> GetSuppliersAsync(
+            CancellationToken cancellationToken)
+        {
+            if (suppliers is not null)
+                return suppliers;
+
+            var rows = await db.Suppliers.AsNoTracking()
+                .Where(x => x.IsActive)
+                .Select(x => new { x.Name, x.CommercialName })
+                .ToListAsync(cancellationToken);
+
+            suppliers = rows.Select(x =>
+                (Name: NormalizeName(x.Name),
+                 CommercialName: NormalizeName(x.CommercialName)))
+                .ToList();
+            return suppliers;
         }
 
-        return new VoucherAnalysis(
-            knownSupplier || knownIssuer,
-            compatible);
+        public async Task<bool> GetKnownIssuerAsync(
+            string merchantKey, CancellationToken cancellationToken)
+        {
+            if (issuerMatches.TryGetValue(merchantKey, out var result))
+                return result;
+
+            if (issuers is null)
+            {
+                var rows = await db.ElectronicDocuments.AsNoTracking()
+                    .Select(x => new { x.IssuerName, x.IssuerCommercialName })
+                    .ToListAsync(cancellationToken);
+
+                issuers = rows.Select(x =>
+                    (IssuerName: NormalizeName(x.IssuerName),
+                     CommercialName: NormalizeName(x.IssuerCommercialName)))
+                    .ToList();
+            }
+
+            result = issuers.Any(x =>
+                NamesCompatible(merchantKey, x.IssuerName) ||
+                NamesCompatible(merchantKey, x.CommercialName));
+            issuerMatches[merchantKey] = result;
+            return result;
+        }
     }
 
     internal static string NormalizeName(string? value)
