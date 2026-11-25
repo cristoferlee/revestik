@@ -100,6 +100,76 @@ public sealed class PublicCatalogMediaStorage
         return deleted;
     }
 
+    internal FileStream AcquireCleanupLease()
+    {
+        var directory = Path.Combine(_root, "maintenance");
+        Directory.CreateDirectory(directory);
+
+        // Keep the lock file permanently. Only its open handle
+        // determines whether another cleanup owns the lease.
+        return new FileStream(
+            Path.Combine(directory, "cleanup.lock"),
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            FileShare.None);
+    }
+
+    internal DateTimeOffset? ReadNextCleanupUtc()
+    {
+        var path = Path.Combine(
+            _root, "maintenance", "next-cleanup-utc.txt");
+
+        string value;
+
+        try
+        {
+            value = File.ReadAllText(path).Trim();
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+
+        if (!DateTimeOffset.TryParseExact(
+            value,
+            "O",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None,
+            out var next) || next.Offset != TimeSpan.Zero)
+        {
+            throw new InvalidDataException(
+                "Invalid public media cleanup schedule.");
+        }
+
+        return next;
+    }
+
+    internal void WriteNextCleanupUtc(DateTimeOffset next)
+    {
+        var directory = Path.Combine(_root, "maintenance");
+        Directory.CreateDirectory(directory);
+
+        var target = Path.Combine(directory, "next-cleanup-utc.txt");
+        var temporary = Path.Combine(
+            directory, Guid.NewGuid().ToString("N") + ".tmp");
+
+        try
+        {
+            File.WriteAllText(
+                temporary,
+                next.ToUniversalTime().ToString(
+                    "O",
+                    System.Globalization.CultureInfo.InvariantCulture));
+
+            File.Move(temporary, target, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporary))
+                File.Delete(temporary);
+        }
+    }
+
     private static string GetPath(string root, string key)
     {
         if (!IsToken(key)) throw new InvalidDataException("Invalid media identifier.");

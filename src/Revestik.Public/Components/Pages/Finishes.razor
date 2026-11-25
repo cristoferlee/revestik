@@ -214,14 +214,9 @@
     {
         try
         {
-            Categories = await Catalog.Categories();
+            Categories = await Catalog.Categories(CategoryId);
             SelectedCategory = CategoryId is int id ? Categories.FirstOrDefault(c => c.Id == id) : null;
-            Subcategories = [];
-            if (SelectedCategory is not null)
-            {
-                var category = await Catalog.Category(SelectedCategory.Slug);
-                Subcategories = category?.Subcategories ?? [];
-            }
+            Subcategories = SelectedCategory?.Subcategories ?? [];
             Products = await Catalog.Products(CurrentPage, CategoryId, SubcategoryId, Search);
             Error = false;
             try { SavedSlides = await HeroCatalog.Slides(); }

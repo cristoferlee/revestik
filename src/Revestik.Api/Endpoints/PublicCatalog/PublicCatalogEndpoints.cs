@@ -1,6 +1,7 @@
 using System.Data;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Authorization;
@@ -98,9 +99,33 @@ public static class PublicCatalogEndpoints
     }
     // The sole selectable taxonomy is ProductCategories/ProductSubcategories.
     // Public-specific text lives on those same records; external response contracts remain stable.
-    private static object CategoryDto(ProductCategory x) => new
+    private sealed record CategoryResponse
     {
-        x.Id, Slug = x.PublicSlug ?? MakePublicSlug(x.Name), NameEs = x.Name,
+        public int Id { get; init; }
+        public string Slug { get; init; } = "";
+        public string NameEs { get; init; } = "";
+        public string? NameEn { get; init; }
+        public string? NameDe { get; init; }
+        public string? DescriptionEs { get; init; }
+        public string? DescriptionEn { get; init; }
+        public string? DescriptionDe { get; init; }
+        public string? HeroTitleEs { get; init; }
+        public string? HeroTitleEn { get; init; }
+        public string? HeroTitleDe { get; init; }
+        public string? HeroDescriptionEs { get; init; }
+        public string? HeroDescriptionEn { get; init; }
+        public string? HeroDescriptionDe { get; init; }
+        public int DisplayOrder { get; init; }
+        public bool IsActive { get; init; }
+        public string Version { get; init; } = "";
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public IReadOnlyList<object>? Subcategories { get; init; }
+    }
+
+    private static CategoryResponse CategoryDto(ProductCategory x) => new()
+    {
+        Id = x.Id, Slug = x.PublicSlug ?? MakePublicSlug(x.Name), NameEs = x.Name,
         NameEn = x.PublicNameEn, NameDe = x.PublicNameDe,
         DescriptionEs = x.PublicDescriptionEs, DescriptionEn = x.PublicDescriptionEn,
         DescriptionDe = x.PublicDescriptionDe, HeroTitleEs = x.PublicHeroTitleEs,
@@ -108,7 +133,7 @@ public static class PublicCatalogEndpoints
         HeroDescriptionEs = x.PublicHeroDescriptionEs,
         HeroDescriptionEn = x.PublicHeroDescriptionEn,
         HeroDescriptionDe = x.PublicHeroDescriptionDe,
-        DisplayOrder = x.PublicDisplayOrder, x.IsActive, Version = V(x.RowVersion)
+        DisplayOrder = x.PublicDisplayOrder, IsActive = x.IsActive, Version = V(x.RowVersion)
     };
     private static object SubcategoryDto(ProductSubcategory x) => new
     {
@@ -670,11 +695,36 @@ public static class PublicCatalogEndpoints
         try{storage.DeleteActive(image.StorageKey);}catch(IOException){} // orphan cleanup is retryable
         return Results.NoContent();
     }
-    private static async Task<IResult> PublicCategories(RevestikDbContext db,CancellationToken ct)
+    private static async Task<IResult> PublicCategories(
+        int? includeSubcategoriesFor,
+        RevestikDbContext db,
+        CancellationToken ct)
     {
         var items = await PublicCatalogVisibility.VisibleCategories(db).AsNoTracking()
             .OrderBy(c => c.PublicDisplayOrder).ThenBy(c => c.Id).ToListAsync(ct);
-        return Results.Ok(items.Select(CategoryDto));
+
+        var categories = items.Select(CategoryDto).ToArray();
+
+        if (includeSubcategoriesFor is int selectedId)
+        {
+            var index = Array.FindIndex(categories, c => c.Id == selectedId);
+
+            if (index >= 0)
+            {
+                var subcategories = await PublicCatalogVisibility
+                    .VisibleSubcategories(db).AsNoTracking()
+                    .Where(s => s.CategoryId == selectedId)
+                    .OrderBy(s => s.PublicDisplayOrder)
+                    .ToListAsync(ct);
+
+                categories[index] = categories[index] with
+                {
+                    Subcategories = subcategories.Select(SubcategoryDto).ToArray()
+                };
+            }
+        }
+
+        return Results.Ok(categories);
     }
     private static async Task<IResult> PublicCategory(string slug,RevestikDbContext db,CancellationToken ct)
     {

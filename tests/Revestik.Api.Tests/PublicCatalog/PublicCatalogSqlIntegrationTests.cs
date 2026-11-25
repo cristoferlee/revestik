@@ -1,3 +1,11 @@
+using System.Data.Common;
+using System.Net;
+using System.Net.Http.Json;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
+using Revestik.Api.Data;
+using Revestik.Public.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 using Revestik.Api.Models;
@@ -12,6 +20,328 @@ namespace Revestik.Api.Tests.PublicCatalog;
 public sealed class PublicCatalogSqlIntegrationTests(SqlServerIntegrationTestFixture fixture)
     : IClassFixture<SqlServerIntegrationTestFixture>
 {
+    [Fact]
+    public async Task FinishesCategoryFilters_SqlCommandBaseline()
+    {
+        int categoryId;
+        int otherCategoryId;
+        int productId;
+        string categorySlug;
+        int[] subcategoryIds;
+        int unrelatedSubcategoryId;
+
+        await using (var db = fixture.CreateDbContext())
+        {
+            var category = Category();
+            category.IsActive = false;
+
+            var otherCategory = Category();
+
+            db.ProductCategories.AddRange(category, otherCategory);
+            await db.SaveChangesAsync();
+
+            var exterior = Subcategory(category.Id);
+            exterior.Name = UniqueSlug("Exteriores");
+            exterior.PublicDisplayOrder = 1;
+
+            var antislip = Subcategory(category.Id);
+            antislip.Name = UniqueSlug("Antideslizantes");
+            antislip.PublicDisplayOrder = 2;
+            antislip.IsActive = false;
+
+            var destonificado = Subcategory(category.Id);
+            destonificado.Name = UniqueSlug("Destonificado");
+            destonificado.PublicDisplayOrder = 3;
+
+            var unrelated = Subcategory(category.Id);
+            unrelated.PublicDisplayOrder = 4;
+
+            var otherSubcategory = Subcategory(otherCategory.Id);
+
+            db.ProductSubcategories.AddRange(
+                exterior, antislip, destonificado,
+                unrelated, otherSubcategory);
+
+            var product = Product();
+            product.IsPublished = true;
+
+            var hidden = Product();
+            hidden.IsPublished = false;
+
+            var otherProduct = Product();
+            otherProduct.IsPublished = true;
+
+            db.PublicCatalogProducts.AddRange(
+                product, hidden, otherProduct);
+
+            await db.SaveChangesAsync();
+
+            db.PublicCatalogProductSubcategories.AddRange(
+                new()
+                {
+                    ProductId = product.Id,
+                    SubcategoryId = exterior.Id
+                },
+                new()
+                {
+                    ProductId = product.Id,
+                    SubcategoryId = antislip.Id
+                },
+                new()
+                {
+                    ProductId = product.Id,
+                    SubcategoryId = destonificado.Id
+                },
+                new()
+                {
+                    ProductId = hidden.Id,
+                    SubcategoryId = exterior.Id
+                },
+                new()
+                {
+                    ProductId = otherProduct.Id,
+                    SubcategoryId = otherSubcategory.Id
+                });
+
+            await db.SaveChangesAsync();
+
+            categoryId = category.Id;
+            otherCategoryId = otherCategory.Id;
+            categorySlug = category.PublicSlug!;
+            productId = product.Id;
+
+            subcategoryIds =
+            [
+                exterior.Id,
+                antislip.Id,
+                destonificado.Id
+            ];
+
+            unrelatedSubcategoryId = unrelated.Id;
+        }
+
+        var counter = new FinishesSqlCommandCounter();
+
+        using var factory = new RevestikWebApplicationFactory(
+            "Development",
+            fixture.ConnectionString,
+            customizeTestServices: services =>
+            {
+                services.AddDbContext<RevestikDbContext>(
+                    options => options.AddInterceptors(counter));
+            });
+
+        using var client = factory.CreateClient(
+            new WebApplicationFactoryClientOptions
+            {
+                BaseAddress = new Uri("https://localhost"),
+                AllowAutoRedirect = false
+            });
+
+        // Warm up the host before measuring catalog queries.
+        using var warmup = await client.GetAsync(
+            "/api/public/catalog/categories");
+
+        Assert.Equal(HttpStatusCode.OK, warmup.StatusCode);
+
+        // 1. Category list.
+        counter.Reset();
+
+        var categories = await client.GetFromJsonAsync<List<CategoryDto>>(
+            "/api/public/catalog/categories");
+
+        var categoryReads = counter.Reads;
+
+        Assert.NotNull(categories);
+        Assert.Contains(categories, x => x.Id == categoryId);
+        Assert.Contains(categories, x => x.Id == otherCategoryId);
+        Assert.Equal(1, categoryReads);
+
+        // 2. Selected category detail.
+        counter.Reset();
+
+        var detail = await client.GetFromJsonAsync<CategoryDetailDto>(
+            $"/api/public/catalog/categories/{categorySlug}");
+
+        var detailReads = counter.Reads;
+
+        Assert.NotNull(detail);
+        Assert.Equal(categoryId, detail.Category.Id);
+        Assert.Equal(4, detail.Subcategories.Count);
+
+        Assert.Equal(
+            subcategoryIds.Append(unrelatedSubcategoryId).ToArray(),
+            detail.Subcategories.Select(x => x.Id).ToArray());
+
+        Assert.All(detail.Subcategories,
+            x => Assert.Equal(categoryId, x.CategoryId));
+
+        Assert.Equal(3, detailReads);
+
+        // Selected-category filters require only two SQL reads.
+        counter.Reset();
+
+        var combined = await client.GetFromJsonAsync<List<CategoryDto>>(
+            $"/api/public/catalog/categories?includeSubcategoriesFor={categoryId}");
+
+        var combinedReads = counter.Reads;
+
+        Assert.NotNull(combined);
+        Assert.Equal(2, combinedReads);
+
+        Assert.Equal(
+            categories.Select(x => x.Id).ToArray(),
+            combined.Select(x => x.Id).ToArray());
+
+        var selectedCategory = Assert.Single(
+            combined, x => x.Id == categoryId);
+
+        Assert.Equal(detail.Category.Slug, selectedCategory.Slug);
+        Assert.Equal(detail.Category.NameEs, selectedCategory.NameEs);
+        Assert.Equal(detail.Category.Version, selectedCategory.Version);
+        Assert.Equal(detail.Category.IsActive, selectedCategory.IsActive);
+
+        Assert.Equal(
+            detail.Subcategories.Select(x => x.Id).ToArray(),
+            selectedCategory.Subcategories.Select(x => x.Id).ToArray());
+
+        Assert.Equal(
+            detail.Subcategories.Select(x => x.NameEs).ToArray(),
+            selectedCategory.Subcategories.Select(x => x.NameEs).ToArray());
+
+        Assert.All(
+            combined.Where(x => x.Id != categoryId),
+            x => Assert.Empty(x.Subcategories));
+
+        // Unknown category must not trigger another SQL query.
+        counter.Reset();
+
+        var unknown = await client.GetFromJsonAsync<List<CategoryDto>>(
+            "/api/public/catalog/categories?includeSubcategoriesFor=-1");
+
+        Assert.NotNull(unknown);
+        Assert.Equal(1, counter.Reads);
+        Assert.All(unknown, x => Assert.Empty(x.Subcategories));
+
+        // Unpublishing the selected category's only published product
+        // must hide the category and its subcategories.
+        await using (var writeDb = fixture.CreateDbContext())
+        {
+            var published = await writeDb.PublicCatalogProducts
+                .SingleAsync(x => x.Id == productId);
+
+            published.IsPublished = false;
+            await writeDb.SaveChangesAsync();
+        }
+
+        counter.Reset();
+
+        var hiddenCategories = await client.GetFromJsonAsync<List<CategoryDto>>(
+            $"/api/public/catalog/categories?includeSubcategoriesFor={categoryId}");
+
+        Assert.NotNull(hiddenCategories);
+        Assert.Equal(1, counter.Reads);
+        Assert.DoesNotContain(hiddenCategories, x => x.Id == categoryId);
+        Assert.All(hiddenCategories, x => Assert.Empty(x.Subcategories));
+
+        // Restore the seeded product for the remaining filter assertions.
+        await using (var writeDb = fixture.CreateDbContext())
+        {
+            var published = await writeDb.PublicCatalogProducts
+                .SingleAsync(x => x.Id == productId);
+
+            published.IsPublished = true;
+            await writeDb.SaveChangesAsync();
+        }
+
+        // The legacy JSON response must not acquire an extra field.
+        var legacyJson = await client.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            "/api/public/catalog/categories");
+
+        Assert.All(legacyJson.EnumerateArray(), item =>
+            Assert.DoesNotContain(item.EnumerateObject(), property =>
+                string.Equals(property.Name, "subcategories",
+                    StringComparison.OrdinalIgnoreCase)));
+
+        // 3. Category filter must return the product only once.
+        counter.Reset();
+
+        var products = await client.GetFromJsonAsync<ProductPageDto>(
+            $"/api/public/catalog/products?page=1&pageSize=12&categoryId={categoryId}");
+
+        var productReads = counter.Reads;
+
+        Assert.NotNull(products);
+        Assert.Equal(1, products.Total);
+        Assert.Equal(productId, Assert.Single(products.Items).Id);
+        Assert.Equal(2, productReads);
+
+        // 4. Each assigned subcategory returns the same product.
+        foreach (var subcategoryId in subcategoryIds)
+        {
+            var filtered = await client.GetFromJsonAsync<ProductPageDto>(
+                $"/api/public/catalog/products?page=1&pageSize=12&categoryId={categoryId}&subcategoryId={subcategoryId}");
+
+            Assert.NotNull(filtered);
+            Assert.Equal(1, filtered.Total);
+            Assert.Equal(productId, Assert.Single(filtered.Items).Id);
+        }
+
+        // 5. A different subcategory must not return the product.
+        var unrelatedProducts =
+            await client.GetFromJsonAsync<ProductPageDto>(
+                $"/api/public/catalog/products?page=1&pageSize=12&categoryId={categoryId}&subcategoryId={unrelatedSubcategoryId}");
+
+        Assert.NotNull(unrelatedProducts);
+        Assert.Equal(0, unrelatedProducts.Total);
+        Assert.Empty(unrelatedProducts.Items);
+
+        // 6. Pagination counts products, not associations.
+        var secondPage =
+            await client.GetFromJsonAsync<ProductPageDto>(
+                $"/api/public/catalog/products?page=2&pageSize=1&categoryId={categoryId}");
+
+        Assert.NotNull(secondPage);
+        Assert.Equal(1, secondPage.Total);
+        Assert.Empty(secondPage.Items);
+
+        Console.WriteLine(
+            $"FINISHES_SQL_BASELINE: categories={categoryReads}," +
+            $"detail={detailReads},products={productReads}," +
+            $"total={categoryReads + detailReads + productReads}");
+
+        Assert.Equal(4, combinedReads + productReads);
+
+        Console.WriteLine(
+            $"FINISHES_SQL_OPTIMIZED: categoriesWithSubcategories={combinedReads}," +
+            $"products={productReads},total={combinedReads + productReads}");
+
+        Console.WriteLine(
+            "FINISHES_SQL_MULTIPLE_SUBCATEGORIES: PASS");
+    }
+
+    private sealed class FinishesSqlCommandCounter : DbCommandInterceptor
+    {
+        private int reads;
+
+        public int Reads => Volatile.Read(ref reads);
+
+        public void Reset() => Interlocked.Exchange(ref reads, 0);
+
+        public override ValueTask<InterceptionResult<DbDataReader>>
+            ReaderExecutingAsync(
+                DbCommand command,
+                CommandEventData eventData,
+                InterceptionResult<DbDataReader> result,
+                CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref reads);
+
+            return base.ReaderExecutingAsync(
+                command, eventData, result, cancellationToken);
+        }
+    }
+
     private static string UniqueSlug(string prefix) =>
         $"{prefix}-{Guid.NewGuid():N}";
 

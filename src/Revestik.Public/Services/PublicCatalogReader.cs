@@ -22,8 +22,20 @@ public sealed class PublicCatalogReader(HttpClient http)
     public async Task<HttpResponseMessage> HomeHeroImage(int slot, CancellationToken ct = default) =>
         await http.GetAsync($"api/public/site/home-hero/media/{slot}", HttpCompletionOption.ResponseHeadersRead, ct);
 
-    public async Task<List<CategoryDto>> Categories(CancellationToken ct = default) =>
-        await http.GetFromJsonAsync<List<CategoryDto>>("api/public/catalog/categories", ct) ?? [];
+    public Task<List<CategoryDto>> Categories(CancellationToken ct = default) =>
+        Categories(null, ct);
+
+    public async Task<List<CategoryDto>> Categories(
+        int? includeSubcategoriesFor,
+        CancellationToken ct = default)
+    {
+        var uri = "api/public/catalog/categories";
+
+        if (includeSubcategoriesFor is int categoryId)
+            uri += $"?includeSubcategoriesFor={categoryId}";
+
+        return await http.GetFromJsonAsync<List<CategoryDto>>(uri, ct) ?? [];
+    }
 
     public async Task<CategoryDetailDto?> Category(string slug, CancellationToken ct = default) =>
         await Optional<CategoryDetailDto>($"api/public/catalog/categories/{Uri.EscapeDataString(slug)}", ct);
@@ -80,6 +92,7 @@ public sealed class CategoryDto
     public bool IsActive { get; set; }
     public string? Version { get; set; }
     public byte[]? RowVersion { get; set; }
+    public List<SubcategoryDto> Subcategories { get; set; } = [];
     public string Name(string lang) => lang switch { "en" => NameEn ?? NameEs, "de" => NameDe ?? NameEs, _ => NameEs };
     public string? Description(string lang) => lang switch { "en" => DescriptionEn ?? DescriptionEs, "de" => DescriptionDe ?? DescriptionEs, _ => DescriptionEs };
     public string? HeroTitle(string lang) => lang switch { "en" => HeroTitleEn ?? HeroTitleEs, "de" => HeroTitleDe ?? HeroTitleEs, _ => HeroTitleEs };

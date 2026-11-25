@@ -61,6 +61,9 @@ public static class PublicSiteHostingExtensions
         return origin;
     }
 
+    internal static object ProjectDetailKey(string slug, string language) =>
+        (typeof(PublicSiteHostingExtensions), slug, language);
+
     // An unknown or unpublished project must retain an actual HTTP 404.
     // Resolve using only the anonymous, published-only API; never use internal projects.
     public static IApplicationBuilder UseRevestikPublicProjectStatus(this IApplicationBuilder app)
@@ -83,7 +86,14 @@ public static class PublicSiteHostingExtensions
                     try
                     {
                         var reader = context.RequestServices.GetRequiredService<PublicProjectsReader>();
-                        if (await reader.Detail(segments[2], segments[0], context.RequestAborted) is null)
+                        var detail = await reader.Detail(
+                            segments[2], segments[0], context.RequestAborted);
+
+                        // Reuse the resolved detail only within this HTTP request.
+                        // A null value represents a completed, unsuccessful lookup.
+                        context.Items[ProjectDetailKey(segments[2], segments[0])] = detail;
+
+                        if (detail is null)
                             context.Response.StatusCode = StatusCodes.Status404NotFound;
                     }
                     catch (HttpRequestException)
