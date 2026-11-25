@@ -111,6 +111,64 @@ public sealed class InventorySummaryTests
         Assert.Equal(0m, summary.TotalInventoryCostValue);
     }
 
+    [Fact]
+    public async Task GetSummary_EmptyDatabase_ReturnsZeros()
+    {
+        await using var db = CreateDbContext();
+
+        var summary = await new InventoryService(db).GetSummaryAsync(
+            CancellationToken.None);
+
+        Assert.Equal(new InventorySummaryResponse(0, 0, 0, 0, 0m, 0m, 0), summary);
+    }
+
+    [Fact]
+    public async Task GetSummary_UsesUnitCostBeforeResolvedCost_AndCountsUnknownProductsOnce()
+    {
+        await using var db = CreateDbContext();
+        var products = await SeedProductsAsync(db);
+
+        await AddLayerAsync(db, products[0], 2m, 100m,
+            InventoryMovementType.InitialStock);
+        await AddLayerAsync(db, products[0], 3m, null,
+            InventoryMovementType.AdjustmentIncrease);
+        await AddLayerAsync(db, products[0], 4m, null,
+            InventoryMovementType.AdjustmentIncrease);
+        await AddLayerAsync(db, products[0], 8m, 500m,
+            InventoryMovementType.InitialStock);
+
+        var layers = await db.InventoryCostLayers
+            .OrderBy(layer => layer.Id).ToListAsync();
+        layers[0].ResolvedUnitCost = 999m;
+        layers[1].ResolvedUnitCost = 50m;
+        layers[3].RemainingQuantity = 0m;
+        await db.SaveChangesAsync();
+
+        var summary = await new InventoryService(db).GetSummaryAsync(
+            CancellationToken.None);
+
+        Assert.Equal(350m, summary.TotalInventoryCostValue);
+        Assert.Equal(4m, summary.UnknownCostQuantity);
+        Assert.Equal(1, summary.ProductsWithUnknownCost);
+    }
+
+    [Fact]
+    public async Task GetSummary_NegativeStockIsNotCountedAsOutOfStock()
+    {
+        await using var db = CreateDbContext();
+        var products = await SeedProductsAsync(db);
+        products[2].StockQuantity = -1m;
+        await db.SaveChangesAsync();
+
+        var summary = await new InventoryService(db).GetSummaryAsync(
+            CancellationToken.None);
+
+        Assert.Equal(3, summary.TotalProducts);
+        Assert.Equal(1, summary.InStockCount);
+        Assert.Equal(1, summary.LowStockCount);
+        Assert.Equal(0, summary.OutOfStockCount);
+    }
+
     private static RevestikDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<RevestikDbContext>()

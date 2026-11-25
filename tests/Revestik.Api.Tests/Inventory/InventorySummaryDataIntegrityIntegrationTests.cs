@@ -1,3 +1,6 @@
+using System.Data.Common;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Revestik.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Revestik.Api.Models;
 using Revestik.Api.Models.Identity;
@@ -171,5 +174,211 @@ public sealed class InventorySummaryDataIntegrityIntegrationTests(
         Assert.Equal(5000m, summary.TotalInventoryCostValue);
         Assert.Equal(3m, summary.UnknownCostQuantity);
         Assert.Equal(1, summary.ProductsWithUnknownCost);
+    }
+
+    [Fact]
+    public async Task GetSummary_OnSqlServer_MatchesLegacySummaryWithTwoCommands()
+    {
+        var legacyCounter = new SqlCommandCounter();
+        await using var legacyDb = CreateMeasuredContext(legacyCounter);
+        var legacy = await ReadLegacySummaryAsync(legacyDb);
+        Assert.Equal(7, legacyCounter.Count);
+
+        var optimizedCounter = new SqlCommandCounter();
+        await using var optimizedDb = CreateMeasuredContext(optimizedCounter);
+        var optimized = await new InventoryService(optimizedDb)
+            .GetSummaryAsync(CancellationToken.None);
+
+        Assert.Equal(2, optimizedCounter.Count);
+        Assert.Equal(legacy, optimized);
+    }
+
+    [Fact]
+    public async Task GetSummary_OnSqlServer_ResolvesCostsAndCountsUnknownProductsOnce()
+    {
+        await using (var seed = sqlServerFixture.CreateDbContext())
+        {
+            var unresolvedLayer = await seed.InventoryCostLayers
+                .SingleAsync(layer => !layer.UnitCost.HasValue);
+
+            unresolvedLayer.ResolvedUnitCost = 700m;
+            unresolvedLayer.CostResolvedByUserId = UserId;
+            unresolvedLayer.CostResolvedAtUtc = DateTime.UtcNow;
+
+            foreach (var quantity in new[] { 2m, 1m })
+            {
+                var movement = new InventoryMovement
+                {
+                    ProductId = productId,
+                    Type = InventoryMovementType.AdjustmentIncrease,
+                    QuantityChange = quantity,
+                    StockBefore = 8m,
+                    StockAfter = 8m + quantity,
+                    UnitCost = null,
+                    AdjustmentReason = InventoryAdjustmentReason.PhysicalCount,
+                    Notes = "Additional unknown cost.",
+                    CreatedByUserId = UserId,
+                    CreatedAtUtc = DateTime.UtcNow
+                };
+                seed.InventoryMovements.Add(movement);
+                await seed.SaveChangesAsync();
+
+                seed.InventoryCostLayers.Add(new InventoryCostLayer
+                {
+                    ProductId = productId,
+                    SourceMovementId = movement.Id,
+                    OriginalQuantity = quantity,
+                    RemainingQuantity = quantity,
+                    UnitCost = null,
+                    CreatedAtUtc = movement.CreatedAtUtc
+                });
+                await seed.SaveChangesAsync();
+            }
+        }
+
+        var counter = new SqlCommandCounter();
+        await using var db = CreateMeasuredContext(counter);
+        var summary = await new InventoryService(db).GetSummaryAsync(
+            CancellationToken.None);
+
+        Assert.Equal(7100m, summary.TotalInventoryCostValue);
+        Assert.Equal(3m, summary.UnknownCostQuantity);
+        Assert.Equal(1, summary.ProductsWithUnknownCost);
+        Assert.Equal(2, counter.Count);
+    }
+
+    [Fact]
+    public async Task GetSummary_OnSqlServer_EmptyCatalogueReturnsZeros()
+    {
+        await using (var seed = sqlServerFixture.CreateDbContext())
+        {
+            await seed.InventoryCostLayers.ExecuteDeleteAsync();
+            await seed.InventoryMovements.ExecuteDeleteAsync();
+            await seed.Products.ExecuteDeleteAsync();
+        }
+
+        var counter = new SqlCommandCounter();
+        await using var db = CreateMeasuredContext(counter);
+        var summary = await new InventoryService(db).GetSummaryAsync(
+            CancellationToken.None);
+
+        Assert.Equal(new InventorySummaryResponse(0, 0, 0, 0, 0m, 0m, 0), summary);
+        Assert.Equal(2, counter.Count);
+    }
+
+    [Fact]
+    public async Task GetSummary_OnSqlServer_IgnoresExhaustedLayers()
+    {
+        await using (var seed = sqlServerFixture.CreateDbContext())
+        {
+            var layers = await seed.InventoryCostLayers.ToListAsync();
+            foreach (var layer in layers)
+                layer.RemainingQuantity = 0m;
+            await seed.SaveChangesAsync();
+        }
+
+        var counter = new SqlCommandCounter();
+        await using var db = CreateMeasuredContext(counter);
+        var summary = await new InventoryService(db).GetSummaryAsync(
+            CancellationToken.None);
+
+        Assert.Equal(1, summary.TotalProducts);
+        Assert.Equal(1, summary.InStockCount);
+        Assert.Equal(0m, summary.TotalInventoryCostValue);
+        Assert.Equal(0m, summary.UnknownCostQuantity);
+        Assert.Equal(0, summary.ProductsWithUnknownCost);
+        Assert.Equal(2, counter.Count);
+    }
+
+    [Fact]
+    public async Task GetSummary_OnSqlServer_ExcludesDeletedProductsAndTheirLayers()
+    {
+        await using (var seed = sqlServerFixture.CreateDbContext())
+        {
+            var product = await seed.Products.SingleAsync(p => p.Id == productId);
+            product.IsDeleted = true;
+            await seed.SaveChangesAsync();
+        }
+
+        var counter = new SqlCommandCounter();
+        await using var db = CreateMeasuredContext(counter);
+        var summary = await new InventoryService(db).GetSummaryAsync(
+            CancellationToken.None);
+
+        Assert.Equal(new InventorySummaryResponse(0, 0, 0, 0, 0m, 0m, 0), summary);
+        Assert.Equal(2, counter.Count);
+    }
+
+    private RevestikDbContext CreateMeasuredContext(SqlCommandCounter interceptor)
+    {
+        var options = new DbContextOptionsBuilder<RevestikDbContext>()
+            .UseSqlServer(sqlServerFixture.ConnectionString)
+            .AddInterceptors(interceptor)
+            .Options;
+        return new RevestikDbContext(options);
+    }
+
+    // The seven-query implementation is retained as a test-only reference.
+    private static async Task<InventorySummaryResponse> ReadLegacySummaryAsync(
+        RevestikDbContext db, CancellationToken ct = default)
+    {
+        var products = db.Products.AsNoTracking()
+            .Where(product => !product.IsDeleted);
+
+        var total = await products.CountAsync(ct);
+        var inStock = await products.CountAsync(
+            product => product.StockQuantity > product.MinimumStock, ct);
+        var lowStock = await products.CountAsync(
+            product => product.StockQuantity > 0m &&
+                       product.StockQuantity <= product.MinimumStock, ct);
+        var outOfStock = await products.CountAsync(
+            product => product.StockQuantity == 0m, ct);
+
+        var layers = db.InventoryCostLayers.AsNoTracking()
+            .Where(layer => !layer.Product.IsDeleted &&
+                            layer.RemainingQuantity > 0m);
+
+        var inventoryCost = await layers
+            .Where(layer => layer.UnitCost.HasValue ||
+                            layer.ResolvedUnitCost.HasValue)
+            .SumAsync(layer => layer.RemainingQuantity *
+                (layer.UnitCost ?? layer.ResolvedUnitCost)!.Value, ct);
+        var unknownQuantity = await layers
+            .Where(layer => !layer.UnitCost.HasValue &&
+                            !layer.ResolvedUnitCost.HasValue)
+            .SumAsync(layer => layer.RemainingQuantity, ct);
+        var unknownProducts = await layers
+            .Where(layer => !layer.UnitCost.HasValue &&
+                            !layer.ResolvedUnitCost.HasValue)
+            .Select(layer => layer.ProductId).Distinct().CountAsync(ct);
+
+        return new InventorySummaryResponse(total, inStock, lowStock,
+            outOfStock, inventoryCost, unknownQuantity, unknownProducts);
+    }
+
+    private sealed class SqlCommandCounter : DbCommandInterceptor
+    {
+        private int count;
+        public int Count => Volatile.Read(ref count);
+
+        public override ValueTask<DbDataReader> ReaderExecutedAsync(
+            DbCommand command,
+            CommandExecutedEventData eventData,
+            DbDataReader result,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref count);
+            return new ValueTask<DbDataReader>(result);
+        }
+
+        public override ValueTask<object?> ScalarExecutedAsync(
+            DbCommand command,
+            CommandExecutedEventData eventData,
+            object? result,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref count);
+            return new ValueTask<object?>(result);
+        }
     }
 }

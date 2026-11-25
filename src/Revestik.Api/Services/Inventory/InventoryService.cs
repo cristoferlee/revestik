@@ -14,72 +14,57 @@ public sealed class InventoryService(RevestikDbContext dbContext)
     public async Task<InventorySummaryResponse> GetSummaryAsync(
         CancellationToken cancellationToken)
     {
-        var activeProducts = dbContext.Products
+        var productCounts = await dbContext.Products
             .AsNoTracking()
-            .Where(product => !product.IsDeleted);
-
-        var totalProducts = await activeProducts
-            .CountAsync(cancellationToken);
-
-        var inStockCount = await activeProducts
-            .CountAsync(
-                product =>
-                    product.StockQuantity > product.MinimumStock,
-                cancellationToken);
-
-        var lowStockCount = await activeProducts
-            .CountAsync(
-                product =>
+            .Where(product => !product.IsDeleted)
+            .GroupBy(_ => 1)
+            .Select(group => new
+            {
+                TotalProducts = group.Count(),
+                InStockCount = group.Count(product =>
+                    product.StockQuantity > product.MinimumStock),
+                LowStockCount = group.Count(product =>
                     product.StockQuantity > 0m &&
-                    product.StockQuantity <= product.MinimumStock,
-                cancellationToken);
+                    product.StockQuantity <= product.MinimumStock),
+                OutOfStockCount = group.Count(product =>
+                    product.StockQuantity == 0m)
+            })
+            .SingleOrDefaultAsync(cancellationToken);
 
-        var outOfStockCount = await activeProducts
-            .CountAsync(
-                product => product.StockQuantity == 0m,
-                cancellationToken);
-
-        var activeLayers = dbContext.InventoryCostLayers
+        var layerTotals = await dbContext.InventoryCostLayers
             .AsNoTracking()
             .Where(layer =>
                 !layer.Product.IsDeleted &&
-                layer.RemainingQuantity > 0m);
-
-        var totalInventoryCostValue = await activeLayers
-            .Where(layer =>
-                layer.UnitCost.HasValue ||
-                layer.ResolvedUnitCost.HasValue)
-            .SumAsync(
-                layer =>
+                layer.RemainingQuantity > 0m)
+            .GroupBy(_ => 1)
+            .Select(group => new
+            {
+                TotalInventoryCostValue = group.Sum(layer =>
                     layer.RemainingQuantity *
-                    (layer.UnitCost ??
-                     layer.ResolvedUnitCost)!.Value,
-                cancellationToken);
-
-        var unknownCostQuantity = await activeLayers
-            .Where(layer =>
-                !layer.UnitCost.HasValue &&
-                !layer.ResolvedUnitCost.HasValue)
-            .SumAsync(
-                layer => layer.RemainingQuantity,
-                cancellationToken);
-
-        var productsWithUnknownCost = await activeLayers
-            .Where(layer =>
-                !layer.UnitCost.HasValue &&
-                !layer.ResolvedUnitCost.HasValue)
-            .Select(layer => layer.ProductId)
-            .Distinct()
-            .CountAsync(cancellationToken);
+                    (layer.UnitCost ?? layer.ResolvedUnitCost ?? 0m)),
+                UnknownCostQuantity = group.Sum(layer =>
+                    !layer.UnitCost.HasValue &&
+                    !layer.ResolvedUnitCost.HasValue
+                        ? layer.RemainingQuantity
+                        : 0m),
+                ProductsWithUnknownCost = group
+                    .Where(layer =>
+                        !layer.UnitCost.HasValue &&
+                        !layer.ResolvedUnitCost.HasValue)
+                    .Select(layer => layer.ProductId)
+                    .Distinct()
+                    .Count()
+            })
+            .SingleOrDefaultAsync(cancellationToken);
 
         return new InventorySummaryResponse(
-            totalProducts,
-            inStockCount,
-            lowStockCount,
-            outOfStockCount,
-            totalInventoryCostValue,
-            unknownCostQuantity,
-            productsWithUnknownCost);
+            productCounts?.TotalProducts ?? 0,
+            productCounts?.InStockCount ?? 0,
+            productCounts?.LowStockCount ?? 0,
+            productCounts?.OutOfStockCount ?? 0,
+            layerTotals?.TotalInventoryCostValue ?? 0m,
+            layerTotals?.UnknownCostQuantity ?? 0m,
+            layerTotals?.ProductsWithUnknownCost ?? 0);
     }
 
     public async Task<InventoryMovementResponse?> RegisterInitialStockAsync(
