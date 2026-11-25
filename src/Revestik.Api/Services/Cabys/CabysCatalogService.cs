@@ -297,7 +297,9 @@ public sealed class CabysCatalogService(
     private async Task BackfillEconomicActivitiesAsync(
         CancellationToken cancellationToken)
     {
+        // Keep the initial projection narrow: historical XML can be large.
         var documents = await dbContext.ElectronicDocuments
+            .AsNoTracking()
             .Where(x =>
                 x.IssuerEconomicActivityCode == string.Empty ||
                 x.ReceiverEconomicActivityCode == string.Empty)
@@ -308,8 +310,12 @@ public sealed class CabysCatalogService(
             })
             .ToListAsync(cancellationToken);
 
+        var updates = new List<(int Id, string IssuerCode, string ReceiverCode)>();
+
         foreach (var stored in documents)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             try
             {
                 var parsed = electronicDocumentXmlParser.Parse(stored.OriginalXml);
@@ -318,21 +324,48 @@ public sealed class CabysCatalogService(
                     continue;
                 }
 
-                var document = await dbContext.ElectronicDocuments
-                    .SingleAsync(x => x.Id == stored.Id, cancellationToken);
-
-                document.IssuerEconomicActivityCode =
-                    received.Document.IssuerEconomicActivityCode;
-                document.ReceiverEconomicActivityCode =
-                    received.Document.ReceiverEconomicActivityCode;
+                updates.Add((
+                    stored.Id,
+                    received.Document.IssuerEconomicActivityCode,
+                    received.Document.ReceiverEconomicActivityCode));
             }
             catch (ElectronicDocumentXmlException)
             {
-                // The original fiscal XML remains untouched. Unsupported/malformed
-                // historical documents are simply left without activity enrichment.
+                // Preserve historical behavior: unsupported/malformed XML is untouched.
             }
         }
 
+        // Fetch only successfully parsed documents in bounded SQL batches.
+        // The previous implementation executed one SELECT per document.
+        const int readBatchSize = 500;
+
+        for (var offset = 0; offset < updates.Count; offset += readBatchSize)
+        {
+            var batch = updates.Skip(offset).Take(readBatchSize).ToArray();
+            var ids = batch.Select(x => x.Id).ToArray();
+            var valuesById = batch.ToDictionary(x => x.Id);
+
+            var trackedDocuments = await dbContext.ElectronicDocuments
+                .Where(x => ids.Contains(x.Id))
+                .ToListAsync(cancellationToken);
+
+            if (trackedDocuments.Count != batch.Length)
+            {
+                // The old SingleAsync failed if a document vanished between reads.
+                // Do not silently skip such a document with the new batched query.
+                throw new InvalidOperationException(
+                    "Un documento electrónico cambió durante la recuperación de actividades económicas.");
+            }
+
+            foreach (var document in trackedDocuments)
+            {
+                var update = valuesById[document.Id];
+                document.IssuerEconomicActivityCode = update.IssuerCode;
+                document.ReceiverEconomicActivityCode = update.ReceiverCode;
+            }
+        }
+
+        // One SaveChanges, as before. No partial per-batch commits.
         if (dbContext.ChangeTracker.HasChanges())
         {
             await dbContext.SaveChangesAsync(cancellationToken);

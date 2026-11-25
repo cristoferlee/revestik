@@ -16,9 +16,9 @@ public sealed class ElectronicDocumentPeriodSummaryService(RevestikDbContext dbC
 
         if (request.DateFrom.HasValue || request.DateTo.HasValue)
         {
-            // Fetch only candidate IDs/dates in a conservative instant window.
-            // SQL Server compares datetimeoffset by instant, but the fiscal period
-            // belongs to the date written in the XML with its original offset.
+            // Preserve the XML's calendar date, including its original UTC offset.
+            // SQL Server compares datetimeoffset instants: first fetch a conservative
+            // candidate window and then validate each XML-local date in memory.
             var candidates = query;
             if (request.DateFrom.HasValue)
             {
@@ -51,42 +51,45 @@ public sealed class ElectronicDocumentPeriodSummaryService(RevestikDbContext dbC
             query = query.Where(x => eligibleIds.Contains(x.Id));
         }
 
-        // Keep fiscal-document counts comprehensive while limiting economic totals
-        // to eligible received documents. Adjustments/payment evidence have their
-        // own fiscal analytics and must not inflate ordinary purchase/expense sums.
-        var economicQuery = query.Where(x =>
-            x.Direction == ElectronicDocumentDirection.Received &&
-            (x.DocumentType == ElectronicDocumentType.Invoice ||
-             x.DocumentType == ElectronicDocumentType.ElectronicTicket ||
-             x.DocumentType == ElectronicDocumentType.PurchaseInvoice));
+        // REFACTOR-04D.2: keep the original fiscal-period filter, but replace
+        // four independent COUNT commands with one conditional aggregation.
+        // The grouped query returns null when the selected period is empty.
+        var counts = await query
+            .GroupBy(_ => 1)
+            .Select(group => new
+            {
+                Pending = group.Count(x =>
+                    x.ProcessingStatus == ElectronicDocumentProcessingStatus.Pending),
+                Processed = group.Count(x =>
+                    x.ProcessingStatus == ElectronicDocumentProcessingStatus.Processed),
+                NoAction = group.Count(x =>
+                    x.ProcessingStatus == ElectronicDocumentProcessingStatus.NoActionRequired),
+                WithHacienda = group.Count(x => x.HaciendaResponse != null)
+            })
+            .SingleOrDefaultAsync(cancellationToken);
 
-        var pending = await query.CountAsync(
-            x => x.ProcessingStatus == ElectronicDocumentProcessingStatus.Pending,
-            cancellationToken);
-        var processed = await query.CountAsync(
-            x => x.ProcessingStatus == ElectronicDocumentProcessingStatus.Processed,
-            cancellationToken);
-        var noAction = await query.CountAsync(
-            x => x.ProcessingStatus == ElectronicDocumentProcessingStatus.NoActionRequired,
-            cancellationToken);
-        var withHacienda = await query.CountAsync(
-            x => x.HaciendaResponse != null,
-            cancellationToken);
-
-        var classified = await economicQuery
+        // Counts include all fiscal evidence. Accounting and financial totals
+        // exclude issued documents, notes, receipts, and unclassified documents.
+        var classified = await query
             .Where(x =>
+                x.Direction == ElectronicDocumentDirection.Received &&
+                (x.DocumentType == ElectronicDocumentType.Invoice ||
+                 x.DocumentType == ElectronicDocumentType.ElectronicTicket ||
+                 x.DocumentType == ElectronicDocumentType.PurchaseInvoice) &&
                 x.ProcessingStatus == ElectronicDocumentProcessingStatus.Processed &&
                 x.CategoryId != null)
             .Select(x => new
             {
                 x.CurrencyCode,
                 x.TotalDocument,
+                x.SaleConditionCode,
                 DocumentNature = x.Category!.AccountingNature,
                 Lines = x.Lines
                     .Select(line => new
                     {
                         line.TotalLine,
-                        HasOverride = line.ClassificationCategoryId != null || line.OperationalDestination != null,
+                        HasOverride = line.ClassificationCategoryId != null ||
+                                      line.OperationalDestination != null,
                         EffectiveNature = line.ClassificationCategory != null
                             ? line.ClassificationCategory.AccountingNature
                             : x.Category!.AccountingNature
@@ -95,7 +98,12 @@ public sealed class ElectronicDocumentPeriodSummaryService(RevestikDbContext dbC
             })
             .ToListAsync(cancellationToken);
 
-        var totals = new Dictionary<string, AccountingAccumulator>(StringComparer.OrdinalIgnoreCase);
+        // Match the original comparer semantics: accounting currencies are grouped
+        // ignoring case; financial currencies are grouped with ordinal case.
+        var accountingByCurrency = new Dictionary<string, AccountingAccumulator>(
+            StringComparer.OrdinalIgnoreCase);
+        var financialByCurrency = new Dictionary<string,
+            (decimal Cash, decimal Credit, decimal Other)>(StringComparer.Ordinal);
 
         foreach (var document in classified)
         {
@@ -103,29 +111,42 @@ public sealed class ElectronicDocumentPeriodSummaryService(RevestikDbContext dbC
                 ? "N/D"
                 : document.CurrencyCode;
 
-            if (!totals.TryGetValue(currency, out var accumulator))
+            if (!accountingByCurrency.TryGetValue(currency, out var accounting))
             {
-                accumulator = new AccountingAccumulator();
-                totals[currency] = accumulator;
+                accounting = new AccountingAccumulator();
+                accountingByCurrency[currency] = accounting;
             }
 
-            if (!document.Lines.Any(x => x.HasOverride))
+            financialByCurrency.TryGetValue(currency, out var financial);
+            financialByCurrency[currency] = document.SaleConditionCode switch
             {
-                accumulator.Add(document.DocumentNature, document.TotalDocument);
+                "01" => (financial.Cash + document.TotalDocument,
+                         financial.Credit, financial.Other),
+                "02" => (financial.Cash,
+                         financial.Credit + document.TotalDocument, financial.Other),
+                _ => (financial.Cash, financial.Credit,
+                      financial.Other + document.TotalDocument)
+            };
+
+            // A document without line overrides keeps its document-level nature
+            // and full total; otherwise distribute line totals and the remainder.
+            if (!document.Lines.Any(line => line.HasOverride))
+            {
+                accounting.Add(document.DocumentNature, document.TotalDocument);
                 continue;
             }
 
             var allocated = 0m;
             foreach (var line in document.Lines)
             {
-                accumulator.Add(line.EffectiveNature, line.TotalLine);
+                accounting.Add(line.EffectiveNature, line.TotalLine);
                 allocated += line.TotalLine;
             }
 
-            accumulator.Unallocated += document.TotalDocument - allocated;
+            accounting.Unallocated += document.TotalDocument - allocated;
         }
 
-        var accountingTotals = totals
+        var accountingTotals = accountingByCurrency
             .OrderBy(x => x.Key)
             .Select(x => new ElectronicDocumentAccountingTotalResponse(
                 x.Key,
@@ -136,33 +157,20 @@ public sealed class ElectronicDocumentPeriodSummaryService(RevestikDbContext dbC
                 x.Value.Unallocated))
             .ToList();
 
-        var financialSource = await economicQuery
-            .Where(x =>
-                x.ProcessingStatus == ElectronicDocumentProcessingStatus.Processed &&
-                x.CategoryId != null)
-            .Select(x => new
-            {
-                x.CurrencyCode,
-                x.TotalDocument,
-                x.SaleConditionCode
-            })
-            .ToListAsync(cancellationToken);
-
-        var financialTotals = financialSource
-            .GroupBy(x => string.IsNullOrWhiteSpace(x.CurrencyCode) ? "N/D" : x.CurrencyCode)
-            .OrderBy(group => group.Key)
-            .Select(group => new ElectronicDocumentFinancialTotalResponse(
-                group.Key,
-                group.Where(x => x.SaleConditionCode == "01").Sum(x => x.TotalDocument),
-                group.Where(x => x.SaleConditionCode == "02").Sum(x => x.TotalDocument),
-                group.Where(x => x.SaleConditionCode != "01" && x.SaleConditionCode != "02").Sum(x => x.TotalDocument)))
+        var financialTotals = financialByCurrency
+            .OrderBy(x => x.Key)
+            .Select(x => new ElectronicDocumentFinancialTotalResponse(
+                x.Key,
+                x.Value.Cash,
+                x.Value.Credit,
+                x.Value.Other))
             .ToList();
 
         return new ElectronicDocumentSummaryResponse(
-            pending,
-            processed,
-            noAction,
-            withHacienda,
+            counts?.Pending ?? 0,
+            counts?.Processed ?? 0,
+            counts?.NoAction ?? 0,
+            counts?.WithHacienda ?? 0,
             accountingTotals,
             financialTotals);
     }

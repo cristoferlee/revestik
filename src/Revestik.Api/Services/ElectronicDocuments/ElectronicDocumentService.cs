@@ -96,15 +96,25 @@ public sealed class ElectronicDocumentService(RevestikDbContext dbContext)
     public async Task<ElectronicDocumentSummaryResponse> GetSummaryAsync(
         CancellationToken cancellationToken)
     {
-        var pending = await dbContext.ElectronicDocuments
-            .CountAsync(x => x.ProcessingStatus == ElectronicDocumentProcessingStatus.Pending, cancellationToken);
-        var processed = await dbContext.ElectronicDocuments
-            .CountAsync(x => x.ProcessingStatus == ElectronicDocumentProcessingStatus.Processed, cancellationToken);
-        var noAction = await dbContext.ElectronicDocuments
-            .CountAsync(x => x.ProcessingStatus == ElectronicDocumentProcessingStatus.NoActionRequired, cancellationToken);
-        var withHacienda = await dbContext.ElectronicDocuments
-            .CountAsync(x => x.HaciendaResponse != null, cancellationToken);
+        // REFACTOR-04C: One SQL aggregate instead of four independent counts.
+        // The grouped query returns null for an empty document table.
+        var counts = await dbContext.ElectronicDocuments
+            .AsNoTracking()
+            .GroupBy(_ => 1)
+            .Select(group => new
+            {
+                Pending = group.Count(x =>
+                    x.ProcessingStatus == ElectronicDocumentProcessingStatus.Pending),
+                Processed = group.Count(x =>
+                    x.ProcessingStatus == ElectronicDocumentProcessingStatus.Processed),
+                NoAction = group.Count(x =>
+                    x.ProcessingStatus == ElectronicDocumentProcessingStatus.NoActionRequired),
+                WithHacienda = group.Count(x => x.HaciendaResponse != null)
+            })
+            .SingleOrDefaultAsync(cancellationToken);
 
+        // The accounting and financial summaries share the same eligible documents.
+        // Keep the existing line-level override and unallocated-amount semantics.
         var classified = await dbContext.ElectronicDocuments
             .AsNoTracking()
             .Where(x =>
@@ -118,12 +128,14 @@ public sealed class ElectronicDocumentService(RevestikDbContext dbContext)
             {
                 x.CurrencyCode,
                 x.TotalDocument,
+                x.SaleConditionCode,
                 DocumentNature = x.Category!.AccountingNature,
                 Lines = x.Lines
                     .Select(line => new
                     {
                         line.TotalLine,
-                        HasOverride = line.ClassificationCategoryId != null || line.OperationalDestination != null,
+                        HasOverride = line.ClassificationCategoryId != null ||
+                                      line.OperationalDestination != null,
                         EffectiveNature = line.ClassificationCategory != null
                             ? line.ClassificationCategory.AccountingNature
                             : x.Category!.AccountingNature
@@ -132,7 +144,12 @@ public sealed class ElectronicDocumentService(RevestikDbContext dbContext)
             })
             .ToListAsync(cancellationToken);
 
-        var totals = new Dictionary<string, AccountingAccumulator>(StringComparer.OrdinalIgnoreCase);
+        // Accounting totals intentionally use case-insensitive currency grouping.
+        // Financial totals retain the original GroupBy's case-sensitive semantics.
+        var accountingByCurrency = new Dictionary<string, AccountingAccumulator>(
+            StringComparer.OrdinalIgnoreCase);
+        var financialByCurrency = new Dictionary<string,
+            (decimal Cash, decimal Credit, decimal Other)>(StringComparer.Ordinal);
 
         foreach (var document in classified)
         {
@@ -140,29 +157,40 @@ public sealed class ElectronicDocumentService(RevestikDbContext dbContext)
                 ? "N/D"
                 : document.CurrencyCode;
 
-            if (!totals.TryGetValue(currency, out var accumulator))
+            if (!accountingByCurrency.TryGetValue(currency, out var accounting))
             {
-                accumulator = new AccountingAccumulator();
-                totals[currency] = accumulator;
+                accounting = new AccountingAccumulator();
+                accountingByCurrency[currency] = accounting;
             }
 
-            if (!document.Lines.Any(x => x.HasOverride))
+            financialByCurrency.TryGetValue(currency, out var financial);
+            financialByCurrency[currency] = document.SaleConditionCode switch
             {
-                accumulator.Add(document.DocumentNature, document.TotalDocument);
+                "01" => (financial.Cash + document.TotalDocument,
+                         financial.Credit, financial.Other),
+                "02" => (financial.Cash,
+                         financial.Credit + document.TotalDocument, financial.Other),
+                _ => (financial.Cash, financial.Credit,
+                      financial.Other + document.TotalDocument)
+            };
+
+            if (!document.Lines.Any(line => line.HasOverride))
+            {
+                accounting.Add(document.DocumentNature, document.TotalDocument);
                 continue;
             }
 
             var allocated = 0m;
             foreach (var line in document.Lines)
             {
-                accumulator.Add(line.EffectiveNature, line.TotalLine);
+                accounting.Add(line.EffectiveNature, line.TotalLine);
                 allocated += line.TotalLine;
             }
 
-            accumulator.Unallocated += document.TotalDocument - allocated;
+            accounting.Unallocated += document.TotalDocument - allocated;
         }
 
-        var accountingTotals = totals
+        var accountingTotals = accountingByCurrency
             .OrderBy(x => x.Key)
             .Select(x => new ElectronicDocumentAccountingTotalResponse(
                 x.Key,
@@ -173,38 +201,20 @@ public sealed class ElectronicDocumentService(RevestikDbContext dbContext)
                 x.Value.Unallocated))
             .ToList();
 
-        var financialSource = await dbContext.ElectronicDocuments
-            .AsNoTracking()
-            .Where(x =>
-                x.Direction == ElectronicDocumentDirection.Received &&
-                (x.DocumentType == ElectronicDocumentType.Invoice ||
-                 x.DocumentType == ElectronicDocumentType.ElectronicTicket ||
-                 x.DocumentType == ElectronicDocumentType.PurchaseInvoice) &&
-                x.ProcessingStatus == ElectronicDocumentProcessingStatus.Processed &&
-                x.CategoryId != null)
-            .Select(x => new
-            {
-                x.CurrencyCode,
-                x.TotalDocument,
-                x.SaleConditionCode
-            })
-            .ToListAsync(cancellationToken);
-
-        var financialTotals = financialSource
-            .GroupBy(x => string.IsNullOrWhiteSpace(x.CurrencyCode) ? "N/D" : x.CurrencyCode)
-            .OrderBy(group => group.Key)
-            .Select(group => new ElectronicDocumentFinancialTotalResponse(
-                group.Key,
-                group.Where(x => x.SaleConditionCode == "01").Sum(x => x.TotalDocument),
-                group.Where(x => x.SaleConditionCode == "02").Sum(x => x.TotalDocument),
-                group.Where(x => x.SaleConditionCode != "01" && x.SaleConditionCode != "02").Sum(x => x.TotalDocument)))
+        var financialTotals = financialByCurrency
+            .OrderBy(x => x.Key)
+            .Select(x => new ElectronicDocumentFinancialTotalResponse(
+                x.Key,
+                x.Value.Cash,
+                x.Value.Credit,
+                x.Value.Other))
             .ToList();
 
         return new ElectronicDocumentSummaryResponse(
-            pending,
-            processed,
-            noAction,
-            withHacienda,
+            counts?.Pending ?? 0,
+            counts?.Processed ?? 0,
+            counts?.NoAction ?? 0,
+            counts?.WithHacienda ?? 0,
             accountingTotals,
             financialTotals);
     }

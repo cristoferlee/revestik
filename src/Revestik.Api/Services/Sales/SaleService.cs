@@ -24,13 +24,11 @@ public sealed class SaleService(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var query = dbContext.Sales
-            .AsNoTracking();
+        var query = dbContext.Sales.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var search = request.Search.Trim();
-
             query = query.Where(sale =>
                 (sale.SaleNumber != null &&
                  sale.SaleNumber.Contains(search)) ||
@@ -63,6 +61,22 @@ public sealed class SaleService(
                 sale.Currency == request.Currency.Value);
         }
 
+        // BalanceStatus depends on SaleCalculator's line discount allocation and
+        // rounding. Keep the original full-evaluation path for that filter.
+        var hasBalanceFilter = request.BalanceStatus.HasValue;
+        var totalCount = hasBalanceFilter
+            ? 0
+            : await query.CountAsync(cancellationToken);
+
+        var skip = ((long)request.Page - 1) * request.PageSize;
+
+        // Avoid loading lines and charges when the requested page is empty.
+        if (!hasBalanceFilter && skip >= totalCount)
+        {
+            return new PaginatedResponse<SaleListItemResponse>(
+                [], request.Page, request.PageSize, totalCount);
+        }
+
         var projected = query.Select(sale => new
         {
             Sale = sale,
@@ -72,118 +86,107 @@ public sealed class SaleService(
                 .Sum(payment => (decimal?)payment.Amount) ?? 0m
         });
 
-        var rawItems = await projected
+        var selected = projected
             .OrderByDescending(item =>
-                item.Sale.IssuedAtUtc ??
-                item.Sale.CreatedAtUtc)
-            .ThenByDescending(item =>
-                item.Sale.Id)
-            .Select(item => new
-                {
-                    item.Sale.Id,
-                    SaleNumber =
-                        item.Sale.SaleNumber ?? string.Empty,
-                    SourceQuotationNumber =
-                        item.Sale.SourceQuotation != null
-                            ? item.Sale.SourceQuotation.QuotationNumber
-                            : string.Empty,
-                    item.Sale.IssuedAtUtc,
-                    CustomerName =
-                        item.Sale.Status != SaleStatus.Draft &&
-                        item.Sale.CustomerNameSnapshot != string.Empty
-                            ? item.Sale.CustomerNameSnapshot
-                            : item.Sale.Customer.Name,
-                    item.Sale.Currency,
-                    item.Sale.Status,
-                    item.PaidTotal,
-                    item.Sale.GeneralDiscountType,
-                    item.Sale.GeneralDiscountValue,
-                    Lines = item.Sale.Lines.Select(line =>
-                        new SaleLineRequest
-                        {
-                            ProductId = line.ProductId,
-                            CabysCode =
-                                line.CabysCode ?? string.Empty,
-                            Description = line.Description,
-                            Unit = line.Unit,
-                            Quantity = line.Quantity,
-                            UnitPrice = line.UnitPrice,
-                            DiscountType = line.DiscountType,
-                            DiscountValue = line.DiscountValue,
-                            TaxRate = line.TaxRate
-                        }).ToList(),
-                    Charges = item.Sale.Charges.Select(charge =>
-                        new SaleChargeRequest
-                        {
-                            Type = charge.Type,
-                            Description = charge.Description,
-                            Amount = charge.Amount
-                        }).ToList()
-                })
-                .ToListAsync(cancellationToken);
+                item.Sale.IssuedAtUtc ?? item.Sale.CreatedAtUtc)
+            .ThenByDescending(item => item.Sale.Id)
+            .AsQueryable();
 
-        var mappedItems = rawItems
-            .Select(item =>
-            {
-                var total = SaleCalculator.Calculate(
-                    item.Lines,
-                    item.Charges,
-                    item.GeneralDiscountType,
-                    item.GeneralDiscountValue).Total;
-
-                var paidTotal = Round(item.PaidTotal);
-                var outstanding =
-                    Math.Max(
-                        0m,
-                        Round(total - paidTotal));
-
-                return new SaleListItemResponse
-                {
-                    Id = item.Id,
-                    SaleNumber = item.SaleNumber,
-                    SourceQuotationNumber =
-                        item.SourceQuotationNumber,
-                    IssuedAtUtc = item.IssuedAtUtc,
-                    CustomerName = item.CustomerName,
-                    Currency = item.Currency,
-                    Total = total,
-                    PaidTotal = paidTotal,
-                    OutstandingAmount = outstanding,
-                    Status = item.Status,
-                    BalanceStatus =
-                        CalculateBalanceStatus(
-                            total,
-                            paidTotal)
-                };
-            });
-
-        if (request.BalanceStatus.HasValue)
+        // Page on SQL before materializing sale lines and charges.
+        // Never apply this before the computed BalanceStatus filter.
+        if (!hasBalanceFilter)
         {
-            mappedItems = mappedItems.Where(item =>
-                item.BalanceStatus ==
-                request.BalanceStatus.Value);
+            selected = selected
+                .Skip((int)skip)
+                .Take(request.PageSize);
         }
 
-        var filteredItems = mappedItems.ToList();
-        var totalCount = filteredItems.Count;
+        var rawItems = await selected
+            .Select(item => new
+            {
+                item.Sale.Id,
+                SaleNumber = item.Sale.SaleNumber ?? string.Empty,
+                SourceQuotationNumber = item.Sale.SourceQuotation != null
+                    ? item.Sale.SourceQuotation.QuotationNumber
+                    : string.Empty,
+                item.Sale.IssuedAtUtc,
+                CustomerName =
+                    item.Sale.Status != SaleStatus.Draft &&
+                    item.Sale.CustomerNameSnapshot != string.Empty
+                        ? item.Sale.CustomerNameSnapshot
+                        : item.Sale.Customer.Name,
+                item.Sale.Currency,
+                item.Sale.Status,
+                item.PaidTotal,
+                item.Sale.GeneralDiscountType,
+                item.Sale.GeneralDiscountValue,
+                Lines = item.Sale.Lines.Select(line =>
+                    new SaleLineRequest
+                    {
+                        ProductId = line.ProductId,
+                        CabysCode = line.CabysCode ?? string.Empty,
+                        Description = line.Description,
+                        Unit = line.Unit,
+                        Quantity = line.Quantity,
+                        UnitPrice = line.UnitPrice,
+                        DiscountType = line.DiscountType,
+                        DiscountValue = line.DiscountValue,
+                        TaxRate = line.TaxRate
+                    }).ToList(),
+                Charges = item.Sale.Charges.Select(charge =>
+                    new SaleChargeRequest
+                    {
+                        Type = charge.Type,
+                        Description = charge.Description,
+                        Amount = charge.Amount
+                    }).ToList()
+            })
+            .ToListAsync(cancellationToken);
 
-        var skip =
-            ((long)request.Page - 1) *
-            request.PageSize;
+        var mappedItems = rawItems.Select(item =>
+        {
+            var total = SaleCalculator.Calculate(
+                item.Lines,
+                item.Charges,
+                item.GeneralDiscountType,
+                item.GeneralDiscountValue).Total;
 
-        IReadOnlyList<SaleListItemResponse> items =
-            skip >= totalCount
+            var paidTotal = Round(item.PaidTotal);
+            var outstanding = Math.Max(0m, Round(total - paidTotal));
+
+            return new SaleListItemResponse
+            {
+                Id = item.Id,
+                SaleNumber = item.SaleNumber,
+                SourceQuotationNumber = item.SourceQuotationNumber,
+                IssuedAtUtc = item.IssuedAtUtc,
+                CustomerName = item.CustomerName,
+                Currency = item.Currency,
+                Total = total,
+                PaidTotal = paidTotal,
+                OutstandingAmount = outstanding,
+                Status = item.Status,
+                BalanceStatus = CalculateBalanceStatus(total, paidTotal)
+            };
+        });
+
+        if (hasBalanceFilter)
+        {
+            var filteredItems = mappedItems
+                .Where(item => item.BalanceStatus == request.BalanceStatus)
+                .ToList();
+
+            var filteredCount = filteredItems.Count;
+            IReadOnlyList<SaleListItemResponse> items = skip >= filteredCount
                 ? []
-                : filteredItems
-                    .Skip((int)skip)
-                    .Take(request.PageSize)
-                    .ToList();
+                : filteredItems.Skip((int)skip).Take(request.PageSize).ToList();
+
+            return new PaginatedResponse<SaleListItemResponse>(
+                items, request.Page, request.PageSize, filteredCount);
+        }
 
         return new PaginatedResponse<SaleListItemResponse>(
-            items,
-            request.Page,
-            request.PageSize,
-            totalCount);
+            mappedItems.ToList(), request.Page, request.PageSize, totalCount);
     }
 
     public async Task<SalePeriodSummaryResponse> GetPeriodSummaryAsync(
@@ -283,87 +286,72 @@ public sealed class SaleService(
     public async Task<SaleSummaryResponse> GetSummaryAsync(
         CancellationToken cancellationToken)
     {
-        var sales = await dbContext.Sales
+        // Preserve the exact SaleCalculator semantics (tax-inclusive prices,
+        // ordered general-discount allocation and decimal rounding).
+        // Stream rows instead of retaining all historical sales in one list.
+        // Only values used for calculation are projected from sale lines.
+        var sales = dbContext.Sales
             .AsNoTracking()
-            .Where(sale =>
-                sale.Status == SaleStatus.Issued)
+            .Where(sale => sale.Status == SaleStatus.Issued)
             .Select(sale => new
             {
                 sale.Currency,
                 sale.GeneralDiscountType,
                 sale.GeneralDiscountValue,
-                Lines = sale.Lines.Select(line =>
-                    new SaleLineRequest
-                    {
-                        ProductId = line.ProductId,
-                        CabysCode =
-                            line.CabysCode ?? string.Empty,
-                        Description = line.Description,
-                        Unit = line.Unit,
-                        Quantity = line.Quantity,
-                        UnitPrice = line.UnitPrice,
-                        DiscountType = line.DiscountType,
-                        DiscountValue = line.DiscountValue,
-                        TaxRate = line.TaxRate
-                    }).ToList(),
-                Charges = sale.Charges.Select(charge =>
-                    new SaleChargeRequest
-                    {
-                        Type = charge.Type,
-                        Description = charge.Description,
-                        Amount = charge.Amount
-                    }).ToList(),
+                Lines = sale.Lines.Select(line => new SaleLineRequest
+                {
+                    Quantity = line.Quantity,
+                    UnitPrice = line.UnitPrice,
+                    DiscountType = line.DiscountType,
+                    DiscountValue = line.DiscountValue,
+                    TaxRate = line.TaxRate
+                }).ToList(),
+                Charges = sale.Charges.Select(charge => new SaleChargeRequest
+                {
+                    Amount = charge.Amount
+                }).ToList(),
                 PaidTotal = sale.Payments
                     .Where(payment =>
-                        payment.Status ==
-                        SalePaymentStatus.Active)
-                    .Sum(payment =>
-                        (decimal?)payment.Amount) ?? 0m
-            })
-            .ToListAsync(cancellationToken);
+                        payment.Status == SalePaymentStatus.Active)
+                    .Sum(payment => (decimal?)payment.Amount) ?? 0m
+            });
 
-        var currencies = sales
-            .Select(sale =>
-            {
-                var total = SaleCalculator.Calculate(
-                    sale.Lines,
-                    sale.Charges,
-                    sale.GeneralDiscountType,
-                    sale.GeneralDiscountValue).Total;
+        var totals = new Dictionary<Currency,
+            (decimal Sold, decimal Collected, decimal Outstanding, int Count)>();
 
-                var paid = Round(sale.PaidTotal);
+        await foreach (var sale in sales
+            .AsAsyncEnumerable()
+            .WithCancellation(cancellationToken))
+        {
+            var total = SaleCalculator.Calculate(
+                sale.Lines,
+                sale.Charges,
+                sale.GeneralDiscountType,
+                sale.GeneralDiscountValue).Total;
+            var paid = Round(sale.PaidTotal);
+            var outstanding = Math.Max(0m, Round(total - paid));
 
-                return new
-                {
-                    sale.Currency,
-                    Total = total,
-                    Paid = paid,
-                    Outstanding =
-                        Math.Max(
-                            0m,
-                            Round(total - paid))
-                };
-            })
-            .GroupBy(item => item.Currency)
-            .OrderBy(group => group.Key)
-            .Select(group =>
-                new SaleCurrencySummaryResponse
-                {
-                    Currency = group.Key,
-                    SoldTotal = Round(
-                        group.Sum(item => item.Total)),
-                    CollectedTotal = Round(
-                        group.Sum(item => item.Paid)),
-                    OutstandingTotal = Round(
-                        group.Sum(item =>
-                            item.Outstanding)),
-                    SaleCount = group.Count()
-                })
-            .ToList();
+            totals.TryGetValue(sale.Currency, out var current);
+            totals[sale.Currency] = (
+                current.Sold + total,
+                current.Collected + paid,
+                current.Outstanding + outstanding,
+                current.Count + 1);
+        }
 
         return new SaleSummaryResponse
         {
-            Currencies = currencies
+            Currencies = totals
+                .OrderBy(item => item.Key)
+                .Select(item => new SaleCurrencySummaryResponse
+                {
+                    Currency = item.Key,
+                    SoldTotal = Round(item.Value.Sold),
+                    CollectedTotal = Round(item.Value.Collected),
+                    OutstandingTotal = Round(item.Value.Outstanding),
+                    SaleCount = item.Value.Count
+                })
+                .ToList()
         };
     }
 
