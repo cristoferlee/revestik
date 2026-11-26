@@ -38,6 +38,42 @@ public sealed class RevestikWebApplicationFactory(
 
     public string PublicMediaTestRoot => publicMediaTestRoot;
 
+    private string? productionCertificateBase64;
+
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        if (environmentName == "Production")
+        {
+            Directory.CreateDirectory(productionStorageRoot);
+
+            using var rsa = RSA.Create(2048);
+            var request = new CertificateRequest(
+                "CN=Revestik-ProductionHostingTests",
+                rsa,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+
+            using var certificate = request.CreateSelfSigned(
+                DateTimeOffset.UtcNow.AddDays(-1),
+                DateTimeOffset.UtcNow.AddDays(2));
+
+            productionCertificateBase64 = Convert.ToBase64String(
+                certificate.Export(X509ContentType.Pkcs12, "test-only-password"));
+
+            // Minimal hosting consumes these settings before builder.Build().
+            // DeferredHostBuilder forwards host configuration to the entry point.
+            builder.ConfigureHostConfiguration(configuration =>
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["RevestikStorage:RootPath"] = productionStorageRoot,
+                    ["DataProtection:CertificateBase64"] = productionCertificateBase64,
+                    ["DataProtection:CertificatePassword"] = "test-only-password"
+                }));
+        }
+
+        return base.CreateHost(builder);
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(environmentName);
@@ -54,30 +90,6 @@ public sealed class RevestikWebApplicationFactory(
 
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
-            string? testCertificateBase64 = null;
-
-            if (environmentName == "Production")
-            {
-                Directory.CreateDirectory(productionStorageRoot);
-
-                using var rsa = RSA.Create(2048);
-
-                var request = new CertificateRequest(
-                    "CN=Revestik-ProductionHostingTests",
-                    rsa,
-                    HashAlgorithmName.SHA256,
-                    RSASignaturePadding.Pkcs1);
-
-                using var certificate = request.CreateSelfSigned(
-                    DateTimeOffset.UtcNow.AddDays(-1),
-                    DateTimeOffset.UtcNow.AddDays(2));
-
-                testCertificateBase64 = Convert.ToBase64String(
-                    certificate.Export(
-                        X509ContentType.Pkcs12,
-                        "test-only-password"));
-            }
-
             configuration.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
@@ -87,7 +99,7 @@ public sealed class RevestikWebApplicationFactory(
                             : null,
 
                     ["DataProtection:CertificateBase64"] =
-                        testCertificateBase64,
+                        productionCertificateBase64,
 
                     ["DataProtection:CertificatePassword"] =
                         environmentName == "Production"

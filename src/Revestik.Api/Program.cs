@@ -275,7 +275,63 @@ else
 
 app.UseRevestikPublicProjectStatus();
 app.UseRouting();
+
+// Health responses must not be cached, including authorization
+// failures and rate-limit rejections.
+app.Use(async (context, next) =>
+{
+    if (context.GetEndpoint()?.Metadata
+        .GetMetadata<HealthDiagnosticMetadata>() is not null)
+    {
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers.CacheControl = "no-store, no-cache";
+            context.Response.Headers.Pragma = "no-cache";
+            context.Response.Headers.Expires = "0";
+            return Task.CompletedTask;
+        });
+    }
+
+    await next(context);
+});
+
+// Liveness is independent of caller identity. Ignore credentials only
+// for the explicitly marked anonymous endpoint, without changing
+// Identity validation or the authentication pipeline for other routes.
+app.Use(async (context, next) =>
+{
+    if (context.GetEndpoint()?.Metadata
+        .GetMetadata<PublicLivenessMetadata>() is null)
+    {
+        await next(context);
+        return;
+    }
+
+    var hadCookie = context.Request.Headers.TryGetValue(
+        "Cookie", out var cookie);
+
+    var hadAuthorization = context.Request.Headers.TryGetValue(
+        "Authorization", out var authorization);
+
+    context.Request.Headers.Remove("Cookie");
+    context.Request.Headers.Remove("Authorization");
+
+    try
+    {
+        await next(context);
+    }
+    finally
+    {
+        if (hadCookie)
+            context.Request.Headers["Cookie"] = cookie;
+
+        if (hadAuthorization)
+            context.Request.Headers["Authorization"] = authorization;
+    }
+});
+
 app.UseAuthentication();
+
 app.UseRateLimiter();
 app.UseAuthorization();
 app.UseOutputCache();
@@ -303,14 +359,44 @@ app.Use(async (context, next) =>
     }
 });
 app.UseAntiforgery();
-app.MapGet("/api/health", async (RevestikDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapGet("/api/health", () => Results.Ok(new
 {
-    var canConnectToDatabase = await dbContext.Database.CanConnectAsync(cancellationToken);
+    Status = "Healthy",
+    Service = "Revestik.Api",
+    TimestampUtc = DateTime.UtcNow
+}))
+    .WithName("GetHealth")
+    .WithTags("System")
+    .WithMetadata(new PublicLivenessMetadata(), new HealthDiagnosticMetadata())
+    .AllowAnonymous()
+    .RequireRateLimiting(RevestikRateLimiting.Health);
+
+app.MapGet("/api/health/database", async (
+    RevestikDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var canConnectToDatabase =
+        await dbContext.Database.CanConnectAsync(cancellationToken);
+
     if (!canConnectToDatabase)
-        return Results.Problem(title: "Database connection failed.", statusCode: StatusCodes.Status503ServiceUnavailable);
-    return Results.Ok(new { Status = "Healthy", Service = "Revestik.Api", Database = "Connected", TimestampUtc = DateTime.UtcNow });
-}).WithName("GetHealth").WithTags("System").AllowAnonymous()
-  .RequireRateLimiting(RevestikRateLimiting.Health);
+        return Results.Problem(
+            title: "Database connection failed.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+
+    return Results.Ok(new
+    {
+        Status = "Healthy",
+        Service = "Revestik.Api",
+        Database = "Connected",
+        TimestampUtc = DateTime.UtcNow
+    });
+})
+    .WithName("GetDatabaseHealth")
+    .WithTags("System")
+    .WithMetadata(new HealthDiagnosticMetadata())
+    .RequireAuthorization(
+        Revestik.Api.Authorization.PolicyNames.AdministratorOnly)
+    .RequireRateLimiting(RevestikRateLimiting.Health);
 
 app.MapRevestikApiEndpoints();
 
@@ -327,7 +413,12 @@ app.MapFallbackToFile("/administracion/{*path:nonfile}", "administracion/index.h
     OnPrepareResponse = static context => DisableClientIndexCaching(context.Context.Response)
 }).AllowAnonymous();
 
-await app.InitializeIdentityAsync();
+// Identity roles must already be provisioned in production.
+if (app.Environment.IsDevelopment())
+{
+    await app.InitializeIdentityAsync();
+}
+
 app.Run();
 
 static void DisableClientIndexCaching(HttpResponse response)
@@ -336,5 +427,9 @@ static void DisableClientIndexCaching(HttpResponse response)
     response.Headers.Pragma = "no-cache";
     response.Headers.Expires = "0";
 }
+
+internal sealed class PublicLivenessMetadata;
+
+internal sealed class HealthDiagnosticMetadata;
 
 public partial class Program;
