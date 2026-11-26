@@ -4,14 +4,14 @@
 
 Revestik is a **.NET 10 modular monolith** hosted on Azure Container Apps with Azure SQL Database. The solution contains four application projects: `Revestik.Api`, `Revestik.Client`, `Revestik.Public`, and `Revestik.Shared`; its automated tests live in `tests/Revestik.Api.Tests`.
 
-The original authenticated business application was deployed at `app.revestikcr.com`. During public-website development, the separate domain and cross-origin `iframe` editor bridge proved difficult to maintain. The approved target architecture consolidates the business application at **`https://revestikcr.com/administracion`** and hosts the public site in the same `Revestik.Api` application. The old `iframe` bridge is legacy code pending separately approved removal, not the intended long-term editing architecture.
+The unified host serves administration at `https://revestikcr.com/administracion`. The former administrative subdomain was retired from ingress and DNS. The legacy administrative iframe editor and message bridge were retired in commit `9cbd7d4`; the independent PDF preview iframe is not part of that cleanup.
 
-**Production status reported by the owner on 2026-11-10:**
+**Production status reported by the owner on 2026-11-26:**
 
 - `https://revestikcr.com/administracion` serves the administrative experience, whose entry point is Google OAuth sign-in; business access remains restricted to authorized users.
-- `https://revestikcr.com/` currently returns **HTTP 401**. The customer-facing public website is **not approved for production launch**.
-- Public Home, shared navigation, and the Finishes/products section are implemented in the repository but remain part of the unfinished public-site beta. Their presence in `main` does not prove that the corresponding functionality or database migrations have been deployed.
-- A prior Azure revision was reported healthy, but the exact Git SHA and database migration state of the **currently active** production image must be verified before any new release. Locally built images do not necessarily retain commit metadata.
+- On 2026-11-26 the owner verified that the public root redirects to `/es` and returns HTTP 200. Anonymous reachability is not formal commercial launch approval; indexing and public authentication changes require separate approval.
+- Public website, cart and editorial features are deployed in the current artifact; complete functional acceptance is outstanding.
+- Verified revision `ca-revestik-prod--hotfix-sql-68638b8`, source `68638b8`, 58/58 migrations, SQL Standard S0. See the Azure checkpoint for exact evidence.
 
 Distinguish **implemented in source**, **tested**, **deployed**, and **publicly released**. Do not infer one state from another. Repository-visible configuration, tests, and example deployment manifests are not an independent audit of live Azure settings.
 
@@ -42,7 +42,7 @@ Before any approved deployment, record the source Git SHA, image digest, Azure r
 | `/administracion` | `Revestik.Client` (Blazor WebAssembly) | Administrative SPA and Google OAuth entry flow. Server-side API authorization protects business data and mutations; serving HTML/static files is not itself proof of authentication. |
 | `/es`, `/en`, `/de` and their site routes | `Revestik.Public` (Razor Components SSR) | Customer-facing site under active development. Public release remains blocked until the beta and release checks are approved. |
 | `/api/*` | `Revestik.Api` (Minimal APIs) | Business, identity, public read, and restricted admin endpoints. Unknown `/api/*` routes must not fall back to the administrative SPA. |
-| `/api/health` | API health endpoint | Used for HTTP and SQL connectivity verification; it is not a comprehensive application smoke test. |
+| `/api/health` | SQL-independent liveness | Does not establish database connectivity; `/api/health/database` is Administrator-only. |
 
 `Revestik.Shared` contains shared contracts, not a standalone process. In the established local development flow, run **only `Revestik.Api`**; it hosts the public pages and the compiled administrative client. The checked-in API HTTPS launch profile uses `https://localhost:7126` (HTTP `http://localhost:5029`). The standalone `Client` and `Public` entry points remain available for specialized development and tests but are not required as three concurrently running apps. See [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -77,7 +77,7 @@ The public catalog adds particular migration risks:
 - `20261104230000_ConsolidateSharedProductTaxonomy` transforms existing classifications and removes duplicated legacy taxonomy tables. Its migration explicitly rejects ambiguous or unsafe data and **cannot be automatically rolled back without risk of data loss**. Review real production data and arrange verified backup restoration before approving its execution.
 - `20261109194500_AllowFinishesHeroSlots` extends Home hero slots `1–3` to include independent Finishes slots `4–6`. Its down migration rejects rollback while Finishes slots are populated.
 
-Existing category/subcategory IDs, slugs, image associations and visibility are business-sensitive data. Do not use destructive schema resets or automatic migration-on-deploy as a substitute for reviewing them. A database rollback also does not restore external integrations or private files automatically. SQL Serverless cold starts may affect availability; confirm current Azure SQL settings before attributing failures to them.
+Existing taxonomy IDs, slugs, image associations and visibility are business-sensitive. Do not use destructive resets or automatic migration-on-deploy. Database rollback does not restore external integrations or files. Production SQL is Standard S0 without Serverless auto-pause.
 
 ## Release and smoke verification
 
@@ -92,7 +92,7 @@ For an **administrative-only** release, verify and record, at minimum:
 
 The **public beta launch requires separate approval** after content completion, mobile/accessibility and image checks, navigation/search/product detail validation, administrator-only editing checks, public/private data separation, SEO and `noindex` policy review, and a production-specific migration/backup and smoke-test plan. Do not describe Home/navbar/products being implemented as a completed public website launch.
 
-The inline public editor is restricted by the authenticated `Administrator` role and server-side CSRF/authorization checks. The browser edit-mode preference is **not** an authorization mechanism. Legacy `iframe` preview scripts and bridge files are pending cleanup **after** replacement verification, under a separately approved code-change scope.
+The inline editor requires Administrator and server-side CSRF/authorization checks. The legacy administrative iframe editor and message bridge were retired in commit `9cbd7d4`; the independent PDF preview iframe is not part of that cleanup.
 
 ## Recovery and outstanding operational risks
 
@@ -100,4 +100,8 @@ Confirm alert owners, Azure SQL backup retention, persistent-volume backups, tes
 
 The Gmail worker coordinates one active synchronization job **per API process**. Running multiple active replicas requires distributed coordination or a separately reviewed design; do not scale replicas assuming the existing process-local lock is sufficient.
 
-Known areas for future, separately approved investigation include legacy `iframe` removal, public-image persistence after hosting changes, public SEO/indexing release gates, and validating how unpublished featured products affect subsequent Home edits. Keep these separate from the present documentation update and from any production-release authorization.
+Remaining operational work is tracked in [the final closure plan](REVESTIK-FINAL-CLOSURE-PLAN.md); no additional infrastructure change is approved.
+
+## Current capacity and recovery evidence
+
+SQL Standard S0 (10 DTU, 250 GiB configured maximum), ACA 0.5 vCPU / 1 GiB / min=max=1. SQL short-term retention 7 days, differential interval 12 hours, local backup redundancy. Independent BACPAC export and local restore verified; Azure PITR and Azure Files restore remain untested. Protect backups outside Git; no production secrets or data in reports. See [the final closure plan](REVESTIK-FINAL-CLOSURE-PLAN.md) and [Azure checkpoint](AZURE-COST-OPTIMIZATION-CHECKPOINT-20261126.md).

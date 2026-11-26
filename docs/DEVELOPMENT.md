@@ -48,12 +48,12 @@ The checked-in `src/Revestik.Api/Properties/launchSettings.json` declares:
 | `https://localhost:7126/` | Unified ASP.NET Core host and public-site routes |
 | `https://localhost:7126/administracion/` | Administrative Blazor WebAssembly application |
 | `https://localhost:7126/administracion/login` | Administrative Google OAuth login screen |
-| `https://localhost:7126/api/health` | API/database health endpoint |
+| `https://localhost:7126/api/health` | SQL-independent liveness endpoint |
 | `https://localhost:7126/es` | Spanish public home during local development |
 | `https://localhost:7126/es/acabados` | Spanish public finishes/products page |
 | `http://localhost:5029` | Additional HTTP listener from the API `https` launch profile; HTTPS is preferred |
 
-The API hosts the administrative WASM assets at `/administracion` and the public Razor Components routes in the same application. Public pages may be exercised in local development, but **the production public root is not launched for visitors**: the owner reports that `https://revestikcr.com` currently returns HTTP 401. In production, `https://revestikcr.com/administracion` is the administrative entry point with Google OAuth.
+On 2026-11-26 the owner verified that the public root redirects to `/es` and returns HTTP 200. Anonymous reachability is not formal commercial launch approval; indexing and public authentication changes require separate approval. The unified host serves administration at `/administracion`.
 
 The older standalone launch profiles for `Revestik.Client` (`https://localhost:7081`, `http://localhost:5181`) and the optional standalone `Revestik.Public` entry point remain relevant only to explicitly scoped diagnostics or integration testing. They must not be presented as mandatory processes in the normal local setup. The public SSR reader uses the configured `PublicCatalog:ApiBaseUrl`, defaulting to `https://localhost:7126/` in Development and a loopback API origin in the unified production host. Check effective local configuration and registered OAuth redirect URIs if authentication or catalog requests fail; do not change CORS, cookies, callback URLs, or production secrets simply to work around a local mismatch.
 
@@ -77,7 +77,7 @@ Example focused authentication regression:
 dotnet test tests/Revestik.Api.Tests/Revestik.Api.Tests.csproj --filter "FullyQualifiedName~Authentication"
 ```
 
-CI restores and builds the solution, runs `dotnet test Revestik.sln --configuration Release --no-build`, publishes `Revestik.Api`, and verifies that the `/administracion` WebAssembly assets are included. The GitHub CI run for commit `581aef9c99ddb7bbc1fffcbe49ec924699c980a2` completed successfully. The owner additionally reported **1,199/1,199 passing local regression tests** and **17/17 manual security checks** for the most recent public editor work. These are historical results for that revision, not evidence that tests have just been rerun or that the latest changes are deployed to Azure. SQL/Testcontainers readiness can affect integration tests.
+CI restores/builds/tests and verifies published administrative assets. The owner reported 1,409/1,409 Release regression tests and successful CI for `68638b8` on 2026-11-25. These are historical results, not a new test execution. SQL/Testcontainers readiness may affect tests.
 
 ## Database and migrations
 
@@ -85,7 +85,7 @@ EF Core migrations must be reviewed for schema and data impact, database target,
 
 ## Public site and visual editor status
 
-The public homepage, navigation, and product/finishes section are implemented in the repository; the complete public website is still under development and is **not approved for a public production beta launch**. Administrative editing requires an authenticated `Administrator`; a browser edit-mode preference does not grant authorization. Legacy `iframe` preview and bridge files remain temporarily in the tree but are scheduled for removal after verification of the integrated editor. Do not add new dependencies on that legacy bridge.
+Public pages and inline editing are implemented; launch acceptance remains outstanding. Administrative editing requires an authenticated `Administrator`; presentation intent never grants authorization. The legacy administrative iframe editor and message bridge were retired in commit `9cbd7d4`; the independent PDF preview iframe is not part of that cleanup.
 
 ## Contribution and change control
 
@@ -93,4 +93,4 @@ Read [AGENTS.md](../AGENTS.md) and follow **INVESTIGATE → PLAN → APPROVE →
 
 ## Troubleshooting
 
-Capture the exact URL/path, HTTP status, sanitized logs, Git SHA, test command, and reproduction steps. Distinguish a code defect from SQL Serverless cold start, unavailable external integration, expired Identity session, stale browser assets, or misconfigured development settings. Remember that anonymous public routes and authenticated administrative APIs have different trust boundaries; static admin assets may be served without making private API data anonymous. Do not claim that a locally verified change is deployed until the actual production image/revision and smoke checks are confirmed.
+Capture exact URL, HTTP status, sanitized logs, Git SHA and reproduction steps. Distinguish application defects from database availability, external integrations, expired Identity sessions, stale assets or local configuration. Production uses provisioned S0, not Serverless auto-pause. `/api/health/database` is Administrator-only; `/api/health` does not query SQL. Verify live image and smoke evidence before deployment claims.

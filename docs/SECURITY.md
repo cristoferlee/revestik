@@ -29,9 +29,9 @@ The public product catalog is independent of internal inventory records, even th
 - The new same-origin inline editor is rendered only on recognized public routes when `PublicEditorAccess.CanEditPublicSite` confirms **both** an authenticated Identity session with the `Administrator` role **and** an edit-mode request or preference.
 - `?edit=1` and the `Revestik.Public.EditMode` cookie are **UI preferences, never authentication or authorization**. `?edit=0` exits edit mode. The preference cookie is configured `Secure`, `HttpOnly`, and `SameSite=Lax`.
 - Editor-specific HTML is marked `Cache-Control: private, no-store` and `X-Robots-Tag: noindex, nofollow`; shared caches and search indexes must not receive administrative editor markup. Independently authenticated API writes remain mandatory even when editor controls appear.
-- The older Client-hosted iframe preview, bridge scripts, and related editor routes still coexist with the newer inline editor. This is transitional legacy code, **not** the target architecture. Remove it only in a separately approved and verified change; do not treat the browser bridge as a security mechanism.
+The legacy administrative iframe editor and message bridge were retired in commit `9cbd7d4`; the independent PDF preview iframe is not part of that cleanup.
 
-**Public-release gate:** The project owner reports that `https://revestikcr.com` currently returns **HTTP 401** in production, while `/administracion` is operational. The public site is still a restricted beta and must not be opened or indexed until a separate release approval, deployment review, and verification. The repository contains anonymous SSR/public API routes; the reported production 401 must therefore be treated as observed environment behavior, **not** as proof that every public endpoint is globally blocked. Verify the effective ingress and route protections before release.
+**Public-release gate:** On 2026-11-26 the owner verified that the public root redirects to `/es` and returns HTTP 200. Anonymous reachability is not formal commercial launch approval; indexing and public authentication changes require separate approval. Public Google login/registration is currently hard-disabled in Production. Verify actual ingress and anonymous routes; noindex is not access control.
 
 ## Production security controls
 
@@ -56,3 +56,5 @@ Authorization alone is insufficient: authenticated users can still request inval
 For security-sensitive changes, verify anonymous access, authenticated role and resource restrictions, CSRF rejection, OAuth callback and redirect handling, editor-mode gating, cache behavior, public catalog publication filters, rejected writes, audit events, concurrency, and private/public storage boundaries. Re-run relevant automated tests on the exact revision and perform environment-specific smoke checks before any release.
 
 A passing UI smoke test, an HTTP 401 at one route, or green CI does **not** constitute a penetration test or independently audited compliance. Historical test counts are not guarantees for a new revision. See [OPERATIONS.md](OPERATIONS.md), [ARCHITECTURE.md](ARCHITECTURE.md), and the accepted [authentication ADR](adr/002-authentication.md) for related deployment and design responsibilities.
+
+Public cart ownership remains server-scoped. Existing SQL HTTP tests cover ownership isolation; full release security acceptance and the clustered-key width issue remain tracked in the final closure plan.

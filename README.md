@@ -9,11 +9,11 @@ Revestik is a **modular monolith**, not a microservices platform. The ASP.NET Co
 ## Current status
 
 - **Internal application:** Deployed on Azure and accessed at [`revestikcr.com/administracion`](https://revestikcr.com/administracion). Authorized users sign in through Google OAuth and ASP.NET Core Identity.
-- **Public website:** Implemented in the repository but **not released to visitors**. The production root `https://revestikcr.com` currently returns HTTP 401 while the public beta is being completed and validated.
-- **Public work completed so far:** The homepage, shared navigation, and finishes/product section have been implemented. Additional content, quality checks, and release approval remain before public launch.
+- **Public website:** Deployed prelaunch. On 2026-11-26 the owner verified that the public root redirects to `/es` and returns HTTP 200. Anonymous reachability is not formal commercial launch approval; indexing and public authentication changes require separate approval.
+- **Public scope:** Home, finishes, products, projects, Solutions, About, Contact, cart and preliminary quotation PDF are implemented; release acceptance remains outstanding.
 - **Release distinction:** Code merged into `main`, passing CI, or tested locally is not necessarily deployed to Azure. Live revision, schema state, and smoke-test evidence must be checked separately.
 
-The internal application originally ran at `app.revestikcr.com`. The public site was later developed for `revestikcr.com`; the resulting cross-origin editing and `iframe` bridge added unnecessary complexity. The architecture was consolidated onto one host and origin, with the administrative application under `/administracion`. The legacy `iframe` editor/bridge remains in the codebase pending controlled removal; **it is not the target architecture**.
+The earlier split-domain architecture has been consolidated at `revestikcr.com`, with administration under `/administracion`. The legacy administrative iframe editor and message bridge were retired in commit `9cbd7d4`; the independent PDF preview iframe is not part of that cleanup.
 
 See the [roadmap](docs/ROADMAP.md) for implemented work, public-beta scope, and remaining tasks.
 
@@ -29,7 +29,7 @@ See the [roadmap](docs/ROADMAP.md) for implemented work, public-beta scope, and 
 | Projects | Customer-linked projects, tasks, milestones, payments, private documents, and alerts |
 | Administration | Google sign-in, Identity-based user management, roles, permissions, settings, and security audit records |
 | Integrations | Gmail synchronization, Costa Rican tax-related services, and BCCR exchange-rate data |
-| Public website (beta in development) | Multilingual company pages, homepage content, finishes catalog, product details, images, and administrator-only content editing |
+| Public website (prelaunch) | Multilingual company pages, finishes catalog, projects, solutions, cart, preliminary quotation PDF and administrator-only editing |
 
 The **public catalog is independent of internal inventory products**. Categories, subcategories, and active units of measure are reused where appropriate, without exposing private stock, costs, FIFO layers, customer data, or financial records. A received tax XML is not automatically an inventory receipt; similarly, a project payment is not automatically a sale payment or bank movement.
 
@@ -116,3 +116,5 @@ dotnet test tests/Revestik.Api.Tests/Revestik.Api.Tests.csproj
 ## Scope and transparency
 
 Revestik is an internal business system with an in-progress public website, **not** a public multi-tenant SaaS or a checkout marketplace. Public-site development must not expose internal business information. This repository does not claim independent security certification, guaranteed uptime, fully audited disaster recovery, or production deployment of every commit. Test results, release artifacts, migrations, and Azure configuration must be verified against their intended environment.
+
+Production uses Azure SQL Standard S0 (10 DTU) and Container Apps with 0.5 vCPU, 1 GiB RAM and one replica. See [final closure plan](docs/REVESTIK-FINAL-CLOSURE-PLAN.md).

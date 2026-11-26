@@ -1,5 +1,27 @@
 # Revestik - Optimization Master Plan
 
+> **Closure decision — 2026-11-26 (FINAL-02A, owner approved).** The original plan below is retained as historical evidence, not an active implementation checklist. Where it conflicts with this resolution, this resolution prevails. See [ROADMAP.md](ROADMAP.md) and [final closure plan](REVESTIK-FINAL-CLOSURE-PLAN.md).
+
+| Block | Resolution |
+| --- | --- |
+| OPT-01A, OPT-02, OPT-14 | COMPLETED |
+| OPT-03A/B, OPT-04, OPT-08 | CANCELLED: no persistent publication or SQL-independent public content/PDF requirement |
+| OPT-11, ACA-01 | CLOSED — NO CHANGE |
+| ACA-02 through ACA-05 | CANCELLED; experimental resources removed, no capacity certification |
+| OPT-05/06 | TRANSFERRED to FINAL-03C |
+| OPT-07 | TRANSFERRED to FINAL-04; verify existing dashboard cache before changing |
+| OPT-09/12 | TRANSFERRED to FINAL-03D |
+| OPT-10 | TRANSFERRED to FINAL-03B |
+| OPT-13 | TRANSFERRED to FINAL-05 |
+| OPT-15/16 | TRANSFERRED to FINAL-06; ordinary cost observation is operational maintenance |
+
+SQL S0 remains the authoritative data source. Preserve existing publication visibility, cache invalidation, security and data integrity. Requirements specific to publication artifacts, regeneration, SQL-free public reads and SQL auto-pause are superseded; ordinary availability/error handling remains required. Other requirements are not silently cancelled. Image optimization and administrator-confirmed orphan cleanup remain approved but unimplemented in this closure. No code, Azure or launch authorization follows from this document.
+
+---
+
+## Historical plan (2026-11-25)
+
+
 ## 1. Document control
 
 - Identifier: OPT-MASTER-01

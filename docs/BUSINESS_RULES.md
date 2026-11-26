@@ -32,13 +32,13 @@ This section documents behavior implemented in `main` at commit `581aef9c99ddb7b
 
 **PUB-012 — Public content writes are server-authoritative.** `/api/admin/public-catalog` and `/api/admin/public-site/*` require administrator authorization; mutable operations validate CSRF where configured, input requirements and concurrency versions. Public read endpoints are separately anonymous. UI visibility, `iframe` messaging or client JavaScript cannot grant privileged authority.
 
-**PUB-013 — Edit-mode preference is not authorization.** The public site's `?edit=1` / `?edit=0` request and secure session preference cookie control presentation intent only. Each editor render still requires a valid authenticated Identity session, the `Administrator` role and an eligible public route; the API separately authorizes writes. The integrated inline editor is the target architecture. The older administrative iframe/bridge implementation remains legacy code pending verified removal.
+**PUB-013 — Edit-mode preference is not authorization.** The public site's `?edit=1` / `?edit=0` request and secure session preference cookie control presentation intent only. Each editor render still requires a valid authenticated Identity session, the `Administrator` role and an eligible public route; the API separately authorizes writes. The legacy administrative iframe editor and message bridge were retired in commit `9cbd7d4`; the independent PDF preview iframe is not part of that cleanup.
 
 **PUB-014 — Home and Finishes hero content is separate.** Home uses stored hero slots 1–3; Finishes (`Acabados`) uses slots 4–6 in the same table and presents its own page-relative slots 1–3. Updates to one page must not overwrite the other page's hero content.
 
 **PUB-015 — Home featured products must remain visible.** Up to five manually selected slugs are displayed in the configured order, excluding products that no longer pass public visibility and cover-image checks. With no manual selection, the current API automatically selects up to five eligible products ordered by `DisplayOrder` and ID. Saving a previously selected unpublished product is rejected; this is a known editor UX case, not an authorization bypass.
 
-**PUB-016 — The public launch is a separate release decision.** The public homepage, navigation and finishes/product experience exist in source, but the owner confirmed that `https://revestikcr.com` still returns HTTP 401 as of 2026-11-10. The administration remains available at `/administracion` with Google OAuth sign-in. An approved beta, production configuration, data review, release and smoke verification are prerequisites to claiming a public launch.
+**PUB-016 — The public launch is a separate release decision.** On 2026-11-26 the owner verified that the public root redirects to `/es` and returns HTTP 200. Anonymous reachability is not formal commercial launch approval; indexing and public authentication changes require separate approval. Administration remains protected by Identity and server-side policies.
 
 Implementation references: `src/Revestik.Api/Endpoints/PublicCatalog/`, `src/Revestik.Api/Services/PublicCatalog/PublicCatalogVisibility.cs`, `src/Revestik.Public/Hosting/PublicEditorAccess.cs`, and relevant SQL integration/authorization tests under `tests/Revestik.Api.Tests/PublicCatalog/`.
 
@@ -649,3 +649,7 @@ These decisions supplement the PRJ baseline and are preserved separately from hi
 - Milestone weights must total 100% for plan activation; progress does not automatically formally close a Project.
 - Project attachments are private and project-scoped. Unlinking a payment evidence document does not delete its source file.
 - The source code, migrations and tests are definitive evidence for implemented behavior. This document does not certify untested capabilities.
+
+## Approved requirements awaiting implementation (2026-11-26)
+
+SQL remains the authoritative source for public visibility and pricing; the proposed separate persistent publication mechanism is cancelled. Automatic image optimization and administrator-confirmed orphan cleanup are approved requirements, not current verified behavior. Until the cleanup change is implemented, the existing scheduled active-media cleanup remains operational. Preserve explicit product-owned media lifecycle and visibility rules. See [final closure plan](REVESTIK-FINAL-CLOSURE-PLAN.md).

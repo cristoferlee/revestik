@@ -104,7 +104,7 @@ Only endpoints that require unauthenticated access should be configured with ano
 
 Current examples include parts of the authentication flow, application health/static hosting requirements, and explicitly anonymous public-catalog read endpoints. A public read endpoint must filter unpublished/archived products, classifications without a public presentation slug, and media not eligible for public access, rather than exposing the operational product/inventory tables.
 
-**Release gate:** The owner confirmed that `https://revestikcr.com` returned HTTP 401 in production on 2026-11-10. Public-site code being present in the unified host does **not** establish that the corporate website has been launched for visitors. The administration at `https://revestikcr.com/administracion` presents the Google OAuth sign-in flow. These are observed environment states, not guarantees about future deploys.
+**Release gate:** On 2026-11-26 the owner verified that the public root redirects to `/es` and returns HTTP 200. Anonymous reachability is not formal commercial launch approval; indexing and public authentication changes require separate approval. Administration remains protected.
 
 Anonymous endpoints must not expose sensitive business information merely because they are publicly reachable.
 
@@ -475,9 +475,9 @@ Historical Sales, Quotations, Inventory movements, cost layers, and physical cou
 
 Blazor WebAssembly static files must never contain secrets because they are downloaded to the user's device. Public catalog SSR data reads must not use administrator cookies or privileged API endpoints and must never return private customer/project documents or financial data. Unknown `/api/*` routes must remain API responses rather than falling through to an HTML/SPA entry point.
 
-The authorized public inline editor renders interactive server components only after the Identity/Administrator check and requests private, non-cacheable HTML. Entering edit mode is not a privilege escalation. The legacy iframe/postMessage preview and bridge assets still exist in the repository but are **deprecated**, not an intended long-term security boundary. Their removal requires a separate approved implementation and security regression.
+The authorized inline editor requires Identity/Administrator and private, non-cacheable HTML. Edit mode is not a privilege escalation. The legacy administrative iframe editor and message bridge were retired in commit `9cbd7d4`; the independent PDF preview iframe is not part of that cleanup.
 
-Before public beta launch, independently verify anonymous read filtering, media authorization, SEO/indexing state, login isolation, cache behavior, and production routing. Public root currently returning 401 is an owner-reported deployment state, not a substitute for these checks.
+Before launch verify anonymous filtering, media authorization, SEO, login isolation, cache and routing. Public reachability and noindex do not establish security or release approval.
 
 ## 27. Security Testing
 
@@ -561,7 +561,7 @@ A security review should be performed when introducing or significantly changing
 * File uploads.
 * Public APIs.
 * Public editor access, public media visibility, and publication state.
-* Changes to domain routing, anonymous HTML caching, or the legacy iframe bridge.
+* Changes to domain routing, anonymous HTML caching or public inline editing.
 * External integrations.
 * Raw SQL.
 * Production hosting.

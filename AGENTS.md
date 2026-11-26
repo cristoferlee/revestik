@@ -28,20 +28,20 @@ Revestik is a **.NET 10 modular monolith** with four application projects:
 
 `tests/Revestik.Api.Tests` is the automated test project, not a fifth application project.
 
-The intended deployment is **one host and one main domain**, `revestikcr.com`. `Revestik.Api` hosts both web experiences and the API. The earlier administrative subdomain `app.revestikcr.com` and the cross-origin iframe editing bridge are historical integration choices, not the target architecture. The old iframe editor and associated bridge code still require a separately approved, verified cleanup; do not declare them removed.
+The deployment is one host and one main domain, `revestikcr.com`, with administration at `/administracion`. The former subdomain was retired from ingress and DNS. The legacy administrative iframe editor and message bridge were retired in commit `9cbd7d4`; the independent PDF preview iframe is not part of that cleanup.
 
 The normal current local startup runs **`Revestik.Api` alone**; it serves the administrative WASM client and the public site. Separate development entry points may exist for targeted debugging, but do not instruct contributors to start three processes as the standard workflow. Verify the actual launch profile and Google OAuth callback configuration before providing port-specific instructions.
 
-## Current deployment and product status — 2026-11-10
+## Current deployment and product status — 2026-11-26
 
 - **Internal administration:** Deployed on Azure Container Apps with Azure SQL Database. The owner confirms `https://revestikcr.com/administracion` works and presents the Google OAuth sign-in flow for unauthenticated visitors. Administrative access and protected operations remain server-authorized.
-- **Public launch gate:** The owner confirms `https://revestikcr.com` currently returns **HTTP 401** in production. This is an intentional pre-launch restriction, not evidence that the customer-facing website is live. Do not enable public access or search indexing without separate approval.
-- **Public website development:** Home, shared navigation/navbar, and the finishes/products section are implemented in the repository. The full public site is still being completed and validated as a **beta** before its public production launch. Other pages and editor capabilities must be verified individually; never mark the whole public site complete based on a few finished sections.
+- **Public launch gate:** On 2026-11-26 the owner verified that the public root redirects to `/es` and returns HTTP 200. Anonymous reachability is not formal commercial launch approval; indexing and public authentication changes require separate approval.
+- **Public website:** Home, Finishes, products, projects, Solutions, About, Contact, cart and preliminary PDF are implemented in source; final acceptance remains required.
 - **Public catalog boundaries:** Public product records are independent of internal inventory products. Categories, subcategories, and selling units are shared with existing administrative catalog settings. Anonymous catalog reads must obey publication and visibility rules; privileged mutations require Administrator authorization and relevant antiforgery checks.
-- **Visual editing:** The target is to edit actual public pages on the unified origin, not a second, duplicated preview application. Legacy `iframe`/`postMessage` editor components remain technical debt pending validated removal.
-- **Evidence baseline:** GitHub `main` was verified at `581aef9c99ddb7bbc1fffcbe49ec924699c980a2` (2026-11-10). GitHub CI for that SHA completed successfully. The owner previously reported a local regression of **1,199/1,199** and **17/17** manual security checks for the public-editor recovery. These reports do not establish that the same code, database migrations, or public pages have been deployed to Azure.
-- **Deployment traceability:** The most recent previously documented Azure revision was `ca-revestik-prod--0000018` on 2026-11-06, built from local sources without reliable Git SHA metadata. Verify the live Azure revision, image digest, configuration, database migration history, and smoke results independently before making production claims.
-- **Known follow-up items:** Remove obsolete iframe/bridge code only after replacement verification; check public-media availability after hosting changes; verify SEO `noindex` behavior and launch readiness; check featured-product selections when publication status changes. These are investigation items, not blanket permission to modify code.
+- **Visual editing:** The integrated inline editor is the current architecture. The legacy administrative iframe editor and message bridge were retired in commit `9cbd7d4`; the independent PDF preview iframe is not part of that cleanup.
+- **Evidence baseline:** `68638b8118c9583662a85599736031eea080b365`; owner-reported 1,409/1,409 regression and successful CI. See the Azure checkpoint for deployment evidence.
+- **Deployment:** `ca-revestik-prod--hotfix-sql-68638b8`; SQL Standard S0, 58 migrations verified, ACA 0.5 vCPU / 1 GiB / one replica.
+- **Active work:** Follow `docs/ROADMAP.md` and `docs/REVESTIK-FINAL-CLOSURE-PLAN.md`. No persistent publication layer, extra CDN or ACA reduction is planned.
 
 ## Engineering and security guardrails
 
@@ -57,3 +57,7 @@ The normal current local startup runs **`Revestik.Api` alone**; it serves the ad
 ## Maintaining this checkpoint
 
 Keep this file concise and current. Update it only with verified Git/test/deployment evidence and explicit owner decisions. Store detailed business rules, architecture, release procedures, and historical decisions in their dedicated documents rather than duplicating entire checkpoints here. Distinguish **implemented**, **tested**, **deployed**, **publicly enabled**, and **planned** in every future handoff.
+
+## Closure discipline
+
+Use `COMPLETED` (implemented and verified), `CLOSED — NO CHANGE` (investigated and retained), `CANCELLED` (explicitly discarded), `NOT APPLICABLE`, `SUPERSEDED` (replacement identified), and `TRANSFERRED` (destination identified). Do not equate transfer with implementation. Keep unresolved evidence explicit; do not expand release scope without approval.

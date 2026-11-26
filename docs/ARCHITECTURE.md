@@ -47,8 +47,8 @@ The earlier accepted [ADR-001](adr/001-architecture.md) recorded the original th
 ## Hosting, routes, and local development
 
 - **Production domain:** `revestikcr.com` is the unified host. The authenticated administration is reached at `https://revestikcr.com/administracion` and directs unauthenticated business users to the Google OAuth sign-in experience.
-- **Public release boundary:** As confirmed by the project owner on 2026-11-10, the production root `https://revestikcr.com/` returns **HTTP 401**. Public-site functionality in the repository must not be described as already launched to anonymous visitors. The public beta requires separate completion, authorization, deployment, and smoke verification.
-- **Historical domain:** Administration was initially deployed at `app.revestikcr.com`. That subdomain is **not** the target architecture; the administration was consolidated under `/administracion` to simplify same-origin hosting and editing.
+- **Public release boundary:** On 2026-11-26 the owner verified that the public root redirects to `/es` and returns HTTP 200. Anonymous reachability is not formal commercial launch approval; indexing and public authentication changes require separate approval.
+- **Historical domain:** `app.revestikcr.com` was retired from Azure ingress and DNS; administration is under `/administracion`.
 - **Main local workflow:** Run **`Revestik.Api` only**. It hosts the administrative client and public SSR site together, including the Google OAuth integration. There is no longer a requirement to run Client, Public, and API as three simultaneous processes for normal development. The separate `Revestik.Public` program remains available for specialized development or testing, not as the principal hosting design.
 - **Administrative routing:** The Blazor WebAssembly files and SPA fallback are scoped to `/administracion`. The application's public SSR root is not an unrestricted fallback to the private administration. The HTML entry page and static assets are not authorization boundaries; sensitive endpoints remain protected.
 - **Public routing:** `Revestik.Public` provides multilingual pages under `/es`, `/en`, and `/de` (for example, `/es/acabados`), with SSR, public media routes, and interactive server components where authorized editing is requested.
@@ -57,7 +57,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for the current launch profile, URLs, and t
 
 ## Public website and editorial architecture
 
-The public website is a **corporate presentation and lead-generation site**, not a public clone of enterprise operations, a mass marketplace, checkout system, or multi-tenant SaaS. The project owner's reported beta progress includes the homepage, shared navigation, and product/finishes section; code presence does not mean those pages have been released to anonymous production traffic.
+The public website is a corporate presentation and lead-generation site, not a checkout marketplace or multi-tenant SaaS. Implemented public scope includes catalog, projects, Solutions, editorial pages, cart and preliminary quotation PDF. Formal acceptance remains outstanding.
 
 ### Catalog and data ownership
 
@@ -71,7 +71,7 @@ The public website is a **corporate presentation and lead-generation site**, not
 
 The target editing experience is **in-page editing on the real public site**, using `Revestik.Public` interactive server components. The server checks the active Identity session and the `Administrator` role on each editor render; edit-mode query/cookie state is a **preference**, not authentication. Administrative mutations are separately protected by authorization, CSRF checks, and validation.
 
-The earlier design embedded public pages in an administrative **`iframe`** and connected them through a JavaScript message bridge while the public and administrative sites lived on different domains. That approach created integration and maintenance problems. Following domain unification, the `iframe`-based administrative editor and related bridge scripts are **legacy code scheduled for removal after the replacement is fully verified**. Their continued presence in the repository is not endorsement of two permanent editing architectures. Do not delete or refactor them as part of documentation-only work.
+The legacy administrative iframe editor and message bridge were retired in commit `9cbd7d4`; the independent PDF preview iframe is not part of that cleanup.
 
 ## Business modules
 
@@ -110,7 +110,7 @@ Historical Gmail synchronization runs in an API-hosted `BackgroundService`, with
 
 ## Production hosting and state
 
-The production architecture uses Azure Container Apps and Azure SQL Database. The API requires a configured durable, private storage root for received-document inbox data, Gmail state, project documents, public-catalog media, and persistent Data Protection keys. Data Protection keys are protected with a certificate. The runtime fails startup if mandatory production storage or certificate configuration is absent.
+Production uses Azure Container Apps (0.5 vCPU, 1 GiB, one replica) and Azure SQL Standard S0 (10 DTU). The API requires durable private storage for inbox data, Gmail state, project documents, public media and certificate-protected Data Protection keys. Startup requires mandatory storage and certificate configuration.
 
 The public catalog and shared taxonomy have EF Core migrations. Migration presence in `main`, successful automated tests, or a healthy container do **not** independently establish that the corresponding changes are applied to production SQL. Review existing data, backup/restore readiness, and target database before authorizing schema changes. In particular, the shared-taxonomy consolidation has data-preservation checks and does not support automatic reversal.
 
@@ -119,3 +119,7 @@ Azure deployment manifests in `deploy/azure/` may be historical or environment-s
 ## Architectural decision records
 
 Accepted ADRs in [`docs/adr/`](adr/) preserve the rationale for decisions at the time they were adopted. Current architecture changes are documented above; add a new ADR when changing a difficult-to-reverse architectural choice, rather than silently rewriting an accepted historical record.
+
+## Approved architecture decisions — 2026-11-26
+
+SQL remains authoritative for public content and pricing; existing cache and visibility controls remain. No persistent publication layer or additional CDN is planned. See [ADR-004](adr/004-publication-architecture.md), [ADR-005](adr/005-hosting-and-cdn.md) and [ADR-006](adr/006-container-resource-allocation.md). See [the final closure plan](REVESTIK-FINAL-CLOSURE-PLAN.md) and [Azure checkpoint](AZURE-COST-OPTIMIZATION-CHECKPOINT-20261126.md).
