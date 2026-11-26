@@ -97,11 +97,12 @@ public static class PublicSolutionsSectionEndpoints
         PublicCatalogValidatedMedia? media = null;
         if (request.ImageToken is not null)
         {
-            try { media = await storage.InspectPendingAsync(request.ImageToken, "ProductCover", ct); }
+            try { media = await storage.InspectPendingAsync(request.ImageToken, "SiteHero", ct); }
             catch (Exception e) when (e is FileNotFoundException or InvalidDataException or IOException or ArgumentException)
             { return Results.BadRequest(new { message = "La fotografía no es válida o ya no está disponible." }); }
         }
 
+        using var mediaLease = await storage.AcquireMutationAsync(ct);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var current = await db.Set<PublicSolutionsSection>().SingleOrDefaultAsync(x => x.Key == key, ct);
         if ((current is null && request.Version.Length > 0) ||

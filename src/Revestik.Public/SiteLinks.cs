@@ -79,6 +79,126 @@ public static class SiteLinks
             (page == 2 && parts.Length == 4 && parts[2] is "categoria" or "category" or "kategorie");
     }
 
+    // OAuth destinations are public navigation routes, not arbitrary URLs.
+    public static string NormalizeAuthenticationReturnPath(
+        string? candidate, string language)
+    {
+        language = language is "en" or "de" ? language : "es";
+        var fallback = Path(language, 0);
+
+        if (string.IsNullOrWhiteSpace(candidate) ||
+            candidate.Length > 2048 ||
+            !candidate.StartsWith("/", StringComparison.Ordinal) ||
+            candidate.StartsWith("//", StringComparison.Ordinal) ||
+            candidate.Contains('\\') ||
+            candidate.Contains('#') ||
+            candidate.Any(char.IsControl))
+            return fallback;
+
+        var rawPath = candidate.Split('?', 2)[0];
+
+        // Reject encoded separators and ambiguous path normalization.
+        if (rawPath.Contains('%') ||
+            rawPath.Contains("//", StringComparison.Ordinal) ||
+            rawPath.Any(char.IsWhiteSpace))
+            return fallback;
+
+        var parts = rawPath.Trim('/').Split('/');
+
+        if (parts.Length == 0 ||
+            parts[0] != language ||
+            parts.Any(part => part is "." or ".."))
+            return fallback;
+
+        if (parts.Length == 1)
+            return fallback;
+
+        var section = "/" + parts[0] + "/" + parts[1];
+
+        if (section == CartPath(language))
+            return parts.Length == 2 ? section : fallback;
+
+        var page = Enumerable.Range(1, 5)
+            .FirstOrDefault(index => Path(language, index) == section);
+
+        if (page == 0)
+            return fallback;
+
+        var normalized = section;
+
+        if (parts.Length > 2)
+        {
+            var categorySegment = language switch
+            {
+                "en" => "category",
+                "de" => "kategorie",
+                _ => "categoria"
+            };
+
+            if (parts.Length == 3 &&
+                page is 1 or 2 &&
+                IsProjectSlug(parts[2]) &&
+                parts[2] is not ("categoria" or "category" or "kategorie"))
+            {
+                normalized += "/" + parts[2];
+            }
+            else if (parts.Length == 4 &&
+                     page == 2 &&
+                     parts[2] == categorySegment &&
+                     IsProjectSlug(parts[3]))
+            {
+                normalized += "/" + categorySegment + "/" + parts[3];
+            }
+            else
+            {
+                return fallback;
+            }
+        }
+
+        // Only preserve supported listing filters. Strip editor, auth,
+        // session and unknown query parameters.
+        if (parts.Length != 2 || page is not (1 or 2))
+            return normalized;
+
+        var queryIndex = candidate.IndexOf('?');
+
+        if (queryIndex < 0)
+            return normalized;
+
+        var parsed = Microsoft.AspNetCore.WebUtilities.QueryHelpers
+            .ParseQuery(candidate[queryIndex..]);
+
+        var filters = new Dictionary<string, string?>();
+
+        foreach (var pair in parsed)
+        {
+            if (pair.Value.Count != 1)
+                continue;
+
+            var value = pair.Value.ToString();
+
+            if (pair.Key == "page" ||
+                page == 2 && pair.Key is "categoryId" or "subcategoryId")
+            {
+                if (int.TryParse(value, out var number) && number > 0)
+                    filters[pair.Key] = number.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture);
+            }
+            else if (page == 2 &&
+                     pair.Key == "search" &&
+                     value.Length is > 0 and <= 200 &&
+                     !value.Any(char.IsControl))
+            {
+                filters["search"] = value;
+            }
+        }
+
+        return filters.Count == 0
+            ? normalized
+            : Microsoft.AspNetCore.WebUtilities.QueryHelpers
+                .AddQueryString(normalized, filters);
+    }
+
     public static string? ValidatedPublicBaseUrl(string? configured)
     {
         if (!Uri.TryCreate(configured, UriKind.Absolute, out var url) || url.Scheme != Uri.UriSchemeHttps ||

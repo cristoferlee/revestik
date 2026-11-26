@@ -139,10 +139,31 @@ public sealed class UserAdministrationService(
         where role.Name != null && RoleNames.All.Contains(role.Name)
         select link.UserId;
 
-    private static ManagedUserResponse Map(ApplicationUser user, IEnumerable<string> roles) =>
-        new(user.Id, user.Email ?? string.Empty, user.DisplayName,
-            roles.SingleOrDefault() ?? string.Empty, user.IsActive,
-            user.CreatedAtUtc, user.LastLoginAtUtc, user.ConcurrencyStamp ?? string.Empty);
+    private static ManagedUserResponse Map(
+        ApplicationUser user,
+        IEnumerable<string> roles)
+    {
+        var assignedRoles = roles.ToArray();
+
+        // Never select one arbitrary role from an inconsistent account.
+        // Keep the account visible for review without presenting it as
+        // having a valid employee role.
+        var role = assignedRoles.Length == 1 &&
+                   RoleNames.All.Contains(
+                       assignedRoles[0], StringComparer.Ordinal)
+            ? assignedRoles[0]
+            : string.Empty;
+
+        return new ManagedUserResponse(
+            user.Id,
+            user.Email ?? string.Empty,
+            user.DisplayName,
+            role,
+            user.IsActive,
+            user.CreatedAtUtc,
+            user.LastLoginAtUtc,
+            user.ConcurrencyStamp ?? string.Empty);
+    }
 
     private static void ValidateRole(string role)
     {

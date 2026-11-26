@@ -7,6 +7,20 @@ public sealed class PublicCatalogMediaStorage
     private readonly string _root;
     private readonly string _pending;
     private readonly string _active;
+    private readonly SemaphoreSlim _mutation = new(1, 1);
+    private readonly SemaphoreSlim _processing = new(1, 1);
+
+    internal async Task<IDisposable> AcquireMutationAsync(CancellationToken ct)
+    {
+        await _mutation.WaitAsync(ct);
+        return new MutationLease(_mutation);
+    }
+
+    private sealed class MutationLease(SemaphoreSlim gate) : IDisposable
+    {
+        private SemaphoreSlim? _gate = gate;
+        public void Dispose() => Interlocked.Exchange(ref _gate, null)?.Release();
+    }
 
     public PublicCatalogMediaStorage(IHostEnvironment env, IConfiguration config)
         : this(env.IsProduction()
@@ -26,6 +40,17 @@ public sealed class PublicCatalogMediaStorage
 
     public async Task<string> StageAsync(Stream input, string fileName, string role, CancellationToken ct)
     {
+        if (!await _processing.WaitAsync(0, ct))
+            throw new InvalidDataException("Image processing is busy. Try again.");
+        try
+        {
+            return await StageCoreAsync(input, role, ct);
+        }
+        finally { _processing.Release(); }
+    }
+
+    private async Task<string> StageCoreAsync(Stream input, string role, CancellationToken ct)
+    {
         await using var buffer = new MemoryStream();
         var chunk = new byte[81920];
         while (true)
@@ -35,19 +60,37 @@ public sealed class PublicCatalogMediaStorage
             if (buffer.Length + n > MaxBytes) throw new InvalidDataException("Maximum image size is 5 MB.");
             buffer.Write(chunk, 0, n);
         }
-        var bytes = buffer.ToArray();
-        var validated = PublicCatalogMediaValidation.Validate(bytes, fileName, role);
+        if (buffer.Length == 0) throw new InvalidDataException("The image is empty.");
+        buffer.Position = 0;
+        var maxSide = MaxSide(role);
+        using var optimized = PublicImageOptimizer.Encode(buffer, maxSide);
+        if (optimized.Size <= 0 || optimized.Size > MaxBytes)
+            throw new InvalidDataException("The optimized image exceeds the storage limit.");
+        ct.ThrowIfCancellationRequested();
         Directory.CreateDirectory(_pending);
         var token = Guid.NewGuid().ToString("N");
-        await using (var file = new FileStream(Path.Combine(_pending, token), FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
-            await file.WriteAsync(bytes, ct);
+        using var lease = await AcquireMutationAsync(ct);
+        var path = Path.Combine(_pending, token + ".webp");
+        using (var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            try { optimized.SaveTo(file); }
+            catch
+            {
+                file.Dispose();
+                File.Delete(path);
+                throw;
+            }
+        }
         return token;
     }
 
     public async Task<PublicCatalogValidatedMedia> InspectPendingAsync(string token, string role, CancellationToken ct)
     {
-        var bytes = await File.ReadAllBytesAsync(GetPath(_pending, token), ct);
-        return PublicCatalogMediaValidation.Validate(bytes, role == "CategoryHeroPrimary" ? "media.gif" : "media.bin", role, detectFromBytes: true);
+        var bytes = await File.ReadAllBytesAsync(GetPendingPath(token), ct);
+        var media = PublicCatalogMediaValidation.Validate(bytes, "media.bin", role, detectFromBytes: true);
+        if (File.Exists(Path.Combine(_pending, token + ".webp")) && Math.Max(media.Width, media.Height) > MaxSide(role))
+            throw new InvalidDataException("Image dimensions exceed the limit for this role.");
+        return media;
     }
 
     public async Task<PublicCatalogValidatedMedia> InspectActiveAsync(string key, string role, CancellationToken ct)
@@ -58,9 +101,9 @@ public sealed class PublicCatalogMediaStorage
 
     public async Task<string> CommitAsync(string token, CancellationToken ct)
     {
-        var source = GetPath(_pending, token);
+        var source = GetPendingPath(token);
         Directory.CreateDirectory(_active);
-        var key = Guid.NewGuid().ToString("N");
+        var key = Guid.NewGuid().ToString("N") + Path.GetExtension(source);
         var dest = GetPath(_active, key);
         await using (var from = File.OpenRead(source))
         await using (var to = new FileStream(dest, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
@@ -69,9 +112,18 @@ public sealed class PublicCatalogMediaStorage
     }
 
     public Task<byte[]> ReadActiveAsync(string key, CancellationToken ct) => File.ReadAllBytesAsync(GetPath(_active, key), ct);
-    public Task<byte[]> ReadPendingAsync(string key, CancellationToken ct) => File.ReadAllBytesAsync(GetPath(_pending, key), ct);
+    public Task<byte[]> ReadPendingAsync(string key, CancellationToken ct) => File.ReadAllBytesAsync(GetPendingPath(key), ct);
     public void DeleteActive(string key) => File.Delete(GetPath(_active, key));
-    public void DeletePending(string key) => File.Delete(GetPath(_pending, key));
+    public void DeletePending(string key) => File.Delete(GetPendingPath(key));
+
+    internal IEnumerable<FileInfo> EnumerateActive() =>
+        Directory.Exists(_active)
+            ? new DirectoryInfo(_active).EnumerateFiles()
+            : Enumerable.Empty<FileInfo>();
+
+    internal FileInfo GetActiveInfo(string key) => new(GetPath(_active, key));
+    internal static bool IsActiveKey(string key) => IsToken(key) ||
+        (key.EndsWith(".webp", StringComparison.Ordinal) && IsToken(key[..^5]));
 
     public int PrunePending(TimeSpan olderThan)
     {
@@ -80,102 +132,33 @@ public sealed class PublicCatalogMediaStorage
         var deleted = 0;
         foreach (var path in Directory.EnumerateFiles(_pending))
         {
-            if (!IsToken(Path.GetFileName(path)) || File.GetLastWriteTimeUtc(path) >= cutoff) continue;
+            if (!IsActiveKey(Path.GetFileName(path)) || File.GetLastWriteTimeUtc(path) >= cutoff) continue;
             try { File.Delete(path); deleted++; } catch (IOException) { /* retry next sweep */ }
         }
         return deleted;
     }
 
-    public int PruneActiveOrphans(IReadOnlySet<string> referencedKeys, TimeSpan olderThan)
-    {
-        if (!Directory.Exists(_active)) return 0;
-        var cutoff = DateTime.UtcNow - olderThan;
-        var deleted = 0;
-        foreach (var path in Directory.EnumerateFiles(_active))
-        {
-            var key = Path.GetFileName(path);
-            if (!IsToken(key) || referencedKeys.Contains(key) || File.GetLastWriteTimeUtc(path) >= cutoff) continue;
-            try { File.Delete(path); deleted++; } catch (IOException) { /* retry on next sweep */ }
-        }
-        return deleted;
-    }
-
-    internal FileStream AcquireCleanupLease()
-    {
-        var directory = Path.Combine(_root, "maintenance");
-        Directory.CreateDirectory(directory);
-
-        // Keep the lock file permanently. Only its open handle
-        // determines whether another cleanup owns the lease.
-        return new FileStream(
-            Path.Combine(directory, "cleanup.lock"),
-            FileMode.OpenOrCreate,
-            FileAccess.ReadWrite,
-            FileShare.None);
-    }
-
-    internal DateTimeOffset? ReadNextCleanupUtc()
-    {
-        var path = Path.Combine(
-            _root, "maintenance", "next-cleanup-utc.txt");
-
-        string value;
-
-        try
-        {
-            value = File.ReadAllText(path).Trim();
-        }
-        catch (FileNotFoundException)
-        {
-            return null;
-        }
-
-        if (!DateTimeOffset.TryParseExact(
-            value,
-            "O",
-            System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.None,
-            out var next) || next.Offset != TimeSpan.Zero)
-        {
-            throw new InvalidDataException(
-                "Invalid public media cleanup schedule.");
-        }
-
-        return next;
-    }
-
-    internal void WriteNextCleanupUtc(DateTimeOffset next)
-    {
-        var directory = Path.Combine(_root, "maintenance");
-        Directory.CreateDirectory(directory);
-
-        var target = Path.Combine(directory, "next-cleanup-utc.txt");
-        var temporary = Path.Combine(
-            directory, Guid.NewGuid().ToString("N") + ".tmp");
-
-        try
-        {
-            File.WriteAllText(
-                temporary,
-                next.ToUniversalTime().ToString(
-                    "O",
-                    System.Globalization.CultureInfo.InvariantCulture));
-
-            File.Move(temporary, target, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(temporary))
-                File.Delete(temporary);
-        }
-    }
-
     private static string GetPath(string root, string key)
     {
-        if (!IsToken(key)) throw new InvalidDataException("Invalid media identifier.");
+        if (!IsActiveKey(key)) throw new InvalidDataException("Invalid media identifier.");
         return Path.Combine(root, key);
     }
     private static bool IsToken(string key) => key.Length == 32 && Guid.TryParseExact(key, "N", out _);
+
+    private static int MaxSide(string role) => role switch
+    {
+        "CategoryHeroPrimary" or "CategoryHeroFallback" or "SiteHero" => 2560,
+        "ProductCover" or "ProductGallery" or "CategoryGallery" => 1920,
+        _ => throw new InvalidDataException("Invalid image role.")
+    };
+
+    private string GetPendingPath(string token)
+    {
+        if (!IsToken(token)) throw new InvalidDataException("Invalid media identifier.");
+        var legacy = GetPath(_pending, token);
+        var optimized = legacy + ".webp";
+        return File.Exists(optimized) ? optimized : legacy;
+    }
 }
 
 public sealed record PublicCatalogValidatedMedia(string ContentType, int Width, int Height, long FileSizeBytes, int FrameCount);

@@ -652,4 +652,4 @@ These decisions supplement the PRJ baseline and are preserved separately from hi
 
 ## Approved requirements awaiting implementation (2026-11-26)
 
-SQL remains the authoritative source for public visibility and pricing; the proposed separate persistent publication mechanism is cancelled. Automatic image optimization and administrator-confirmed orphan cleanup are approved requirements, not current verified behavior. Until the cleanup change is implemented, the existing scheduled active-media cleanup remains operational. Preserve explicit product-owned media lifecycle and visibility rules. See [final closure plan](REVESTIK-FINAL-CLOSURE-PLAN.md).
+SQL remains the authoritative source for public visibility and pricing; the proposed separate persistent publication mechanism is cancelled. Expired pending uploads may be removed automatically. Active orphan media requires explicit administrator confirmation and reference revalidation. Preserve explicit owner-associated media lifecycle and visibility rules. See [final closure plan](REVESTIK-FINAL-CLOSURE-PLAN.md).

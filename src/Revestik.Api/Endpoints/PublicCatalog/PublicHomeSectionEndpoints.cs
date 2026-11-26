@@ -96,6 +96,7 @@ public static class PublicHomeSectionEndpoints
                 return Results.BadRequest(new { message = "Solo se pueden destacar productos publicados y disponibles." });
         }
 
+        using var mediaLease = await storage.AcquireMutationAsync(ct);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var current = await db.PublicHomeSections.SingleOrDefaultAsync(x => x.Key == key, ct);
         if ((current is null && request.Version.Length > 0) ||
@@ -105,7 +106,7 @@ public static class PublicHomeSectionEndpoints
         PublicCatalogValidatedMedia? media = null;
         if (request.ImageToken is not null)
         {
-            try { media = await storage.InspectPendingAsync(request.ImageToken, "ProductCover", ct); }
+            try { media = await storage.InspectPendingAsync(request.ImageToken, "SiteHero", ct); }
             catch (Exception e) when (e is FileNotFoundException or InvalidDataException or IOException or ArgumentException)
             { return Results.BadRequest(new { message = "La fotografía no es válida o ya no está disponible." }); }
         }

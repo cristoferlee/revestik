@@ -9,7 +9,7 @@ public static class PublicCatalogMediaValidation
     {
         if (bytes.Length == 0 || bytes.Length > PublicCatalogMediaStorage.MaxBytes)
             throw new InvalidDataException("Image must be between 1 byte and 5 MB.");
-        if (role is not ("ProductCover" or "ProductGallery" or "CategoryHeroPrimary" or "CategoryHeroFallback" or "CategoryGallery"))
+        if (role is not ("ProductCover" or "ProductGallery" or "CategoryHeroPrimary" or "CategoryHeroFallback" or "CategoryGallery" or "SiteHero"))
             throw new InvalidDataException("Invalid image role.");
         var mime = Identify(bytes);
         if (mime == "image/gif")

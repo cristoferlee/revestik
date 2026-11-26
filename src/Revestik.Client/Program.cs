@@ -81,6 +81,7 @@ builder.Services.AddScoped<AuthenticationStateProvider>(
 
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<UserAdministrationApiService>();
+builder.Services.AddScoped<PublicCustomerAdministrationApiService>();
 builder.Services.AddScoped<ICabysApiService, CabysApiService>();
 builder.Services.AddScoped<ICustomerApiService, CustomerApiService>();
 builder.Services.AddScoped<ISupplierApiService, SupplierApiService>();

@@ -14,21 +14,34 @@ namespace Revestik.Api.Tests.Authentication;
 public sealed class PublicGoogleLoginBoundaryTests
 {
     [Theory]
-    [InlineData("Development", false, false)]
-    [InlineData("Development", true, true)]
-    [InlineData("Production", false, false)]
-    [InlineData("Production", true, false)]
-    public void PublicRegistration_IsDisabledByDefaultAndAlwaysDisabledInProduction(
-        string environmentName, bool flag, bool expected)
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    public void PublicLoginAndRegistration_AreIndependent(
+        bool login, bool registration, bool expectedRegistration)
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(
             new Dictionary<string, string?>
             {
-                ["Authentication:PublicGoogleRegistrationEnabled"] = flag.ToString()
+                ["Authentication:PublicGoogleLoginEnabled"] = login.ToString(),
+                ["Authentication:PublicGoogleRegistrationEnabled"] = registration.ToString()
             }).Build();
 
-        Assert.Equal(expected, GoogleLoginFlow.PublicRegistrationEnabled(
-            config, new FakeEnvironment(environmentName)));
+        Assert.Equal(login, GoogleLoginFlow.PublicLoginEnabled(config));
+
+        Assert.Equal(
+            expectedRegistration,
+            GoogleLoginFlow.PublicRegistrationEnabled(config));
+    }
+
+    [Fact]
+    public void PublicAuthentication_IsDisabledByDefault()
+    {
+        var config = new ConfigurationBuilder().Build();
+
+        Assert.False(GoogleLoginFlow.PublicLoginEnabled(config));
+        Assert.False(GoogleLoginFlow.PublicRegistrationEnabled(config));
     }
 
     [Fact]
@@ -40,7 +53,8 @@ public sealed class PublicGoogleLoginBoundaryTests
             builder.ConfigureAppConfiguration((_, configuration) =>
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["Authentication:PublicGoogleRegistrationEnabled"] = "false"
+                    ["Authentication:PublicGoogleLoginEnabled"] = "false",
+                    ["Authentication:PublicGoogleRegistrationEnabled"] = "true"
                 })));
         using var client = factory.CreateClient();
         using var login = await client.GetAsync("/api/auth/public/login/google");
@@ -93,7 +107,7 @@ public sealed class PublicGoogleLoginBoundaryTests
     public void PublicIdentitySession_ExpiresAfterFourHours_WithoutPersistenceOrSliding()
     {
         var now = new DateTimeOffset(2026, 11, 18, 18, 0, 0, TimeSpan.Zero);
-        var session = GoogleLoginFlow.PublicSessionProperties(now);
+        var session = GoogleLoginFlow.PublicSessionProperties(now, 1);
         Assert.False(session.IsPersistent);
         Assert.Equal(now.AddHours(4), session.ExpiresUtc);
         Assert.False(session.AllowRefresh == true);

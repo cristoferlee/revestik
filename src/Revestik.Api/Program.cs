@@ -162,6 +162,7 @@ builder.Services.AddDbContext<RevestikDbContext>(options => options.UseSqlServer
 builder.Services.AddRevestikAuthentication(builder.Configuration);
 builder.Services.AddRevestikPublicSite(builder.Configuration, builder.Environment);
 builder.Services.AddScoped<UserAdministrationService>();
+builder.Services.AddScoped<PublicCustomerAdministrationService>();
 builder.Services.AddScoped<PublicCartService>();
 builder.Services.AddSingleton<PublicProformaPdfService>();
 builder.Services.AddBankVoucherGmailIntegration(builder.Configuration);

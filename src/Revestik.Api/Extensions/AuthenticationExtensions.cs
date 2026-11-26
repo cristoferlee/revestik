@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Revestik.Api.Authorization;
+using Revestik.Shared.Authentication;
+using Revestik.Api.Services.Authentication;
 using Revestik.Api.Data;
 using Revestik.Api.Models.Identity;
 
@@ -42,6 +44,111 @@ public static class AuthenticationExtensions
 
             options.ExpireTimeSpan = TimeSpan.FromHours(8);
             options.SlidingExpiration = true;
+
+            // Preserve Identity's SecurityStamp validator. Public login
+            // shutdown adds a configuration-only check, not a SQL query.
+            var validateIdentityPrincipal = options.Events.OnValidatePrincipal;
+
+            options.Events.OnValidatePrincipal = async context =>
+            {
+                static bool MustReject(
+                    System.Security.Claims.ClaimsPrincipal? principal,
+                    bool loginEnabled)
+                {
+                    if (PublicAuthenticationRules.IsEmployee(principal))
+                        return false;
+
+                    if (PublicAuthenticationRules.IsPublicCustomer(principal))
+                        return !loginEnabled;
+
+                    // Unknown, roleless and mixed-role accounts
+                    // cannot establish a valid application identity.
+                    return true;
+                }
+
+                var currentConfiguration = context.HttpContext.RequestServices
+                    .GetRequiredService<IConfiguration>();
+
+                var isEmployee =
+                    PublicAuthenticationRules.IsEmployee(context.Principal);
+
+                // Public configuration must not affect employee sessions.
+                var loginEnabled = !isEmployee &&
+                    bool.TryParse(
+                        currentConfiguration[
+                            PublicAuthenticationRules.LoginEnabledKey],
+                        out var enabled) && enabled;
+
+                var currentVersion = isEmployee
+                    ? 0
+                    : GoogleLoginFlow.PublicSessionVersion(currentConfiguration);
+
+                if (MustReject(context.Principal, loginEnabled) ||
+                    PublicAuthenticationRules.IsPublicCustomer(context.Principal) &&
+                    !GoogleLoginFlow.HasCurrentPublicSessionVersion(
+                        context.Properties, currentVersion))
+                {
+                    context.RejectPrincipal();
+                    await context.HttpContext.SignOutAsync(
+                        IdentityConstants.ApplicationScheme);
+                    return;
+                }
+
+                var wasPublic =
+                    PublicAuthenticationRules.IsPublicCustomer(context.Principal);
+
+                // A public ticket cannot become an employee ticket,
+                // and an employee ticket cannot become a public ticket.
+
+                var originalExpiry = context.Properties.ExpiresUtc;
+
+                await validateIdentityPrincipal(context);
+
+                // Recheck after Identity refreshes the principal. Never
+                // let a public cookie become an employee session.
+                if (context.Principal is not null &&
+                    (MustReject(context.Principal, loginEnabled) ||
+                     wasPublic != PublicAuthenticationRules.IsPublicCustomer(
+                         context.Principal)))
+                {
+                    context.RejectPrincipal();
+                    await context.HttpContext.SignOutAsync(
+                        IdentityConstants.ApplicationScheme);
+                    return;
+                }
+
+                if (wasPublic && context.Principal is not null)
+                {
+                    if (originalExpiry is null ||
+                        originalExpiry <= DateTimeOffset.UtcNow)
+                    {
+                        context.RejectPrincipal();
+                        await context.HttpContext.SignOutAsync(
+                            IdentityConstants.ApplicationScheme);
+                        return;
+                    }
+
+                    // Identity requests renewal after refreshing claims.
+                    // CookieAuthenticationHandler normally recalculates the
+                    // expiry from the ticket lifetime, extending the session.
+                    // Explicitly issue the refreshed principal with the
+                    // original absolute deadline instead.
+                    context.Properties.ExpiresUtc = originalExpiry;
+                    context.Properties.IsPersistent = false;
+                    context.Properties.AllowRefresh = false;
+
+                    if (context.ShouldRenew)
+                    {
+                        context.ShouldRenew = false;
+                        context.Properties.IssuedUtc = DateTimeOffset.UtcNow;
+
+                        await context.HttpContext.SignInAsync(
+                            IdentityConstants.ApplicationScheme,
+                            context.Principal,
+                            context.Properties);
+                    }
+                }
+            };
 
             options.Events.OnRedirectToLogin = context =>
             {
@@ -88,6 +195,8 @@ public static class AuthenticationExtensions
         var internalUserPolicy = new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
             .RequireRole(RoleNames.All)
+            .RequireAssertion(context =>
+                PublicAuthenticationRules.IsEmployee(context.User))
             .Build();
 
         services.AddScoped<Revestik.Api.Services.Authentication.PublicGoogleSignInService>();
@@ -97,74 +206,112 @@ public static class AuthenticationExtensions
             .SetFallbackPolicy(internalUserPolicy)
             .AddPolicy(
                 PolicyNames.AuthenticatedUser,
-                policy => policy.RequireAuthenticatedUser())
+                policy => policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        PublicAuthenticationRules.IsEmployee(context.User) ||
+                        PublicAuthenticationRules.IsPublicCustomer(context.User)))
             .AddPolicy(
                 PolicyNames.PublicCustomerOnly,
                 policy => policy.RequireAuthenticatedUser().RequireAssertion(context =>
-                    context.User.IsInRole(RoleNames.PublicCustomer) &&
-                    RoleNames.All.All(role => !context.User.IsInRole(role))))
+                    PublicAuthenticationRules.IsPublicCustomer(context.User)))
             .AddPolicy(
                 PolicyNames.AdministratorOnly,
-                policy => policy.RequireRole(
+                policy => policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        PublicAuthenticationRules.IsEmployee(context.User))
+                    .RequireRole(
                     RoleNames.Administrator))
             .AddPolicy(
                 PolicyNames.ManageCustomers,
-                policy => policy.RequireRole(
+                policy => policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        PublicAuthenticationRules.IsEmployee(context.User))
+                    .RequireRole(
                     RoleNames.Administrator,
                     RoleNames.Accountant,
                     RoleNames.Sales))
             .AddPolicy(
                 PolicyNames.ManageProjects,
-                policy => policy.RequireRole(
+                policy => policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        PublicAuthenticationRules.IsEmployee(context.User))
+                    .RequireRole(
                     RoleNames.Administrator,
                     RoleNames.Accountant,
                     RoleNames.Sales))
             .AddPolicy(
                 PolicyNames.ManageInventory,
-                policy => policy.RequireRole(
+                policy => policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        PublicAuthenticationRules.IsEmployee(context.User))
+                    .RequireRole(
                     RoleNames.Administrator,
                     RoleNames.Accountant,
                     RoleNames.Sales,
                     RoleNames.Warehouse))
             .AddPolicy(
                 PolicyNames.ManageProductCatalog,
-                policy => policy.RequireRole(
+                policy => policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        PublicAuthenticationRules.IsEmployee(context.User))
+                    .RequireRole(
                     RoleNames.Administrator,
                     RoleNames.Accountant,
                     RoleNames.Sales))
             .AddPolicy(
                 PolicyNames.ManageSales,
-                policy => policy.RequireRole(
+                policy => policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        PublicAuthenticationRules.IsEmployee(context.User))
+                    .RequireRole(
                     RoleNames.Administrator,
                     RoleNames.Accountant,
                     RoleNames.Sales))
             .AddPolicy(
                 PolicyNames.ManageQuotations,
-                policy => policy.RequireRole(
+                policy => policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        PublicAuthenticationRules.IsEmployee(context.User))
+                    .RequireRole(
                     RoleNames.Administrator,
                     RoleNames.Accountant,
                     RoleNames.Sales))
             .AddPolicy(
                 PolicyNames.ManagePurchases,
-                policy => policy.RequireRole(RoleNames.All))
+                policy => policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        PublicAuthenticationRules.IsEmployee(context.User))
+                    .RequireRole(RoleNames.All))
             .AddPolicy(
                 PolicyNames.ManagePurchasePayments,
-                policy => policy.RequireRole(
+                policy => policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        PublicAuthenticationRules.IsEmployee(context.User))
+                    .RequireRole(
                     RoleNames.Administrator,
                     RoleNames.Accountant))
             .AddPolicy(
                 PolicyNames.ManageExpenses,
-                policy => policy.RequireRole(
+                policy => policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        PublicAuthenticationRules.IsEmployee(context.User))
+                    .RequireRole(
                     RoleNames.Administrator,
                     RoleNames.Accountant))
             .AddPolicy(
                 PolicyNames.ManageAccountingClassification,
-                policy => policy.RequireRole(
+                policy => policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        PublicAuthenticationRules.IsEmployee(context.User))
+                    .RequireRole(
                     RoleNames.Administrator,
                     RoleNames.Accountant))
             .AddPolicy(
                 PolicyNames.ViewAuditLog,
-                policy => policy.RequireRole(
+                policy => policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        PublicAuthenticationRules.IsEmployee(context.User))
+                    .RequireRole(
                     RoleNames.Administrator));
 
         return services;

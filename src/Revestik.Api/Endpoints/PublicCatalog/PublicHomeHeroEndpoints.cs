@@ -89,6 +89,7 @@ public static class PublicHomeHeroEndpoints
             return Results.BadRequest(new { message = "Verificá el título y la descripción en español." });
 
         var actualSlot = slot + offset;
+        using var mediaLease = await storage.AcquireMutationAsync(ct);
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var slide = await db.PublicHomeHeroSlides.SingleOrDefaultAsync(x => x.Slot == actualSlot, ct);
         if (slide is null && !string.IsNullOrEmpty(request.Version))
@@ -99,7 +100,7 @@ public static class PublicHomeHeroEndpoints
         PublicCatalogValidatedMedia? media = null;
         if (request.ImageToken is not null)
         {
-            try { media = await storage.InspectPendingAsync(request.ImageToken, "ProductCover", ct); }
+            try { media = await storage.InspectPendingAsync(request.ImageToken, "SiteHero", ct); }
             catch (Exception e) when (e is FileNotFoundException or InvalidDataException or IOException or ArgumentException)
             { return Results.BadRequest(new { message = "La imagen no está disponible o no es válida." }); }
         }

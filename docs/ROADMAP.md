@@ -10,13 +10,15 @@ SQL Standard S0 and the existing ACA capacity are retained. Persistent publicati
 | --- | --- |
 | FINAL-02B | Documentation synchronization and review |
 | FINAL-03A | Database integrity and public cart key |
-| FINAL-03B | Public identity, security and abuse protection |
-| FINAL-03C | Image optimization and confirmed orphan maintenance |
+| FINAL-03B | Implemented and locally verified. Real Google OAuth acceptance remains open. |
+| FINAL-03C | Implemented and locally verified. Browser, container capacity and rollout acceptance remain open. |
 | FINAL-03D | Legal, SEO, errors and multilingual public acceptance |
 | FINAL-04 | Commercial and functional verification |
 | FINAL-05 | Evidence-driven refactor and duplicate removal |
 | FINAL-06 | Release candidate, regression, security, recovery and release approval |
 
 The [final closure plan](REVESTIK-FINAL-CLOSURE-PLAN.md) defines acceptance and evidence gaps. Historical checkpoints remain evidence, not independent active backlogs. No feature or infrastructure change is authorized by this roadmap alone. No dates are committed. Ordinary monitoring, backups and maintenance continue after closure.
+
+The combined pre-commit candidate is based on `88c86b9532c24c915857063ef14baf266d20bbfd`. The integrated local Release run passed 1,492 tests. Follow-up focused runs covered the tests added after that run began. The production baseline above remains the last recorded deployment evidence.
 
 Distinguish implemented, locally verified, deployed, reachable and formally launched. Follow INVESTIGATE → PLAN → APPROVE → IMPLEMENT → VERIFY → STOP.

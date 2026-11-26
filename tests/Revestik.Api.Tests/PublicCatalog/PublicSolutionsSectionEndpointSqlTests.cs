@@ -163,8 +163,9 @@ public sealed class PublicSolutionsSectionEndpointSqlTests(SqlServerIntegrationT
 
         using var served = await client.GetAsync("/api/public/site/solutions-sections/hero/media");
         Assert.Equal(HttpStatusCode.OK, served.StatusCode);
-        Assert.Equal("image/png", served.Content.Headers.ContentType?.MediaType);
-        Assert.Equal(png, await served.Content.ReadAsByteArrayAsync());
+        Assert.Equal("image/webp", served.Content.Headers.ContentType?.MediaType);
+        var bytes = await served.Content.ReadAsByteArrayAsync();
+        Assert.Equal("WEBP", System.Text.Encoding.ASCII.GetString(bytes, 8, 4));
 
         var remove = new SolutionsSectionWrite
         {

@@ -187,13 +187,13 @@ export const saveHeroSlide = (slot, data) => {
     return mutate(`/api/admin/public-site/finishes-hero/${slot}`, 'PUT', data);
 };
 
-export async function stageImage(element) {
+export async function stageImage(element, role = 'ProductCover') {
     const file = element?.files?.[0];
     if (!file || !file.size || file.size > 5 * 1024 * 1024 ||
         !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Invalid image');
     const body = new FormData();
     body.append('file', file, file.name);
-    body.append('role', 'ProductCover');
+    body.append('role', role);
     const result = await request('/api/admin/public-catalog/images/stage', {
         method: 'POST', headers: { 'X-CSRF-TOKEN': await token() }, body
     });

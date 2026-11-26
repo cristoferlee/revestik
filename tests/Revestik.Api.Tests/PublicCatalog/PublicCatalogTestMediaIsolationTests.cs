@@ -43,12 +43,13 @@ public sealed class PublicCatalogTestMediaIsolationTests
         string? committedKey = null;
         try
         {
-            Assert.True(File.Exists(Path.Combine(testMediaRoot, "pending", pendingToken)));
+            Assert.True(File.Exists(Path.Combine(testMediaRoot, "pending", pendingToken + ".webp")));
 
             committedKey = await storage.CommitAsync(pendingToken, CancellationToken.None);
             Assert.True(File.Exists(Path.Combine(testMediaRoot, "active", committedKey)));
-            Assert.Equal(imageBytes,
-                await storage.ReadActiveAsync(committedKey, CancellationToken.None));
+            Assert.EndsWith(".webp", committedKey);
+            var media = await storage.InspectActiveAsync(committedKey, "ProductCover", CancellationToken.None);
+            Assert.Equal(("image/webp", 1, 1), (media.ContentType, media.Width, media.Height));
         }
         finally
         {

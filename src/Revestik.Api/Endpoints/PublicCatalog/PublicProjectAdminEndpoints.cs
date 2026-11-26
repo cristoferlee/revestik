@@ -266,6 +266,7 @@ public static class PublicProjectAdminEndpoints
         IResult result;
         try
         {
+            using var mediaLease = await storage.AcquireMutationAsync(ct);
             await using (var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct))
             {
                 var name = r.Project.Translations.Single(t => t.LanguageCode == "es").Name;
@@ -318,6 +319,7 @@ public static class PublicProjectAdminEndpoints
         IResult result;
         try
         {
+            using var mediaLease = await storage.AcquireMutationAsync(ct);
             await using (var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct))
             {
                 var p = await db.Set<PublicProject>().Include(p => p.Translations)

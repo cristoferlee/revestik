@@ -1,11 +1,9 @@
 @page "/es/carrito"
 @page "/en/cart"
 @page "/de/warenkorb"
-@using Microsoft.Extensions.Hosting
 @using Microsoft.Extensions.Configuration
 @inject NavigationManager Navigation
 @inject IConfiguration Configuration
-@inject IHostEnvironment HostEnvironment
 
 @{
     var language = Locale.FromUri(Navigation.Uri);
@@ -15,8 +13,8 @@
     {
         whatsappPhone = "";
     }
-    var publicLoginEnabled = !HostEnvironment.IsProduction() &&
-        Configuration.GetValue<bool>("Authentication:PublicGoogleRegistrationEnabled");
+    var publicLoginEnabled = Configuration.GetValue<bool>(
+        Revestik.Shared.Authentication.PublicAuthenticationRules.LoginEnabledKey);
 }
 <PageTitle>@L("Mi carrito | REVESTIK", "My cart | REVESTIK", "Mein Warenkorb | REVESTIK")</PageTitle>
 <HeadContent>
@@ -53,12 +51,21 @@
         </section>
         <section class="public-cart-auth" data-public-cart-login hidden>
             <h2>@L("Tu carrito temporal está disponible", "Your guest cart is ready", "Ihr Gastwarenkorb ist bereit")</h2>
-            <p>@L("Podés agregar productos sin iniciar sesión. Para guardar la selección en tu cuenta, ingresá con Google e importala cuando quieras.",
-                "You can add products without signing in. Sign in with Google and import them when you're ready.",
-                "Sie können Produkte ohne Anmeldung hinzufügen und sie später nach der Google-Anmeldung importieren.")</p>
             @if (publicLoginEnabled)
             {
-                <a class="public-cart-browse" href="@($"/api/auth/public/login/google?language={language}")" data-enhance-nav="false">
+                <p>@L("Podés agregar productos sin iniciar sesión. Para guardar la selección en tu cuenta, ingresá con Google e importala cuando quieras.",
+                    "You can add products without signing in. Sign in with Google and import them when you're ready.",
+                    "Sie können Produkte ohne Anmeldung hinzufügen und sie später nach der Google-Anmeldung importieren.")</p>
+            }
+            else
+            {
+                <p>@L("Podés seguir agregando productos y solicitar una proforma sin iniciar sesión.",
+                    "You can continue adding products and request a quotation without signing in.",
+                    "Sie können weiterhin Produkte hinzufügen und ohne Anmeldung ein Angebot anfragen.")</p>
+            }
+            @if (publicLoginEnabled)
+            {
+                <a class="public-cart-browse" href="@($"/api/auth/public/login/google?language={language}&returnPath={Uri.EscapeDataString(new Uri(Navigation.Uri).PathAndQuery)}")" data-enhance-nav="false">
                     @L("Entrar con Google", "Sign in with Google", "Mit Google anmelden")
                 </a>
             }
@@ -82,7 +89,7 @@
                 "Diese Auswahl bleibt sieben Tage in diesem Browser und gehört zu keinem Konto.")</p>
             @if (publicLoginEnabled)
             {
-                <a class="public-cart-browse" href="@($"/api/auth/public/login/google?language={language}")" data-enhance-nav="false">
+                <a class="public-cart-browse" href="@($"/api/auth/public/login/google?language={language}&returnPath={Uri.EscapeDataString(new Uri(Navigation.Uri).PathAndQuery)}")" data-enhance-nav="false">
                     @L("Iniciar sesión para guardar", "Sign in to save", "Zum Speichern anmelden")
                 </a>
             }

@@ -285,7 +285,7 @@
         error = null;
         try
         {
-            var uploaded = await module.InvokeAsync<StagedImage>("stageImage", heroFileInput);
+            var uploaded = await module.InvokeAsync<StagedImage>("stageImage", heroFileInput, "SiteHero");
             if (heroPendingToken is not null)
                 await module.InvokeVoidAsync("discardImage", heroPendingToken);
             heroPendingToken = uploaded.Token;

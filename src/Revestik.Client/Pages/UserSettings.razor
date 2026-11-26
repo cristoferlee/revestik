@@ -50,7 +50,13 @@
                             <td>@RoleLabel(user.Role)</td>
                             <td>@(user.IsActive ? "Activo" : "Inactivo")</td>
                             <td>@(user.LastLoginAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Sin acceso")</td>
-                            <td><button type="button" disabled="@busy" @onclick="() => OpenEdit(user)">Administrar</button></td>
+                            <td>
+    <button type="button"
+            disabled="@(busy || string.IsNullOrEmpty(user.Role))"
+            @onclick="() => OpenEdit(user)">
+        Administrar
+    </button>
+</td>
                         </tr>
                     }
                 </tbody>
@@ -179,7 +185,7 @@
         "Accountant" => "Contabilidad",
         "Sales" => "Ventas",
         "Warehouse" => "Bodega",
-        _ => "Sin asignar"
+        _ => "Roles inconsistentes: requiere revision"
     };
 
     private sealed class UserForm

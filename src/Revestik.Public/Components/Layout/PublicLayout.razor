@@ -5,7 +5,8 @@
     var t = Locale.Get(lang);
     var activePage = SiteLinks.PageFromUri(Navigation.Uri);
     var publicSession = RequestContext?.User.Identity?.IsAuthenticated == true
-        ? RequestContext.User.IsInRole("PublicCustomer") ? "customer" : "forbidden"
+        ? Revestik.Shared.Authentication.PublicAuthenticationRules.IsPublicCustomer(
+            RequestContext.User) ? "customer" : "forbidden"
         : "guest";
 }
 <a class="skip-link" href="#main">@t.Skip</a>

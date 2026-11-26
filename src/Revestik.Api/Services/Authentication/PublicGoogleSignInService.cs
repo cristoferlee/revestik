@@ -1,4 +1,6 @@
 using System.Data;
+using Revestik.Shared.Authentication;
+using Revestik.Public;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Identity;
@@ -19,6 +21,7 @@ public enum PublicGoogleAccountStatus
     Conflict,
     Disabled,
     InvalidIdentity,
+    RegistrationDisabled,
     ProvisioningFailed
 }
 
@@ -30,6 +33,7 @@ public static class GoogleLoginFlow
 {
     private const string IntentKey = "revestik:google-login-intent";
     private const string PublicLanguageKey = "revestik:public-language";
+    private const string PublicReturnPathKey = "revestik:public-return-path";
 
     public const string Internal = "internal";
     public const string Public = "public";
@@ -63,15 +67,87 @@ public static class GoogleLoginFlow
         return "es";
     }
 
+    public static void SetPublicReturnPath(
+        Microsoft.AspNetCore.Authentication.AuthenticationProperties properties,
+        string? returnPath,
+        string? language)
+    {
+        properties.Items[PublicReturnPathKey] =
+            SiteLinks.NormalizeAuthenticationReturnPath(
+                returnPath, NormalizePublicLanguage(language));
+    }
+
+    public static string GetPublicReturnPath(ExternalLoginInfo? login)
+    {
+        var language = GetPublicLanguage(login);
+        string? returnPath = null;
+
+        if (login?.AuthenticationProperties?.Items is { } items)
+            items.TryGetValue(PublicReturnPathKey, out returnPath);
+
+        return SiteLinks.NormalizeAuthenticationReturnPath(
+            returnPath, language);
+    }
+
+    public static int PublicSessionVersion(IConfiguration configuration)
+    {
+        var configured = configuration[
+            PublicAuthenticationRules.SessionVersionKey];
+
+        if (configured is null)
+            return 1;
+
+        return int.TryParse(
+                   configured,
+                   System.Globalization.NumberStyles.None,
+                   System.Globalization.CultureInfo.InvariantCulture,
+                   out var version) &&
+               version > 0
+            ? version
+            : 0;
+    }
+
+    public static bool HasCurrentPublicSessionVersion(
+        Microsoft.AspNetCore.Authentication.AuthenticationProperties properties,
+        int currentVersion)
+    {
+        if (currentVersion <= 0)
+            return false;
+
+        return properties.Items.TryGetValue(
+                   PublicAuthenticationRules.SessionVersionProperty,
+                   out var storedVersion) &&
+               string.Equals(
+                   storedVersion,
+                   currentVersion.ToString(
+                       System.Globalization.CultureInfo.InvariantCulture),
+                   StringComparison.Ordinal);
+    }
+
     // Public sessions expire after four hours without sliding renewal.
     // Administration keeps its own existing Identity cookie configuration.
     public static Microsoft.AspNetCore.Authentication.AuthenticationProperties
-        PublicSessionProperties(DateTimeOffset issuedAtUtc) => new()
-        {
-            IsPersistent = false,
-            ExpiresUtc = issuedAtUtc.AddHours(4),
-            AllowRefresh = false
-        };
+        PublicSessionProperties(
+            DateTimeOffset issuedAtUtc,
+            int sessionVersion)
+    {
+        if (sessionVersion <= 0)
+            throw new ArgumentOutOfRangeException(nameof(sessionVersion));
+
+        var properties =
+            new Microsoft.AspNetCore.Authentication.AuthenticationProperties
+            {
+                IsPersistent = false,
+                ExpiresUtc = issuedAtUtc.AddHours(4),
+                AllowRefresh = false
+            };
+
+        properties.Items[PublicAuthenticationRules.SessionVersionProperty] =
+            sessionVersion.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+
+        return properties;
+    }
 
     public static bool HasEmployeeRole(ICollection<string> roles) =>
         roles.Count == 1 &&
@@ -81,10 +157,15 @@ public static class GoogleLoginFlow
         roles.Count == 1 &&
         string.Equals(roles.First(), RoleNames.PublicCustomer, StringComparison.Ordinal);
 
-    // No 01B release path can open public registration on a production host.
-    public static bool PublicRegistrationEnabled(IConfiguration configuration, IHostEnvironment environment) =>
-        !environment.IsProduction() &&
-        configuration.GetValue<bool>("Authentication:PublicGoogleRegistrationEnabled");
+    public static bool PublicLoginEnabled(IConfiguration configuration) =>
+        configuration.GetValue<bool>(
+            PublicAuthenticationRules.LoginEnabledKey);
+
+    public static bool PublicRegistrationEnabled(IConfiguration configuration) =>
+        PublicAuthenticationRules.CanRegister(
+            PublicLoginEnabled(configuration),
+            configuration.GetValue<bool>(
+                PublicAuthenticationRules.RegistrationEnabledKey));
 }
 
 public sealed class PublicGoogleSignInService(
@@ -94,7 +175,8 @@ public sealed class PublicGoogleSignInService(
 {
     public async Task<PublicGoogleAccountResult> ResolveAsync(
         ExternalLoginInfo login,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool allowRegistration)
     {
         var email = login.Principal.FindFirstValue(ClaimTypes.Email)?.Trim();
 
@@ -148,6 +230,9 @@ public sealed class PublicGoogleSignInService(
                 logger.LogWarning("Public Google registration rejected: email already belongs to an account.");
                 return new(PublicGoogleAccountStatus.Conflict);
             }
+
+            if (!allowRegistration)
+                return new(PublicGoogleAccountStatus.RegistrationDisabled);
 
             user = new ApplicationUser
             {

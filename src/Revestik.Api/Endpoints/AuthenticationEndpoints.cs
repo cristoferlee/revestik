@@ -124,13 +124,22 @@ public static class AuthenticationEndpoints
                 "/public/login/google",
                 async (
                     string? language,
+                    string? returnPath,
+                    HttpContext context,
                     SignInManager<ApplicationUser> signInManager,
                     IAuthenticationSchemeProvider schemeProvider,
-                    IConfiguration configuration,
-                    IHostEnvironment environment) =>
+                    IConfiguration configuration) =>
                 {
-                    if (!GoogleLoginFlow.PublicRegistrationEnabled(configuration, environment))
+                    context.Response.Headers.CacheControl = "private, no-store";
+
+                    if (!GoogleLoginFlow.PublicLoginEnabled(configuration))
                         return Results.NotFound();
+
+                    if (context.User.Identity?.IsAuthenticated == true)
+                        return Results.LocalRedirect(
+                            Revestik.Public.SiteLinks.NormalizeAuthenticationReturnPath(
+                                returnPath,
+                                GoogleLoginFlow.NormalizePublicLanguage(language)));
 
                     if (await schemeProvider.GetSchemeAsync(GoogleDefaults.AuthenticationScheme) is null)
                         return Results.Problem(
@@ -142,6 +151,18 @@ public static class AuthenticationEndpoints
                         "/api/auth/public/external-callback");
                     GoogleLoginFlow.SetIntent(properties, GoogleLoginFlow.Public);
                     GoogleLoginFlow.SetPublicLanguage(properties, language);
+                    GoogleLoginFlow.SetPublicReturnPath(properties, returnPath, language);
+
+                    var sessionVersion =
+                        GoogleLoginFlow.PublicSessionVersion(configuration);
+
+                    if (sessionVersion <= 0)
+                        return Results.StatusCode(
+                            StatusCodes.Status503ServiceUnavailable);
+
+                    properties.Items[PublicAuthenticationRules.SessionVersionProperty] =
+                        sessionVersion.ToString(
+                            System.Globalization.CultureInfo.InvariantCulture);
                     return Results.Challenge(properties, [GoogleDefaults.AuthenticationScheme]);
                 })
             .RequireRateLimiting(RevestikRateLimiting.Login)
@@ -448,22 +469,43 @@ public static class AuthenticationEndpoints
     private static async Task<IResult> HandlePublicExternalCallbackAsync(
         SignInManager<ApplicationUser> signInManager,
         IConfiguration configuration,
-        IHostEnvironment environment,
         PublicGoogleSignInService publicGoogleSignIn,
         RevestikDbContext db,
         UserManager<ApplicationUser> userManager,
         HttpContext context,
         CancellationToken ct)
     {
-        if (!GoogleLoginFlow.PublicRegistrationEnabled(configuration, environment))
+        context.Response.Headers.CacheControl = "private, no-store";
+
+        if (!GoogleLoginFlow.PublicLoginEnabled(configuration))
+        {
+            await context.SignOutAsync(IdentityConstants.ExternalScheme);
             return Results.NotFound();
+        }
 
         var externalLogin = await signInManager.GetExternalLoginInfoAsync();
+
+        // Consume the temporary external cookie even on failed callbacks.
+        await context.SignOutAsync(IdentityConstants.ExternalScheme);
         var language = GoogleLoginFlow.GetPublicLanguage(externalLogin);
         if (!GoogleLoginFlow.HasIntent(externalLogin, GoogleLoginFlow.Public))
             return PublicLoginError("external_login_failed", language);
 
-        var result = await publicGoogleSignIn.ResolveAsync(externalLogin!, ct);
+        if (context.User.Identity?.IsAuthenticated == true)
+            return PublicLoginError("account_conflict", language);
+
+        var sessionVersion =
+            GoogleLoginFlow.PublicSessionVersion(configuration);
+
+        if (externalLogin?.AuthenticationProperties is not { } properties ||
+            !GoogleLoginFlow.HasCurrentPublicSessionVersion(
+                properties, sessionVersion))
+            return PublicLoginError("external_login_failed", language);
+
+        var result = await publicGoogleSignIn.ResolveAsync(
+            externalLogin!,
+            ct,
+            GoogleLoginFlow.PublicRegistrationEnabled(configuration));
         if (result.User is null)
         {
             var error = result.Status switch
@@ -471,6 +513,7 @@ public static class AuthenticationEndpoints
                 PublicGoogleAccountStatus.Disabled => "account_disabled",
                 PublicGoogleAccountStatus.InvalidIdentity => "external_login_failed",
                 PublicGoogleAccountStatus.Conflict => "account_conflict",
+                PublicGoogleAccountStatus.RegistrationDisabled => "registration_disabled",
                 _ => "registration_failed"
             };
             return PublicLoginError(error, language);
@@ -484,13 +527,17 @@ public static class AuthenticationEndpoints
         // If audit persistence fails, the app authentication cookie is not issued.
         SecurityAudit.Record(db, "PublicLoginSucceeded", "User", result.User.Id, result.User.Id);
         await db.SaveChangesAsync(ct);
-        await context.SignOutAsync(IdentityConstants.ExternalScheme);
+
+        if (!GoogleLoginFlow.PublicLoginEnabled(configuration) ||
+            GoogleLoginFlow.PublicSessionVersion(configuration) != sessionVersion)
+            return Results.NotFound();
+
         await signInManager.SignInAsync(
             result.User,
-            GoogleLoginFlow.PublicSessionProperties(DateTimeOffset.UtcNow),
+            GoogleLoginFlow.PublicSessionProperties(DateTimeOffset.UtcNow, sessionVersion),
             GoogleDefaults.AuthenticationScheme);
 
-        return Results.Redirect($"/{language}");
+        return Results.LocalRedirect(GoogleLoginFlow.GetPublicReturnPath(externalLogin));
     }
 
     private static IResult PublicLoginError(string errorCode, string language) =>

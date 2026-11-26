@@ -25,4 +25,18 @@
 
 ## Workflow and limitations
 
+### FINAL-03B and FINAL-03C pre-commit checkpoint (2026-11-26)
+
+The candidate is based on `88c86b9532c24c915857063ef14baf266d20bbfd`. FINAL-03B implements public login and registration controls, session isolation and revocation, and administrator management of public customer accounts. FINAL-03C implements bounded WebP processing and administrator-confirmed active orphan deletion. Scheduled maintenance cleans expired pending files without querying SQL.
+
+Local evidence includes 1,492 passing integrated Release tests with zero failures or skips and 164 passing focused catalog, project and proforma tests. The pre-commit Release rebuild produced zero warnings and errors. Its focused run passed all 15 tests with zero failures or skips, including the post-regression-start files covering optimization and PDF decoding, authorization and antiforgery, and SQL reference revalidation and repeated deletion. The Linux image built locally and loaded both native libraries. EF reported no pending model changes. Gitleaks found no secrets in the candidate tree.
+
+The production baseline at the top of this document remains the last recorded production evidence. The combined candidate awaits Git synchronization and separate release approval.
+
+- Run browser and visual smoke tests for account administration, public authentication and cart return, media upload and publication, and orphan discovery and deletion.
+- Measure peak memory and processing behavior with representative near-limit uploads on Linux under a 1 GiB memory limit and 0.5 vCPU.
+- Verify Azure revision overlap safety. The media lock is process-local, and the previous revision can still run scheduled active-media cleanup while it is live.
+- Validate rollback using an API revision that reads both legacy GUID and new GUID.webp media keys.
+- Complete real Google OAuth acceptance under an approved configuration, covering returning customers, registration controls, return paths and employee access.
+
 Use terminal states from AGENTS.md. Transferred blocks are tracked only here, not as separate obligations. Historical test counts are evidence for their exact baseline. Existing public cart SQL ownership tests and media cleanup tests are not proof of complete release acceptance. Do not silently cancel remaining requirements; record a specific owner decision if any scope becomes unnecessary. No automatic code changes, commit, push, migration, deploy, DNS, OAuth or indexing authorization. Routine cost and capacity observation is operational maintenance, not an unfinished feature.

@@ -1,0 +1,94 @@
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<section class="settings-group" aria-labelledby="public-media-heading" aria-busy="@busy">
+    <h2 id="public-media-heading">Imágenes del sitio público</h2>
+    <button type="button" class="secondary-button" disabled="@busy" @onclick="Discover">Buscar archivos sin referencias</button>
+    @if (error is not null)
+    {
+        <p role="alert">@error</p>
+    }
+    @if (scan is not null)
+    {
+        <p role="status">@scan.Items.Length archivos en esta búsqueda · @scan.TotalBytes.ToString("N0") bytes recuperables</p>
+        @if (scan.Truncated)
+        {
+            <p>La búsqueda alcanzó su límite. El total corresponde a los archivos mostrados.</p>
+        }
+        @if (scan.Items.Length > 0)
+        {
+            <fieldset disabled="@busy">
+                <legend>Seleccioná hasta 50 archivos</legend>
+                @foreach (var item in scan.Items)
+                {
+                    <div @key="item.Id">
+                        <label>
+                            <input type="checkbox" @bind="item.Selected" @bind:after="ResetConfirmation" />
+                            <span style="overflow-wrap:anywhere">@item.Id · @item.Size.ToString("N0") bytes</span>
+                        </label>
+                    </div>
+                }
+            </fieldset>
+            <label><input type="checkbox" @bind="confirmed" disabled="@(busy || SelectedCount is < 1 or > 50)" />
+                Confirmo la eliminación permanente de los @SelectedCount archivos seleccionados.
+            </label>
+            <button type="button" class="secondary-button" disabled="@(busy || !confirmed || SelectedCount is < 1 or > 50)" @onclick="Delete">Eliminar selección</button>
+        }
+    }
+    @if (result is not null)
+    {
+        <p role="status">@result</p>
+    }
+</section>
+
+@code {
+    private const string Route = "api/admin/public-media/orphans";
+    private Discovery? scan;
+    private bool busy;
+    private bool confirmed;
+    private string? error;
+    private string? result;
+    private int SelectedCount => scan?.Items.Count(x => x.Selected) ?? 0;
+
+    private void ResetConfirmation() => confirmed = false;
+
+    private async Task Discover()
+    {
+        busy = true;
+        confirmed = false;
+        scan = null;
+        error = result = null;
+        try { scan = await Http.GetFromJsonAsync<Discovery>(Route); }
+        catch (HttpRequestException) { error = "No se pudo completar la búsqueda. Volvé a intentarlo."; }
+        finally { busy = false; }
+    }
+
+    private async Task Delete()
+    {
+        if (busy || !confirmed || scan is null || SelectedCount is < 1 or > 50) return;
+        var tickets = scan.Items.Where(x => x.Selected).Select(x => x.Ticket).ToArray();
+        busy = true;
+        confirmed = false;
+        scan = null;
+        error = result = null;
+        try
+        {
+            using var response = await Http.PostAsJsonAsync(Route + "/delete", new { confirmed = true, tickets });
+            response.EnsureSuccessStatusCode();
+            var outcome = await response.Content.ReadFromJsonAsync<Deletion>();
+            if (outcome is null) throw new HttpRequestException();
+            int Count(string status) => outcome.Results.Count(x => x.Status == status);
+            result = $"Eliminados: {Count("deleted")}. Omitidos: {Count("skipped")}. Ya ausentes: {Count("missing")}. Fallidos: {Count("failed")}.";
+        }
+        catch (HttpRequestException) { error = "No se pudo confirmar el resultado. Buscá los archivos nuevamente."; }
+        finally { busy = false; }
+    }
+
+    private sealed record Discovery(Candidate[] Items, long TotalBytes, bool Truncated);
+    private sealed record Candidate(string Id, long Size, string Ticket)
+    {
+        public bool Selected { get; set; }
+    }
+    private sealed record Deletion(FileOutcome[] Results);
+    private sealed record FileOutcome(string Status);
+}

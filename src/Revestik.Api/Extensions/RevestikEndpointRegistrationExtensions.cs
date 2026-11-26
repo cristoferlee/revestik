@@ -44,6 +44,7 @@ public static class RevestikEndpointRegistrationExtensions
         app.MapGmailIntegrationEndpoints();
         app.MapBankVoucherGmailIntegrationEndpoints();
         app.MapPublicCatalogEndpoints();
+        app.MapPublicMediaMaintenanceEndpoints();
         app.MapPublicCartEndpoints();
         app.MapPublicProformaEndpoints();
         app.MapPublicProjectReadEndpoints();
@@ -65,6 +66,7 @@ public static class RevestikEndpointRegistrationExtensions
         app.MapCompanyDocumentPdfPreferencesEndpoints();
         app.MapAuthenticationEndpoints();
         app.MapUserAdministrationEndpoints();
+        app.MapPublicCustomerAdministrationEndpoints();
         app.MapSecurityAuditEndpoints();
         app.MapFiscalReconciliationEndpoints();
         app.MapProjectEndpoints();

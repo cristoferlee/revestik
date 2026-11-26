@@ -1,18 +1,18 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.WebUtilities
 @using Microsoft.Extensions.Configuration
-@using Microsoft.Extensions.Hosting
+@using Revestik.Shared.Authentication
 @inject NavigationManager Navigation
 @inject IConfiguration Configuration
-@inject IHostEnvironment HostEnvironment
 @{
     var language = Locale.FromUri(Navigation.Uri);
     var labels = GetLabels(language);
     var principal = RequestContext?.User;
     var signedIn = principal?.Identity?.IsAuthenticated == true;
+    var employee = PublicAuthenticationRules.IsEmployee(principal);
     var email = principal?.FindFirstValue(ClaimTypes.Email) ?? principal?.Identity?.Name ?? labels.Account;
-    var publicLoginEnabled = !HostEnvironment.IsProduction() &&
-        Configuration.GetValue<bool>("Authentication:PublicGoogleRegistrationEnabled");
+    var publicLoginEnabled = Configuration.GetValue<bool>(
+        Revestik.Shared.Authentication.PublicAuthenticationRules.LoginEnabledKey);
     var query = QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);
     var errorCode = query.TryGetValue("authError", out var errorValues)
         ? errorValues.ToString()
@@ -27,6 +27,14 @@
                 <span aria-hidden="true">&#9679;</span>
                 <span class="public-auth-email">@email</span>
             </span>
+            @if (employee)
+            {
+                <a class="public-auth-login public-auth-administration"
+                   href="/administracion/"
+                   data-enhance-nav="false">
+                    @AdministrationLabel(language)
+                </a>
+            }
             <button type="button" class="public-auth-logout" data-public-logout
                     data-error-text="@labels.LogoutError">
                 @labels.Logout
@@ -35,7 +43,7 @@
         }
         else
         {
-            <a class="public-auth-login" href="@($"/api/auth/public/login/google?language={language}")"
+            <a class="public-auth-login" href="@($"/api/auth/public/login/google?language={language}&returnPath={Uri.EscapeDataString(new Uri(Navigation.Uri).PathAndQuery)}")"
                data-enhance-nav="false">@labels.Login</a>
         }
     </div>
@@ -56,8 +64,26 @@
             _ => ("Cuenta", "Entrar con Google", "Salir", "No se pudo cerrar la sesión. Intentá nuevamente.")
         };
 
+    private static string AdministrationLabel(string language) =>
+        language switch
+        {
+            "en" => "Administration",
+            "de" => "Verwaltung",
+            _ => "Administración"
+        };
+
     private static string GetErrorText(string language, string code)
     {
+        if (code == "registration_disabled")
+        {
+            return language switch
+            {
+                "en" => "New registrations are temporarily closed. Existing customers can still sign in.",
+                "de" => "Neue Registrierungen sind vorübergehend geschlossen. Bestehende Kunden können sich weiterhin anmelden.",
+                _ => "El registro de nuevas cuentas está cerrado temporalmente. Los clientes existentes pueden seguir iniciando sesión."
+            };
+        }
+
         var conflict = code == "account_conflict";
         var disabled = code == "account_disabled";
         return language switch

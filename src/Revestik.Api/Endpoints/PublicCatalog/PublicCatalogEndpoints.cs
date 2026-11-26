@@ -303,6 +303,7 @@ public static class PublicCatalogEndpoints
         var committed=new List<string>();
         try
         {
+            using var mediaLease = await storage.AcquireMutationAsync(ct);
             await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.Serializable,ct);
             await EnsurePresentationsAsync(db, r.SubcategoryIds, ct);
             var productName = r.Translations.Single(t => t.LanguageCode == "es").Name;
@@ -402,6 +403,7 @@ public static class PublicCatalogEndpoints
         IResult result;
         try
         {
+            using var mediaLease = await storage.AcquireMutationAsync(ct);
             await using (var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct))
             {
                 var product = await ProductIncludes(db).SingleOrDefaultAsync(x => x.Id == id && !x.IsArchived, ct);
@@ -616,6 +618,7 @@ public static class PublicCatalogEndpoints
         if(r.Role is not ("ProductCover" or "ProductGallery")||r.DisplayOrder<0||r.AltEs?.Length>300||r.AltEn?.Length>300||r.AltDe?.Length>300)return Bad("Invalid product image metadata.");
         PublicCatalogValidatedMedia media;
         try{media=await storage.InspectPendingAsync(r.Token,r.Role,ct);}catch(Exception ex) when(ex is IOException or InvalidDataException){return Bad("Uploaded image is missing or invalid.");}
+        using var mediaLease = await storage.AcquireMutationAsync(ct);
         await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.Serializable,ct);
         var product=await db.PublicCatalogProducts.SingleOrDefaultAsync(p=>p.Id==id&&!p.IsArchived,ct);
         if(product is null)return Results.NotFound();
@@ -637,6 +640,7 @@ public static class PublicCatalogEndpoints
         PublicCatalogValidatedMedia media;
         try{media=await storage.InspectPendingAsync(r.Token,r.Role,ct);}catch(Exception ex) when(ex is IOException or InvalidDataException){return Bad("Uploaded image is missing or invalid.");}
         if(media.ContentType=="image/gif" && r.Role!="CategoryHeroPrimary")return Bad("GIF only permitted as main Hero.");
+        using var mediaLease = await storage.AcquireMutationAsync(ct);
         await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.Serializable,ct);
         var category=await db.ProductCategories.SingleOrDefaultAsync(x=>x.Id==id,ct);
         if(category is null)return Results.NotFound();

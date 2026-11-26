@@ -189,7 +189,7 @@ export async function stageImage(element) {
     }
     const body = new FormData();
     body.append('file', file, file.name);
-    body.append('role', 'ProductCover');
+    body.append('role', 'SiteHero');
     const result = await authorizedRequest('/api/admin/public-catalog/images/stage', {
         method: 'POST',
         headers: { 'X-CSRF-TOKEN': await csrf() },

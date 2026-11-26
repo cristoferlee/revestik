@@ -1,0 +1,326 @@
+@page "/settings/public-customers"
+@using Microsoft.AspNetCore.Authorization
+@using Revestik.Client.Services.Users
+@using Revestik.Shared.Users
+@attribute [Authorize(Roles = "Administrator")]
+@inject PublicCustomerAdministrationApiService Api
+
+<PageTitle>Cuentas de clientes web | Revestik</PageTitle>
+
+<main class="public-customer-settings">
+    <header class="customer-settings-heading">
+        <a href="settings">Volver a Configuraci&oacute;n</a>
+        <h1>Cuentas de clientes web</h1>
+        <p>
+            Administr&aacute; el acceso de las cuentas registradas
+            con Google en el sitio web de Revestik.
+        </p>
+    </header>
+
+    <p class="customer-settings-note">
+        Estas cuentas son independientes de los empleados y
+        del registro de clientes comerciales.
+    </p>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <p class="customer-settings-error" role="alert">@error</p>
+    }
+
+    @if (!string.IsNullOrEmpty(success))
+    {
+        <p role="status">@success</p>
+    }
+
+    <form class="customer-settings-search"
+          @onsubmit="SearchAsync"
+          @onsubmit:preventDefault>
+        <label>
+            Buscar cuenta
+            <input type="search"
+                   maxlength="200"
+                   placeholder="Nombre o correo"
+                   @bind="search"
+                   @bind:event="oninput"
+                   disabled="@busy" />
+        </label>
+        <button type="submit" disabled="@busy">Buscar</button>
+    </form>
+
+    @if (busy)
+    {
+        <p role="status">Cargando...</p>
+    }
+
+    @if (result is not null)
+    {
+        <p>Resultados: @result.TotalCount</p>
+
+        @if (result.Customers.Count == 0)
+        {
+            <p>No hay cuentas que coincidan con la consulta.</p>
+        }
+        else
+        {
+            <div class="customer-settings-table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Estado</th>
+                            <th>Registro</th>
+                            <th>&Uacute;ltimo acceso</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var customer in result.Customers)
+                        {
+                            <tr @key="customer.Id">
+                                <td>
+                                    <strong>@customer.DisplayName</strong>
+                                    <small>@customer.Email</small>
+                                </td>
+                                <td>
+                                    <span class="@(customer.IsActive
+                                        ? "status-active"
+                                        : "status-inactive")">
+                                        @(customer.IsActive ? "Activo" : "Inactivo")
+                                    </span>
+                                </td>
+                                <td>@FormatDate(customer.CreatedAtUtc)</td>
+                                <td>@FormatDate(customer.LastLoginAtUtc)</td>
+                                <td>
+                                    <button type="button"
+                                            disabled="@busy"
+                                            @onclick="() => SelectCustomer(customer)">
+                                        @(customer.IsActive ? "Desactivar" : "Activar")
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <nav class="customer-settings-pagination"
+             aria-label="Paginacion">
+            <button type="button"
+                    disabled="@(busy || page <= 1)"
+                    @onclick="PreviousPageAsync">
+                Anterior
+            </button>
+
+            <span>P&aacute;gina @(page) de @TotalPages</span>
+
+            <button type="button"
+                    disabled="@(busy || page >= TotalPages)"
+                    @onclick="NextPageAsync">
+                Siguiente
+            </button>
+        </nav>
+    }
+
+    @if (selected is not null)
+    {
+        <div class="customer-settings-overlay">
+            <section class="customer-settings-dialog"
+                     role="dialog"
+                     aria-modal="true"
+                     aria-labelledby="customer-status-title">
+
+                <h2 id="customer-status-title">
+                    @(selected.IsActive
+                        ? "Desactivar cuenta"
+                        : "Activar cuenta")
+                </h2>
+
+                <p><strong>@selected.DisplayName</strong></p>
+                <p>@selected.Email</p>
+
+                @if (selected.IsActive)
+                {
+                    <p>
+                        Se bloquearan nuevos accesos y se revocaran
+                        las sesiones existentes en la siguiente
+                        validacion de seguridad.
+                    </p>
+                    <p>
+                        La cuenta y su carrito se conservaran.
+                    </p>
+                }
+                else
+                {
+                    <p>
+                        El cliente podra volver a iniciar sesion
+                        cuando el acceso publico este habilitado.
+                    </p>
+                }
+
+                <div class="customer-settings-actions">
+                    <button type="button"
+                            disabled="@busy"
+                            @onclick="CancelSelection">
+                        Cancelar
+                    </button>
+
+                    <button type="button"
+                            disabled="@busy"
+                            @onclick="SaveStatusAsync">
+                        Confirmar
+                    </button>
+                </div>
+            </section>
+        </div>
+    }
+</main>
+
+@code {
+    private const int PageSize = 25;
+
+    private PublicCustomerListResponse? result;
+    private PublicCustomerAccountResponse? selected;
+
+    private string search = string.Empty;
+    private string appliedSearch = string.Empty;
+
+    private int page = 1;
+    private bool busy;
+
+    private string? error;
+    private string? success;
+
+    private int TotalPages =>
+        Math.Max(1, (int)Math.Ceiling(
+            (result?.TotalCount ?? 0) / (double)PageSize));
+
+    protected override async Task OnInitializedAsync() =>
+        await RefreshAsync();
+
+    private async Task SearchAsync()
+    {
+        if (busy) return;
+
+        appliedSearch = search.Trim();
+        page = 1;
+        success = null;
+
+        await RefreshAsync();
+    }
+
+    private async Task PreviousPageAsync()
+    {
+        if (busy || page <= 1) return;
+
+        page--;
+        await RefreshAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (busy || page >= TotalPages) return;
+
+        page++;
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        busy = true;
+        error = null;
+
+        try
+        {
+            result = await Api.ListAsync(
+                appliedSearch, page, PageSize);
+
+            if (page > TotalPages)
+            {
+                page = TotalPages;
+
+                result = await Api.ListAsync(
+                    appliedSearch, page, PageSize);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            result = null;
+            error = "No se pudieron cargar las cuentas.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void SelectCustomer(
+        PublicCustomerAccountResponse customer)
+    {
+        if (busy) return;
+
+        error = success = null;
+        selected = customer;
+    }
+
+    private void CancelSelection()
+    {
+        if (!busy)
+            selected = null;
+    }
+
+    private async Task SaveStatusAsync()
+    {
+        if (busy || selected is null)
+            return;
+
+        var customer = selected;
+
+        busy = true;
+        error = success = null;
+
+        try
+        {
+            await Api.UpdateStatusAsync(
+                customer.Id,
+                new UpdatePublicCustomerStatusRequest
+                {
+                    IsActive = !customer.IsActive,
+                    Version = customer.Version
+                });
+
+            selected = null;
+
+            success = customer.IsActive
+                ? "Cuenta desactivada correctamente."
+                : "Cuenta activada correctamente.";
+
+            await RefreshAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            selected = null;
+
+            if (exception.StatusCode ==
+                System.Net.HttpStatusCode.Conflict)
+            {
+                await RefreshAsync();
+
+                error = "La cuenta cambio. Revisa su estado e intenta nuevamente.";
+            }
+            else
+            {
+                error = "No se pudo actualizar la cuenta.";
+            }
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string FormatDate(DateTime? date) =>
+        date.HasValue
+            ? date.Value.ToString("dd/MM/yyyy HH:mm") + " UTC"
+            : "Sin acceso";
+}
