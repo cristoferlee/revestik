@@ -10,7 +10,8 @@ public sealed class PublicCartItemConfiguration : IEntityTypeConfiguration<Publi
     {
         builder.ToTable("PublicCartItems", table =>
             table.HasCheckConstraint("CK_PublicCartItems_Quantity", "[Quantity] > 0 AND [Quantity] <= 10000"));
-        builder.HasKey(item => new { item.UserId, item.ProductId });
+        builder.HasKey(item => new { item.UserId, item.ProductId })
+            .IsClustered(false);
         builder.Property(item => item.UserId).HasMaxLength(450).IsRequired();
         builder.Property(item => item.Quantity).HasPrecision(18, 3);
         builder.Property(item => item.CreatedAtUtc).HasColumnType("datetime2");

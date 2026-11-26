@@ -280,4 +280,163 @@ public sealed class PublicCartSqlHttpTests(SqlServerIntegrationTestFixture fixtu
             .ToArrayAsync();
         Assert.Equal("PublicCartItems", Assert.Single(tables));
     }
+
+    [Fact]
+    public async Task PrimaryKeyIsNonClustered()
+    {
+        await using var db = fixture.CreateDbContext();
+
+        var indexType = await db.Database.SqlQueryRaw<string>(
+            """
+            SELECT [type_desc] AS [Value]
+            FROM sys.indexes
+            WHERE object_id = OBJECT_ID(N'PublicCartItems')
+              AND is_primary_key = 1
+            """).SingleAsync();
+
+        Assert.Equal("NONCLUSTERED", indexType);
+
+        var applied = await db.Database.GetAppliedMigrationsAsync();
+
+        Assert.Contains(applied, id =>
+            id.EndsWith(
+                "_UseNonClusteredPublicCartPrimaryKey",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task MaximumLengthUserIdCanBePersistedInCart()
+    {
+        var seed = await SeedAsync();
+
+        var id = Guid.NewGuid().ToString("N").PadRight(450, 'x');
+
+        await using var db = fixture.CreateDbContext();
+
+        db.Users.Add(new ApplicationUser
+        {
+            Id = id,
+            IsActive = true,
+            DisplayName = "Maximum length cart user"
+        });
+
+        await db.SaveChangesAsync();
+
+        var item = new PublicCartItem
+        {
+            UserId = id,
+            ProductId = seed.ProductId,
+            Quantity = 2.5m,
+            CreatedAtUtc = DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow
+        };
+
+        db.PublicCartItems.Add(item);
+
+        await db.SaveChangesAsync();
+
+        db.ChangeTracker.Clear();
+
+        var persisted = await db.PublicCartItems
+            .SingleAsync(x =>
+                x.UserId == id &&
+                x.ProductId == seed.ProductId);
+
+        Assert.Equal(450, persisted.UserId.Length);
+        Assert.Equal(2.5m, persisted.Quantity);
+        Assert.NotEmpty(persisted.RowVersion);
+    }
+
+    [Fact]
+    public async Task DuplicateUserProductKeyIsRejectedBySql()
+    {
+        var seed = await SeedAsync();
+
+        await using var db = fixture.CreateDbContext();
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO [PublicCartItems]
+                ([UserId], [ProductId], [Quantity],
+                 [CreatedAtUtc], [UpdatedAtUtc])
+            VALUES
+                ({seed.A}, {seed.ProductId}, 1,
+                 SYSUTCDATETIME(), SYSUTCDATETIME())
+            """);
+
+        var error = await Assert.ThrowsAsync<
+            Microsoft.Data.SqlClient.SqlException>(() =>
+                db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO [PublicCartItems]
+                        ([UserId], [ProductId], [Quantity],
+                         [CreatedAtUtc], [UpdatedAtUtc])
+                    VALUES
+                        ({seed.A}, {seed.ProductId}, 2,
+                         SYSUTCDATETIME(), SYSUTCDATETIME())
+                    """));
+
+        Assert.Equal(2627, error.Number);
+
+        Assert.Equal(1, await db.PublicCartItems.CountAsync(x =>
+            x.UserId == seed.A &&
+            x.ProductId == seed.ProductId));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(10001)]
+    public async Task InvalidQuantityIsRejectedBySql(int quantity)
+    {
+        var seed = await SeedAsync();
+
+        await using var db = fixture.CreateDbContext();
+
+        var error = await Assert.ThrowsAsync<
+            Microsoft.Data.SqlClient.SqlException>(() =>
+                db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO [PublicCartItems]
+                        ([UserId], [ProductId], [Quantity],
+                         [CreatedAtUtc], [UpdatedAtUtc])
+                    VALUES
+                        ({seed.A}, {seed.ProductId}, {quantity},
+                         SYSUTCDATETIME(), SYSUTCDATETIME())
+                    """));
+
+        Assert.Equal(547, error.Number);
+        Assert.Contains("CK_PublicCartItems_Quantity", error.Message);
+
+        Assert.False(await db.PublicCartItems.AnyAsync(x =>
+            x.UserId == seed.A &&
+            x.ProductId == seed.ProductId));
+    }
+
+    [Fact]
+    public async Task UserDeletionCascadesCartRows()
+    {
+        var seed = await SeedAsync();
+
+        await using var db = fixture.CreateDbContext();
+
+        db.PublicCartItems.Add(new PublicCartItem
+        {
+            UserId = seed.A,
+            ProductId = seed.ProductId,
+            Quantity = 1m,
+            CreatedAtUtc = DateTime.UtcNow,
+            UpdatedAtUtc = DateTime.UtcNow
+        });
+
+        await db.SaveChangesAsync();
+
+        db.ChangeTracker.Clear();
+
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            DELETE FROM [AspNetUsers]
+            WHERE [Id] = {seed.A}
+            """);
+
+        Assert.False(await db.PublicCartItems.AnyAsync(x =>
+            x.UserId == seed.A));
+    }
+
 }
