@@ -1,0 +1,31 @@
+@page "/es/cookies-y-almacenamiento"
+@layout LegalPreviewLayout
+
+<PageTitle>Cookies y almacenamiento local | REVESTIK</PageTitle>
+
+<main id="main" class="subpage">
+    <div class="subpage-inner">
+        <h1>Cookies y almacenamiento local</h1>
+        <p>Revestik guarda algunos datos en tu navegador para mantener tu sesión, proteger tus acciones en el sitio y recordar los productos que agregás al carrito.</p>
+
+        <h2>Si usás el carrito sin cuenta</h2>
+        <p>Los productos y las cantidades que elegís se guardan en el navegador que estás usando. Podés volver a ver tu selección durante <strong>siete días desde que empezaste el carrito</strong>.</p>
+        <p>Si más adelante iniciás sesión y decidís importar la selección, los productos importados quedan guardados en tu cuenta.</p>
+
+        <h2>Si iniciás sesión</h2>
+        <p>Usamos cookies para reconocer tu sesión y ayudar a impedir que otro sitio haga cambios en tu nombre. La sesión de cliente dura <strong>hasta cuatro horas</strong>. Si entrás con Google, también usamos cookies temporales para completar el acceso.</p>
+
+        <h2>Cómo borrar los datos de tu navegador</h2>
+        <p>Podés quitar productos desde el carrito o borrar los datos de Revestik desde la configuración de tu navegador. Si borrás esos datos, podés perder el carrito de invitado y tener que volver a iniciar sesión.</p>
+        <p>Los productos que ya guardaste en tu cuenta se gestionan desde esa cuenta. Si querés solicitar la eliminación de tus datos personales, consultá la <a href="/es/privacidad"><u>política de privacidad</u></a>.</p>
+
+        <details>
+            <summary>Detalles técnicos</summary>
+            <ul>
+                <li><code>Revestik.Auth</code> identifica la sesión activa.</li>
+                <li><code>Revestik.Csrf</code> protege las solicitudes que realizan cambios en el sitio.</li>
+                <li><code>revestik.public.cart.guest.v1</code> es la clave de almacenamiento local del carrito de invitado.</li>
+            </ul>
+        </details>
+    </div>
+</main>

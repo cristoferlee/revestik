@@ -1,5 +1,7 @@
 @inherits LayoutComponentBase
+@using Microsoft.Extensions.Hosting
 @inject NavigationManager Navigation
+@inject IHostEnvironment HostEnvironment
 @{
     var lang = Locale.FromUri(Navigation.Uri);
     var t = Locale.Get(lang);
@@ -43,7 +45,7 @@
                     <a href="@SiteLinks.LanguagePath(language, Navigation.Uri)" lang="@language" aria-current="@(lang == language ? "true" : null)">@language.ToUpperInvariant()</a>
                 }
             </nav>
-            <WhatsAppContactLink Language="@lang" CssClass="header-cta" Label="@t.Nav[5]" />
+            <WhatsAppContactLink Language="@lang" CssClass="header-cta" Label="WhatsApp" />
         </div>
     </div>
 </header>
@@ -67,14 +69,32 @@
                 <a href="@SiteLinks.Path(lang, 5)">@t.Nav[5]</a>
                 <WhatsAppContactLink Language="@lang" CssClass="" Label="WhatsApp" HideWhenUnavailable="true" />
                 <a href="tel:+50661682122">@L("Teléfono", "Phone", "Telefon"): +506 6168 2122</a>
-                <span>@L("Ubicación: Parrita, Puntarenas, Costa Rica", "Location: Parrita, Puntarenas, Costa Rica", "Standort: Parrita, Puntarenas, Costa Rica")</span>
+                <a href="@PublicContactDetails.EmailLink">@PublicContactDetails.Email</a>
+                <span>@L("Ubicación", "Location", "Standort"): @PublicContactDetails.Location</span>
+                <span lang="es">@PublicContactDetails.StreetAddress</span>
                 <span>@L("Cobertura: según ubicación del proyecto", "Coverage: based on project location", "Einsatzgebiet: abhängig vom Projektstandort")</span>
                 <span>@L("Horario: lunes a sábado, 8:00 a. m. – 5:00 p. m.", "Hours: Monday to Saturday, 8:00 AM – 5:00 PM", "Öffnungszeiten: Montag bis Samstag, 8:00–17:00 Uhr")</span>
                 <span>@L("Domingo: cerrado", "Sunday: closed", "Sonntag: geschlossen")</span>
             </div>
             <div class="footer-legal">
                 <h2>@t.FooterLegal</h2>
-                <p>@t.LegalPending</p>
+                @if (HostEnvironment.IsDevelopment())
+                {
+                    <nav aria-label="@t.FooterLegal">
+                        @if (lang != "es")
+                        {
+                            <p>@L("Documentos disponibles en español.", "These documents are available in Spanish.", "Diese Dokumente sind auf Spanisch verfügbar.")</p>
+                        }
+                        <a href="/es/aviso-legal" hreflang="es">@L("Aviso legal", "Legal notice", "Rechtliche Hinweise")</a>
+                        <a href="/es/privacidad" hreflang="es">@L("Política de privacidad", "Privacy policy", "Datenschutzerklärung")</a>
+                        <a href="/es/cookies-y-almacenamiento" hreflang="es">@L("Cookies y almacenamiento local", "Cookies and local storage", "Cookies und lokale Speicherung")</a>
+                        <a href="/es/terminos-de-uso" hreflang="es">@L("Términos de uso", "Terms of use", "Nutzungsbedingungen")</a>
+                    </nav>
+                }
+                else
+                {
+                    <p>@t.LegalPending</p>
+                }
             </div>
         </div>
         <div class="footer-bottom"><small>© @DateTime.UtcNow.Year REVESTIK</small><small>Costa Rica</small></div>

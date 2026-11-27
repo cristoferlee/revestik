@@ -169,6 +169,18 @@ public sealed class HomeHeroSlideDto
     public string? DescriptionDe { get; set; }
     public bool HasImage { get; set; }
     public string Version { get; set; } = "";
-    public string Heading(string lang) => lang switch { "en" => HeadingEn ?? HeadingEs, "de" => HeadingDe ?? HeadingEs, _ => HeadingEs };
-    public string Description(string lang) => lang switch { "en" => DescriptionEn ?? DescriptionEs, "de" => DescriptionDe ?? DescriptionEs, _ => DescriptionEs };
+    public string Heading(string lang, string? localizedFallback = null) =>
+        LocalizedText(lang, HeadingEs, HeadingEn, HeadingDe, localizedFallback);
+
+    public string Description(string lang, string? localizedFallback = null) =>
+        LocalizedText(lang, DescriptionEs, DescriptionEn, DescriptionDe, localizedFallback);
+
+    private static string LocalizedText(string lang, string es, string? en, string? de, string? localizedFallback)
+    {
+        var text = lang switch { "en" => en, "de" => de, _ => es };
+        if (localizedFallback is not null && string.IsNullOrWhiteSpace(text))
+            return localizedFallback;
+
+        return text ?? es;
+    }
 }

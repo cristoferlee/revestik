@@ -142,7 +142,21 @@
                 {
                     @if (Products.Items.Count == 0)
                     {
-                        <p>@L("Todavía no hay productos publicados con estos filtros.", "No published products match these filters.", "Keine veröffentlichten Produkte entsprechen diesen Filtern.")</p>
+                        @if (Products.Total > 0)
+                        {
+                            <p>@L("Esta página no tiene productos.", "There are no products on this page.", "Auf dieser Seite werden keine Produkte angezeigt.")</p>
+                            <p class="hero-actions"><a class="hero-action-primary" href="@FilterUrl(CategoryId, SubcategoryId)">@L("Volver a la primera página", "Back to the first page", "Zurück zur ersten Seite")</a></p>
+                        }
+                        else if (HasFilters)
+                        {
+                            <p>@L("No encontramos productos con estos filtros.", "No products match these filters.", "Keine Produkte entsprechen diesen Filtern.")</p>
+                            <p class="hero-actions"><a class="hero-action-primary" href="@SiteLinks.Path(Lang, 2)">@L("Quitar filtros", "Clear filters", "Filter zurücksetzen")</a></p>
+                        }
+                        else
+                        {
+                            <p>@L("Todavía no hay productos publicados.", "No products have been published yet.", "Es wurden noch keine Produkte veröffentlicht.")</p>
+                            <p class="hero-actions"><a class="hero-action-primary" href="@SiteLinks.Path(Lang, 5)">@L("Consultar por acabados", "Ask about finishes", "Nach Oberflächen fragen")</a></p>
+                        }
                     }
                     <div class="catalog-grid">
                         @foreach (var product in Products.Items)
@@ -194,6 +208,7 @@
     private bool Error;
     private string Lang => Locale.FromUri(Navigation.Uri);
     private int CurrentPage => Math.Max(1, Page ?? 1);
+    private bool HasFilters => CategoryId.HasValue || SubcategoryId.HasValue || !string.IsNullOrWhiteSpace(Search);
     private string L(string es, string en, string de) => Lang switch { "en" => en, "de" => de, _ => es };
 
     private string FilterUrl(int? categoryId, int? subcategoryId)

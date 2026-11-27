@@ -1,0 +1,21 @@
+@inherits LayoutComponentBase
+@layout PublicLayout
+@using Microsoft.Extensions.Hosting
+@inject IHostEnvironment HostEnvironment
+@inject NavigationManager Navigation
+
+@if (HostEnvironment.IsDevelopment())
+{
+    <HeadContent>
+        <meta name="robots" content="noindex,nofollow" />
+    </HeadContent>
+    @Body
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (!HostEnvironment.IsDevelopment())
+            Navigation.NotFound();
+    }
+}

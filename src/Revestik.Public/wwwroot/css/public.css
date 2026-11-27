@@ -1,11 +1,18 @@
 /* REVESTIK Public | VISUAL-02
    Single canonical stylesheet. Shared brand tokens are aligned to Revestik.Client.
    No legacy HOME-01 override layers. Public-only selectors do not affect the internal app. */
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+@font-face {
+  font-family: Manrope;
+  src: url('../fonts/manrope/manrope-vf.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+}
 
 :root {
   color-scheme: light;
   --brand-gold: #ffbd59;
+  --gold-text: #99500a;
   --accent: #f59e0b;
   --accent-hover: #d97706;
   --accent-pale: #fff7ed;
@@ -60,6 +67,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--focus); outline
 .home-hero .home-hero-shell { position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 20px; width: 100%; max-width: var(--max); margin: auto; padding: clamp(30px,4vw,44px) 28px 22px; }
 .home-hero .home-hero-copy { max-width: 990px; min-width: 0; }
 .eyebrow { color: var(--brand-gold); font-size: 12px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+.subpage-inner > .eyebrow, .projects-index-header > .eyebrow { color: var(--gold-text); }
 .home-hero .home-hero-copy h1 { max-width: 33ch; margin: 20px 0; font-size: clamp(2.35rem,3.5vw,3rem); line-height: 1.12; letter-spacing: -.045em; text-wrap: balance; }
 .home-hero .home-hero-description { max-width: 66ch; color: #f0f0ee; font-size: clamp(.95rem,1.3vw,1.08rem); line-height: 1.65; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 25px; }
@@ -83,7 +91,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--focus); outline
 .stub p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.8; }
 .stub a { display: inline-block; margin-top: 14px; color: #99500a; font-weight: 700; font-size: 13px; }
 .stub a:hover { text-decoration: underline; text-underline-offset: 3px; }
-.section-index { color: var(--accent-hover); font-weight: 800; font-size: 14px; }
+.section-index { color: var(--gold-text); font-weight: 800; font-size: 14px; }
 /* HOME-01C: editorial projects; placeholders are intentionally not project claims.
    Canonical styles only: no second cascade of legacy overrides. */
 .featured-projects { padding: 52px 0 58px; border-bottom: 1px solid var(--border); }
@@ -132,7 +140,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--focus); outline
 .featured-project-link:focus-visible, .featured-product-link:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
 .featured-products { padding: 52px 0 58px; border-bottom: 1px solid var(--border); }
 .featured-products-header { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 27px; }
-.featured-products-eyebrow { margin: 7px 0; font-size: .7rem; color: var(--accent-hover); font-weight: 800; letter-spacing: .16em; }
+.featured-products-eyebrow { margin: 7px 0; font-size: .7rem; color: var(--gold-text); font-weight: 800; letter-spacing: .16em; }
 .featured-products-header h2 { margin: 0; font-size: clamp(1.8rem, 3vw, 2.4rem); letter-spacing: -.04em; }
 .featured-products-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 17px; }
 .featured-product { display: block; min-width: 0; position: relative; }
@@ -147,7 +155,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--focus); outline
 @media (max-width: 600px) { .featured-products { padding: 35px 0 45px; } .featured-products-header { align-items: start; flex-direction: column; gap: 14px; } .featured-products-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 21px 12px; } }
 
 /* HOME-01E–G — canonical public home sections; no legacy overrides. */
-.home-section-eyebrow { margin: 0 0 13px; color: var(--accent-hover); font-size: .72rem; font-weight: 800; letter-spacing: .13em; }
+.home-section-eyebrow { margin: 0 0 13px; color: var(--gold-text); font-size: .72rem; font-weight: 800; letter-spacing: .13em; }
 .home-solutions { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,.9fr); gap: clamp(30px,6vw,85px); align-items: center; padding: 68px 0; border-bottom: 1px solid var(--border); }
 .home-solutions-copy h2, .home-advantages-heading h2, .home-contact-cta h2 { margin: 0 0 17px; font-size: clamp(1.9rem,3.8vw,3rem); letter-spacing: -.045em; line-height: 1.13; }
 .home-solutions-copy > p:not(.home-section-eyebrow), .home-advantages-heading > p:not(.home-section-eyebrow) { max-width: 57ch; color: var(--muted); font-size: .94rem; line-height: 1.8; }
@@ -293,6 +301,7 @@ body.public-viewer-open { overflow: hidden; }
 .subpage h1 { max-width: 880px; margin: 16px 0 24px; font-size: clamp(34px,4.6vw,63px); line-height: 1.15; letter-spacing: -.035em; overflow-wrap: break-word; }
 .subpage p:not(.eyebrow) { max-width: 780px; color: var(--muted); line-height: 1.8; }
 .back-home { display: inline-block; margin-top: 30px; color: #99500a; font-weight: 700; }
+.editorial-row a[href^="mailto:"] { color: var(--gold-text); text-decoration: underline; text-underline-offset: 3px; }
 .error-page { padding: 100px 30px; text-align: center; }
 
 /* Text-only footer in existing charcoal blue; never recreate the corporate logo here. */

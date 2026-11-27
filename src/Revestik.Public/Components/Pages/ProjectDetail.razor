@@ -39,7 +39,7 @@
                 {
                     var source = $"/api/public/projects/images/{photo.Id}";
                     <div class="revestik-project-photo-stage @(photo.Role == "ProjectCover" ? "is-cover" : null)"
-                         style="@PhotoRatio(photo)" @key="photo.Id">
+                         style="@PhotoDimensions(photo)" @key="photo.Id">
                         <button type="button" class="project-detail-photo public-photo-trigger"
                                 data-public-image data-gallery="@item.Slug" data-full-src="@source"
                                 data-image-label="@photo.Alt" aria-haspopup="dialog"
@@ -143,8 +143,10 @@
     private string L(string es, string en, string de) => Lang switch { "en" => en, "de" => de, _ => es };
     private static string Coord(decimal v) => (v * 100m).ToString("0.####", CultureInfo.InvariantCulture);
     private static string Position(ProjectHotspotDto tag) => $"left:{Coord(tag.LabelX)}%;top:{Coord(tag.LabelY)}%";
-    private static string PhotoRatio(ProjectPhotoDto photo) =>
-        $"aspect-ratio:{(photo.Width > 0 ? photo.Width : 4)} / {(photo.Height > 0 ? photo.Height : 3)}";
+    private static string PhotoDimensions(ProjectPhotoDto photo) =>
+        photo.Width > 0 && photo.Height > 0
+            ? $"--project-photo-width:{photo.Width}px;--project-photo-ratio:calc({photo.Width} / {photo.Height})"
+            : string.Empty;
 
     protected override async Task OnParametersSetAsync()
     {

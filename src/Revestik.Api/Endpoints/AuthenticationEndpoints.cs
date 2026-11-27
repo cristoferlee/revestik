@@ -122,51 +122,19 @@ public static class AuthenticationEndpoints
         // application callbacks. The login intent travels in protected OAuth state.
         group.MapGet(
                 "/public/login/google",
-                async (
-                    string? language,
-                    string? returnPath,
-                    HttpContext context,
+                (string? language, string? returnPath, HttpContext context,
                     SignInManager<ApplicationUser> signInManager,
                     IAuthenticationSchemeProvider schemeProvider,
                     IConfiguration configuration) =>
-                {
-                    context.Response.Headers.CacheControl = "private, no-store";
-
-                    if (!GoogleLoginFlow.PublicLoginEnabled(configuration))
-                        return Results.NotFound();
-
-                    if (context.User.Identity?.IsAuthenticated == true)
-                        return Results.LocalRedirect(
-                            Revestik.Public.SiteLinks.NormalizeAuthenticationReturnPath(
-                                returnPath,
-                                GoogleLoginFlow.NormalizePublicLanguage(language)));
-
-                    if (await schemeProvider.GetSchemeAsync(GoogleDefaults.AuthenticationScheme) is null)
-                        return Results.Problem(
-                            title: "Google authentication is unavailable.",
-                            statusCode: StatusCodes.Status503ServiceUnavailable);
-
-                    var properties = signInManager.ConfigureExternalAuthenticationProperties(
-                        GoogleDefaults.AuthenticationScheme,
-                        "/api/auth/public/external-callback");
-                    GoogleLoginFlow.SetIntent(properties, GoogleLoginFlow.Public);
-                    GoogleLoginFlow.SetPublicLanguage(properties, language);
-                    GoogleLoginFlow.SetPublicReturnPath(properties, returnPath, language);
-
-                    var sessionVersion =
-                        GoogleLoginFlow.PublicSessionVersion(configuration);
-
-                    if (sessionVersion <= 0)
-                        return Results.StatusCode(
-                            StatusCodes.Status503ServiceUnavailable);
-
-                    properties.Items[PublicAuthenticationRules.SessionVersionProperty] =
-                        sessionVersion.ToString(
-                            System.Globalization.CultureInfo.InvariantCulture);
-                    return Results.Challenge(properties, [GoogleDefaults.AuthenticationScheme]);
-                })
+                    StartPublicGoogleChallengeAsync(language, returnPath, context, signInManager,
+                        schemeProvider, configuration, registrationAcceptance: null))
             .RequireRateLimiting(RevestikRateLimiting.Login)
             .WithName("PublicGoogleLogin")
+            .AllowAnonymous();
+
+        group.MapPost("/public/register/google", HandlePublicRegistrationAsync)
+            .RequireRateLimiting(RevestikRateLimiting.Login)
+            .WithName("PublicGoogleRegistration")
             .AllowAnonymous();
 
         group.MapGet(
@@ -466,9 +434,76 @@ public static class AuthenticationEndpoints
         }
     }
 
+    private static async Task<IResult> HandlePublicRegistrationAsync(
+        HttpContext context,
+        IConfiguration configuration,
+        IHostEnvironment environment,
+        IAntiforgery antiforgery,
+        SignInManager<ApplicationUser> signInManager,
+        IAuthenticationSchemeProvider schemeProvider)
+    {
+        context.Response.Headers.CacheControl = "private, no-store";
+        if (!environment.IsDevelopment() ||
+            !GoogleLoginFlow.PublicRegistrationEnabled(configuration))
+            return Results.NotFound();
+
+        if (!context.Request.HasFormContentType || !await antiforgery.IsRequestValidAsync(context))
+            return Results.BadRequest();
+
+        var form = await context.Request.ReadFormAsync(context.RequestAborted);
+        var language = GoogleLoginFlow.NormalizePublicLanguage(form["language"].ToString());
+        if (form["accepted"].ToString() != "yes" ||
+            form["noticeVersion"].ToString() != PublicAuthenticationRules.RegistrationNoticeVersion)
+            return PublicLoginError("registration_consent_required", language);
+
+        return await StartPublicGoogleChallengeAsync(language, form["returnPath"].ToString(), context,
+            signInManager, schemeProvider, configuration, DateTimeOffset.UtcNow);
+    }
+
+    private static async Task<IResult> StartPublicGoogleChallengeAsync(
+        string? language,
+        string? returnPath,
+        HttpContext context,
+        SignInManager<ApplicationUser> signInManager,
+        IAuthenticationSchemeProvider schemeProvider,
+        IConfiguration configuration,
+        DateTimeOffset? registrationAcceptance)
+    {
+        context.Response.Headers.CacheControl = "private, no-store";
+        if (!GoogleLoginFlow.PublicLoginEnabled(configuration))
+            return Results.NotFound();
+
+        if (context.User.Identity?.IsAuthenticated == true)
+            return Results.LocalRedirect(Revestik.Public.SiteLinks.NormalizeAuthenticationReturnPath(
+                returnPath, GoogleLoginFlow.NormalizePublicLanguage(language)));
+
+        if (await schemeProvider.GetSchemeAsync(GoogleDefaults.AuthenticationScheme) is null)
+            return Results.Problem(
+                title: "Google authentication is unavailable.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+
+        var sessionVersion = GoogleLoginFlow.PublicSessionVersion(configuration);
+        if (sessionVersion <= 0)
+            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+        var properties = signInManager.ConfigureExternalAuthenticationProperties(
+            GoogleDefaults.AuthenticationScheme, "/api/auth/public/external-callback");
+        GoogleLoginFlow.SetIntent(properties, GoogleLoginFlow.Public);
+        GoogleLoginFlow.SetPublicLanguage(properties, language);
+        GoogleLoginFlow.SetPublicReturnPath(properties, returnPath, language);
+        properties.Items[PublicAuthenticationRules.SessionVersionProperty] =
+            sessionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        if (registrationAcceptance is { } acceptedAtUtc)
+            GoogleLoginFlow.SetPublicRegistrationAcceptance(properties, acceptedAtUtc);
+
+        return Results.Challenge(properties, [GoogleDefaults.AuthenticationScheme]);
+    }
+
     private static async Task<IResult> HandlePublicExternalCallbackAsync(
         SignInManager<ApplicationUser> signInManager,
         IConfiguration configuration,
+        IHostEnvironment environment,
         PublicGoogleSignInService publicGoogleSignIn,
         RevestikDbContext db,
         UserManager<ApplicationUser> userManager,
@@ -505,7 +540,8 @@ public static class AuthenticationEndpoints
         var result = await publicGoogleSignIn.ResolveAsync(
             externalLogin!,
             ct,
-            GoogleLoginFlow.PublicRegistrationEnabled(configuration));
+            environment.IsDevelopment() && GoogleLoginFlow.PublicRegistrationEnabled(configuration),
+            GoogleLoginFlow.GetPublicRegistrationAcceptance(properties, DateTimeOffset.UtcNow));
         if (result.User is null)
         {
             var error = result.Status switch
@@ -514,6 +550,7 @@ public static class AuthenticationEndpoints
                 PublicGoogleAccountStatus.InvalidIdentity => "external_login_failed",
                 PublicGoogleAccountStatus.Conflict => "account_conflict",
                 PublicGoogleAccountStatus.RegistrationDisabled => "registration_disabled",
+                PublicGoogleAccountStatus.ConsentRequired => "registration_consent_required",
                 _ => "registration_failed"
             };
             return PublicLoginError(error, language);

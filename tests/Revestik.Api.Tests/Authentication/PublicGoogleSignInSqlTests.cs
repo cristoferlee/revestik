@@ -1,12 +1,15 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Revestik.Api.Authorization;
 using Revestik.Api.Data;
+using Revestik.Api.Models;
 using Revestik.Api.Models.Identity;
 using Revestik.Api.Services.Authentication;
 using Revestik.Api.Tests.Hosting;
+using Revestik.Shared.Authentication;
 
 namespace Revestik.Api.Tests.Authentication;
 
@@ -36,6 +39,10 @@ public sealed class PublicGoogleSignInSqlTests : IClassFixture<SqlServerIntegrat
                 Assert.True((await roles.CreateAsync(new IdentityRole(role))).Succeeded);
     }
 
+    private static PublicRegistrationAcceptance Acceptance() =>
+        new(PublicAuthenticationRules.RegistrationNoticeVersion,
+            PublicAuthenticationRules.RegistrationNoticeLanguage, DateTimeOffset.UtcNow);
+
     [Fact]
     public async Task Registration_CreatesOnlyPublicRoleAndBindsProviderSubject()
     {
@@ -47,7 +54,13 @@ public sealed class PublicGoogleSignInSqlTests : IClassFixture<SqlServerIntegrat
         var email = $"public-{Guid.NewGuid():N}@example.test";
         var login = Login(email, $"subject-{Guid.NewGuid():N}");
 
-        var created = await service.ResolveAsync(login, CancellationToken.None, allowRegistration: true);
+        var withoutAcceptance = await service.ResolveAsync(login, CancellationToken.None, allowRegistration: true);
+        Assert.Equal(PublicGoogleAccountStatus.ConsentRequired, withoutAcceptance.Status);
+        Assert.Null(await manager.FindByEmailAsync(email));
+
+        var acceptance = Acceptance();
+        var created = await service.ResolveAsync(login, CancellationToken.None,
+            allowRegistration: true, registrationAcceptance: acceptance);
         Assert.Equal(PublicGoogleAccountStatus.Created, created.Status);
         Assert.NotNull(created.User);
         Assert.True(created.User.EmailConfirmed);
@@ -55,6 +68,12 @@ public sealed class PublicGoogleSignInSqlTests : IClassFixture<SqlServerIntegrat
         Assert.Equal([RoleNames.PublicCustomer], await manager.GetRolesAsync(created.User));
         Assert.Equal(created.User.Id,
             (await manager.FindByLoginAsync("Google", login.ProviderKey))?.Id);
+
+        var db = scope.ServiceProvider.GetRequiredService<RevestikDbContext>();
+        var audit = await db.Set<SecurityAuditEntry>().SingleAsync(entry =>
+            entry.EntityId == created.User.Id && entry.Action == "PublicGoogleAccountCreated");
+        Assert.NotNull(audit.Details);
+        Assert.Equal(acceptance, JsonSerializer.Deserialize<PublicRegistrationAcceptance>(audit.Details));
 
         var repeat = await service.ResolveAsync(login, CancellationToken.None, allowRegistration: true);
         Assert.Equal(PublicGoogleAccountStatus.Existing, repeat.Status);
@@ -71,8 +90,8 @@ public sealed class PublicGoogleSignInSqlTests : IClassFixture<SqlServerIntegrat
         var manager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var email = $"collision-{Guid.NewGuid():N}@example.test";
 
-        var first = await service.ResolveAsync(Login(email, "sub-one"), CancellationToken.None, allowRegistration: true);
-        var second = await service.ResolveAsync(Login(email, "sub-two"), CancellationToken.None, allowRegistration: true);
+        var first = await service.ResolveAsync(Login(email, "sub-one"), CancellationToken.None, allowRegistration: true, registrationAcceptance: Acceptance());
+        var second = await service.ResolveAsync(Login(email, "sub-two"), CancellationToken.None, allowRegistration: true, registrationAcceptance: Acceptance());
         Assert.Equal(PublicGoogleAccountStatus.Created, first.Status);
         Assert.Equal(PublicGoogleAccountStatus.Conflict, second.Status);
         Assert.Null(await manager.FindByLoginAsync("Google", "sub-two"));
@@ -95,7 +114,7 @@ public sealed class PublicGoogleSignInSqlTests : IClassFixture<SqlServerIntegrat
         Assert.True((await manager.CreateAsync(staff)).Succeeded);
         Assert.True((await manager.AddToRoleAsync(staff, RoleNames.Sales)).Succeeded);
 
-        var attempted = await service.ResolveAsync(Login(email, "new-public-subject"), CancellationToken.None, allowRegistration: true);
+        var attempted = await service.ResolveAsync(Login(email, "new-public-subject"), CancellationToken.None, allowRegistration: true, registrationAcceptance: Acceptance());
         Assert.Equal(PublicGoogleAccountStatus.Conflict, attempted.Status);
         Assert.Null(await manager.FindByLoginAsync("Google", "new-public-subject"));
         Assert.Equal([RoleNames.Sales], await manager.GetRolesAsync(staff));
@@ -111,12 +130,12 @@ public sealed class PublicGoogleSignInSqlTests : IClassFixture<SqlServerIntegrat
         var service = scope.ServiceProvider.GetRequiredService<PublicGoogleSignInService>();
         var email = $"disabled-{Guid.NewGuid():N}@example.test";
         var login = Login(email, $"sub-{Guid.NewGuid():N}");
-        var first = await service.ResolveAsync(login, CancellationToken.None, allowRegistration: true);
+        var first = await service.ResolveAsync(login, CancellationToken.None, allowRegistration: true, registrationAcceptance: Acceptance());
         Assert.Equal(PublicGoogleAccountStatus.Created, first.Status);
         first.User!.IsActive = false;
         Assert.True((await manager.UpdateAsync(first.User)).Succeeded);
 
-        var blocked = await service.ResolveAsync(login, CancellationToken.None, allowRegistration: true);
+        var blocked = await service.ResolveAsync(login, CancellationToken.None, allowRegistration: true, registrationAcceptance: Acceptance());
         Assert.Equal(PublicGoogleAccountStatus.Disabled, blocked.Status);
     }
 
@@ -135,7 +154,7 @@ public sealed class PublicGoogleSignInSqlTests : IClassFixture<SqlServerIntegrat
         {
             await using var scope = provider.CreateAsyncScope();
             var service = scope.ServiceProvider.GetRequiredService<PublicGoogleSignInService>();
-            return (await service.ResolveAsync(login, CancellationToken.None, allowRegistration: true)).Status;
+            return (await service.ResolveAsync(login, CancellationToken.None, allowRegistration: true, registrationAcceptance: Acceptance())).Status;
         }
 
         var attempts = await Task.WhenAll(Attempt(), Attempt());
@@ -162,7 +181,7 @@ public sealed class PublicGoogleSignInSqlTests : IClassFixture<SqlServerIntegrat
         var service = scope.ServiceProvider.GetRequiredService<PublicGoogleSignInService>();
         var email = $"unverified-{Guid.NewGuid():N}@example.test";
         Assert.Equal(PublicGoogleAccountStatus.InvalidIdentity, (await service.ResolveAsync(
-            Login(email, "unverified-sub", "false"), CancellationToken.None, allowRegistration: true)).Status);
+            Login(email, "unverified-sub", "false"), CancellationToken.None, allowRegistration: true, registrationAcceptance: Acceptance())).Status);
         Assert.Null(await manager.FindByEmailAsync(email));
     }
 
@@ -194,7 +213,7 @@ public sealed class PublicGoogleSignInSqlTests : IClassFixture<SqlServerIntegrat
 
         var created = await service.ResolveAsync(
             login, CancellationToken.None,
-            allowRegistration: true);
+            allowRegistration: true, registrationAcceptance: Acceptance());
 
         Assert.Equal(PublicGoogleAccountStatus.Created, created.Status);
 

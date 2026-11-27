@@ -1,4 +1,6 @@
 using System.Data;
+using System.Globalization;
+using Microsoft.AspNetCore.Authentication;
 using Revestik.Shared.Authentication;
 using Revestik.Public;
 using System.Security.Claims;
@@ -22,6 +24,7 @@ public enum PublicGoogleAccountStatus
     Disabled,
     InvalidIdentity,
     RegistrationDisabled,
+    ConsentRequired,
     ProvisioningFailed
 }
 
@@ -29,8 +32,14 @@ public sealed record PublicGoogleAccountResult(
     PublicGoogleAccountStatus Status,
     ApplicationUser? User = null);
 
+public sealed record PublicRegistrationAcceptance(
+    string PrivacyNoticeVersion, string PrivacyNoticeLanguage, DateTimeOffset AcceptedAtUtc);
+
 public static class GoogleLoginFlow
 {
+    private const string RegistrationNoticeKey = "revestik:registration-notice-version";
+    private const string RegistrationAcceptedAtKey = "revestik:registration-accepted-at";
+
     private const string IntentKey = "revestik:google-login-intent";
     private const string PublicLanguageKey = "revestik:public-language";
     private const string PublicReturnPathKey = "revestik:public-return-path";
@@ -87,6 +96,31 @@ public static class GoogleLoginFlow
 
         return SiteLinks.NormalizeAuthenticationReturnPath(
             returnPath, language);
+    }
+
+    public static void SetPublicRegistrationAcceptance(
+        AuthenticationProperties properties,
+        DateTimeOffset acceptedAtUtc)
+    {
+        properties.Items[RegistrationNoticeKey] = PublicAuthenticationRules.RegistrationNoticeVersion;
+        properties.Items[RegistrationAcceptedAtKey] =
+            acceptedAtUtc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+    }
+
+    public static PublicRegistrationAcceptance? GetPublicRegistrationAcceptance(
+        AuthenticationProperties properties,
+        DateTimeOffset now)
+    {
+        if (!properties.Items.TryGetValue(RegistrationNoticeKey, out var version) ||
+            !string.Equals(version, PublicAuthenticationRules.RegistrationNoticeVersion, StringComparison.Ordinal) ||
+            !properties.Items.TryGetValue(RegistrationAcceptedAtKey, out var timestamp) ||
+            !DateTimeOffset.TryParseExact(timestamp, "O", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var acceptedAtUtc) ||
+            acceptedAtUtc > now || now - acceptedAtUtc >= TimeSpan.FromMinutes(15))
+            return null;
+
+        return new(PublicAuthenticationRules.RegistrationNoticeVersion,
+            PublicAuthenticationRules.RegistrationNoticeLanguage, acceptedAtUtc);
     }
 
     public static int PublicSessionVersion(IConfiguration configuration)
@@ -176,7 +210,8 @@ public sealed class PublicGoogleSignInService(
     public async Task<PublicGoogleAccountResult> ResolveAsync(
         ExternalLoginInfo login,
         CancellationToken ct,
-        bool allowRegistration)
+        bool allowRegistration,
+        PublicRegistrationAcceptance? registrationAcceptance = null)
     {
         var email = login.Principal.FindFirstValue(ClaimTypes.Email)?.Trim();
 
@@ -234,6 +269,9 @@ public sealed class PublicGoogleSignInService(
             if (!allowRegistration)
                 return new(PublicGoogleAccountStatus.RegistrationDisabled);
 
+            if (registrationAcceptance is null)
+                return new(PublicGoogleAccountStatus.ConsentRequired);
+
             user = new ApplicationUser
             {
                 UserName = email,
@@ -254,7 +292,8 @@ public sealed class PublicGoogleSignInService(
             if (!await ApplyAsync(userManager.AddLoginAsync(user, login)))
                 return new(PublicGoogleAccountStatus.ProvisioningFailed);
 
-            SecurityAudit.Record(db, "PublicGoogleAccountCreated", "User", user.Id, user.Id);
+            SecurityAudit.Record(db, "PublicGoogleAccountCreated", "User", user.Id, user.Id,
+                registrationAcceptance);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
 

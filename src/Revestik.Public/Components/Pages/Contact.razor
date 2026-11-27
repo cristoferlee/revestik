@@ -55,7 +55,7 @@
                     <span class="editorial-row-number" aria-hidden="true">01</span>
                     <div>
                         <h3>@L("Ubicación", "Location", "Standort")</h3>
-                        <p>Parrita, Puntarenas, Costa Rica</p>
+                        <p>@PublicContactDetails.Location<br /><span lang="es">@PublicContactDetails.StreetAddress</span></p>
                     </div>
                 </div>
                 <div class="editorial-row">
@@ -68,12 +68,19 @@
                 <div class="editorial-row">
                     <span class="editorial-row-number" aria-hidden="true">03</span>
                     <div>
+                        <h3>@L("Correo electrónico", "Email", "E-Mail")</h3>
+                        <p><a href="@PublicContactDetails.EmailLink">@PublicContactDetails.Email</a></p>
+                    </div>
+                </div>
+                <div class="editorial-row">
+                    <span class="editorial-row-number" aria-hidden="true">04</span>
+                    <div>
                         <h3>@L("Cobertura", "Coverage", "Einsatzgebiet")</h3>
                         <p>@L("Según ubicación del proyecto", "Based on project location", "Abhängig vom Projektstandort")</p>
                     </div>
                 </div>
                 <div class="editorial-row">
-                    <span class="editorial-row-number" aria-hidden="true">04</span>
+                    <span class="editorial-row-number" aria-hidden="true">05</span>
                     <div>
                         <h3>@L("Horario", "Hours", "Öffnungszeiten")</h3>
                         <p>@L("Lunes a sábado de 8:00 a. m. a 5:00 p. m. Domingo cerrado.", "Monday to Saturday, 8:00 AM to 5:00 PM. Closed Sunday.", "Montag bis Samstag, 8:00–17:00 Uhr. Sonntag geschlossen.")</p>

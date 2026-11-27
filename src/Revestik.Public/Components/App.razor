@@ -9,6 +9,7 @@
     var knownRoute = SiteLinks.IsKnownPublicRoute(Navigation.Uri);
     var currentPath = new Uri(Navigation.Uri).AbsolutePath;
     var language = Locale.FromUri(Navigation.Uri);
+    var closeViewerLabel = L(language, "Cerrar visor", "Close photo viewer", "Fotobetrachter schließen");
     var isEditingSite = PublicEditorAccess.CanEditPublicSite(RequestContext);
     if (RequestContext?.User.Identity?.IsAuthenticated == true &&
         RequestContext is not null && !RequestContext.Response.HasStarted)
@@ -17,18 +18,18 @@
     }
 }
 <!DOCTYPE html>
-<html lang="@Locale.FromUri(Navigation.Uri)">
+<html lang="@language">
 <head>
     <base href="/" />
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <link rel="icon" type="image/svg+xml" href="/assets/revestik-rk.svg" />
-    <link rel="stylesheet" href="/css/public.css?v=SOLUTIONS-HERO-IMAGE-02" />
+    <link rel="stylesheet" href="/css/public.css?v=PUBLIC-IDENTITY-A11Y-03D" />
     <link rel="stylesheet" href="/css/public-auth.css?v=PUBLIC-AUTH-01C" />
     <link rel="stylesheet" href="/css/public-cart.css?v=PUBLIC-CART-01D" />
-    <link rel="stylesheet" href="/css/public-projects.css?v=PROJECTS-01D-FIX01" />
-    <link rel="stylesheet" href="/css/catalog.css?v=ACABADOS-RECOVERY-02" />
+    <link rel="stylesheet" href="/css/public-projects.css?v=PROJECTS-MEDIA-03D" />
+    <link rel="stylesheet" href="/css/catalog.css?v=ACABADOS-MEDIA-03D" />
     @if (isEditingSite)
     {
         <link rel="stylesheet" href="/css/public-inline-editor.css?v=VERIFY02-PERSISTENCE-FIX" />
@@ -59,7 +60,7 @@
     <Routes />
     <div id="public-cart-notice" class="public-cart-notice" role="status" aria-live="polite" hidden>
         <span data-public-cart-notice-text></span>
-        <button type="button" data-public-cart-notice-close aria-label="Close notification">&times;</button>
+        <button type="button" data-public-cart-notice-close aria-label="@L(language, "Cerrar notificación", "Close notification", "Benachrichtigung schließen")">&times;</button>
     </div>
     @if (isEditingSite)
     {
@@ -74,17 +75,17 @@
         }
     }
     @* Global SSR-safe image viewer. Javascript enhances explicitly opted-in photos only. *@
-    <dialog id="public-image-viewer" class="public-image-viewer" aria-label="Image viewer">
+    <dialog id="public-image-viewer" class="public-image-viewer" aria-label="@L(language, "Visor de fotografías", "Photo viewer", "Fotobetrachter")">
         <div class="public-image-viewer-shell">
-            <button class="public-image-viewer-close public-glass-control" type="button" data-viewer-close aria-label="Close image viewer" title="Close">&times;</button>
+            <button class="public-image-viewer-close public-glass-control" type="button" data-viewer-close aria-label="@closeViewerLabel" title="@closeViewerLabel">&times;</button>
             <div class="public-image-viewer-stage" data-viewer-stage></div>
             <div class="public-image-viewer-toolbar">
-                <button class="public-glass-control" type="button" data-viewer-prev aria-label="Previous photograph">&#8592;</button>
+                <button class="public-glass-control" type="button" data-viewer-prev aria-label="@L(language, "Fotografía anterior", "Previous photograph", "Vorheriges Foto")">&#8592;</button>
                 <div class="public-image-viewer-caption" aria-live="polite">
                     <span data-viewer-title></span>
                     <span class="public-image-viewer-count" data-viewer-count></span>
                 </div>
-                <button class="public-glass-control" type="button" data-viewer-next aria-label="Next photograph">&#8594;</button>
+                <button class="public-glass-control" type="button" data-viewer-next aria-label="@L(language, "Fotografía siguiente", "Next photograph", "Nächstes Foto")">&#8594;</button>
             </div>
         </div>
     </dialog>
@@ -94,7 +95,7 @@
     <script src="/js/public-hero.js" defer></script>
     <script src="/js/public-catalog-search.js?v=ACABADOS-RECOVERY-02" defer></script>
     <script src="/js/public-featured-products.js" defer></script>
-    <script src="/js/public-image-viewer.js" defer></script>
+    <script src="/js/public-image-viewer.js?v=PUBLIC-IDENTITY-A11Y-03D" defer></script>
     @if (isEditingSite)
     {
         <script src="/_framework/blazor.web.js"></script>
@@ -104,4 +105,11 @@
 
 @code {
     [CascadingParameter] private HttpContext? RequestContext { get; set; }
+
+    private static string L(string language, string es, string en, string de) => language switch
+    {
+        "en" => en,
+        "de" => de,
+        _ => es
+    };
 }

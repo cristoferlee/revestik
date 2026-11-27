@@ -50,7 +50,13 @@
   gap: 18px;
 }
 .finishes-page .catalog-card { width: 100%; min-width: 0; }
-.finishes-page .catalog-card img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.finishes-page .catalog-card img {
+  display: block;
+  width: 100%;
+  height: clamp(104px, 28vw, 144px);
+  object-fit: scale-down;
+  background: #f2f2f2;
+}
 @media (max-width: 530px) {
   .finishes-page .catalog-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

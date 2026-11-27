@@ -1,9 +1,11 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.WebUtilities
 @using Microsoft.Extensions.Configuration
+@using Microsoft.Extensions.Hosting
 @using Revestik.Shared.Authentication
 @inject NavigationManager Navigation
 @inject IConfiguration Configuration
+@inject IHostEnvironment HostEnvironment
 @{
     var language = Locale.FromUri(Navigation.Uri);
     var labels = GetLabels(language);
@@ -13,6 +15,9 @@
     var email = principal?.FindFirstValue(ClaimTypes.Email) ?? principal?.Identity?.Name ?? labels.Account;
     var publicLoginEnabled = Configuration.GetValue<bool>(
         Revestik.Shared.Authentication.PublicAuthenticationRules.LoginEnabledKey);
+    var registrationAvailable = HostEnvironment.IsDevelopment() &&
+        PublicAuthenticationRules.CanRegister(publicLoginEnabled,
+            Configuration.GetValue<bool>(PublicAuthenticationRules.RegistrationEnabledKey));
     var query = QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);
     var errorCode = query.TryGetValue("authError", out var errorValues)
         ? errorValues.ToString()
@@ -45,6 +50,12 @@
         {
             <a class="public-auth-login" href="@($"/api/auth/public/login/google?language={language}&returnPath={Uri.EscapeDataString(new Uri(Navigation.Uri).PathAndQuery)}")"
                data-enhance-nav="false">@labels.Login</a>
+            @if (registrationAvailable && new Uri(Navigation.Uri).AbsolutePath != PublicAuthenticationRules.RegistrationPreviewPath)
+            {
+                <a class="public-auth-login"
+                   href="@($"{PublicAuthenticationRules.RegistrationPreviewPath}?language={language}&returnPath={Uri.EscapeDataString(new Uri(Navigation.Uri).PathAndQuery)}")"
+                   data-enhance-nav="false">@RegistrationLabel(language)</a>
+            }
         }
     </div>
 }
@@ -64,6 +75,13 @@
             _ => ("Cuenta", "Entrar con Google", "Salir", "No se pudo cerrar la sesión. Intentá nuevamente.")
         };
 
+    private static string RegistrationLabel(string language) => language switch
+    {
+        "en" => "Create account (ES)",
+        "de" => "Konto erstellen (ES)",
+        _ => "Crear cuenta"
+    };
+
     private static string AdministrationLabel(string language) =>
         language switch
         {
@@ -74,6 +92,16 @@
 
     private static string GetErrorText(string language, string code)
     {
+        if (code == "registration_consent_required")
+        {
+            return language switch
+            {
+                "en" => "To create an account, select Create account and review the privacy notice.",
+                "de" => "Wählen Sie zum Erstellen eines Kontos Konto erstellen und lesen Sie den Datenschutzhinweis.",
+                _ => "Para crear una cuenta, elegí Crear cuenta y revisá el aviso de privacidad."
+            };
+        }
+
         if (code == "registration_disabled")
         {
             return language switch

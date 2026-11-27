@@ -12,6 +12,11 @@ public static class PublicAuthenticationRules
 
     public const string CustomerRole = "PublicCustomer";
 
+    public const string RegistrationPreviewPath = "/es/crear-cuenta";
+    public const string RegistrationPostPath = "/api/auth/public/register/google";
+    public const string RegistrationNoticeVersion = "es-preview-1";
+    public const string RegistrationNoticeLanguage = "es";
+
     public const string SessionVersionKey =
         "Authentication:PublicSessionVersion";
 

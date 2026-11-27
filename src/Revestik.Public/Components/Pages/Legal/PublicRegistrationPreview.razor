@@ -1,0 +1,61 @@
+@page "/es/crear-cuenta"
+@layout LegalPreviewLayout
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.Extensions.Configuration
+@using Microsoft.Extensions.Hosting
+@using Revestik.Shared.Authentication
+@inject IConfiguration Configuration
+@inject IHostEnvironment HostEnvironment
+@inject NavigationManager Navigation
+
+@if (RegistrationAvailable)
+{
+    <PageTitle>Crear una cuenta | REVESTIK</PageTitle>
+
+    <main id="main" class="subpage">
+        <div class="subpage-inner">
+            <h1>Creá tu cuenta en Revestik</h1>
+            <p>Con una cuenta podés guardar tu selección de productos y consultarla al volver. También podés seguir explorando, usar el carrito y generar una proforma como invitado.</p>
+
+            <h2>Qué datos usamos</h2>
+            <p><strong>3-102-959852 SRL</strong> recibe de Google tu nombre visible, correo electrónico e identificador de cuenta. Usamos estos datos para verificar tu identidad, crear tu cuenta y gestionar tu acceso.</p>
+            <p>Podés consultar nuestra <a href="/es/privacidad"><u>política de privacidad</u></a> o escribir a <a href="@PublicContactDetails.EmailLink"><u>@PublicContactDetails.Email</u></a> para ejercer tus derechos sobre tus datos.</p>
+
+            <form method="post" action="@PublicAuthenticationRules.RegistrationPostPath" data-enhance="false">
+                <AntiforgeryToken />
+                <input type="hidden" name="noticeVersion" value="@PublicAuthenticationRules.RegistrationNoticeVersion" />
+                <input type="hidden" name="language" value="@Language" />
+                <input type="hidden" name="returnPath" value="@SafeReturnPath" />
+                <p>
+                    <label>
+                        <input type="checkbox" name="accepted" value="yes" required />
+                        Acepto que Revestik use los datos indicados para crear y gestionar mi cuenta.
+                    </label>
+                </p>
+                <div class="hero-actions">
+                    <button class="public-cart-browse" type="submit">Continuar con Google</button>
+                    <a class="back-home" href="@SafeReturnPath">Seguir como invitado</a>
+                </div>
+            </form>
+        </div>
+    </main>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "language")] public string? ReturnLanguage { get; set; }
+    [SupplyParameterFromQuery(Name = "returnPath")] public string? ReturnPath { get; set; }
+
+    private bool RegistrationAvailable => HostEnvironment.IsDevelopment() &&
+        PublicAuthenticationRules.CanRegister(
+            Configuration.GetValue<bool>(PublicAuthenticationRules.LoginEnabledKey),
+            Configuration.GetValue<bool>(PublicAuthenticationRules.RegistrationEnabledKey));
+
+    private string Language => ReturnLanguage is "en" or "de" ? ReturnLanguage : "es";
+    private string SafeReturnPath => SiteLinks.NormalizeAuthenticationReturnPath(ReturnPath, Language);
+
+    protected override void OnParametersSet()
+    {
+        if (!RegistrationAvailable)
+            Navigation.NotFound();
+    }
+}

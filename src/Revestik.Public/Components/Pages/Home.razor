@@ -10,6 +10,7 @@
     var t = Locale.Get(lang);
     var seo = PublicSeo.Get(lang, 0);
     var slides = GetSlides(lang);
+    var firstSlide = HomeSlides.FirstOrDefault(x => x.Slot == 1);
 }
 <PageTitle>@seo.Title</PageTitle>
 <HeadContent>
@@ -24,8 +25,8 @@
                 var index = i;
                 var saved = HomeSlides.FirstOrDefault(x => x.Slot == index + 1);
                 <div class="hero-slide @(index == 0 ? "is-active" : null)" data-hero-slide
-                     data-hero-title="@(saved?.Heading(lang) ?? seo.Heading)"
-                     data-hero-description="@(saved?.Description(lang) ?? seo.Description)"
+                     data-hero-title="@(saved?.Heading(lang, seo.Heading) ?? seo.Heading)"
+                     data-hero-description="@(saved?.Description(lang, seo.Description) ?? seo.Description)"
                      aria-hidden="@(index == 0 ? "false" : "true")">
                     @if (saved?.HasImage == true)
                     {
@@ -46,8 +47,8 @@
         <div class="home-hero-shell">
             <div class="home-hero-copy">
                 <p class="eyebrow">REVESTIK &middot; COSTA RICA</p>
-                <h1 id="home-title" data-hero-heading>@(HomeSlides.FirstOrDefault(x => x.Slot == 1)?.Heading(lang) ?? seo.Heading)</h1>
-                <p class="home-hero-description" data-hero-copy>@(HomeSlides.FirstOrDefault(x => x.Slot == 1)?.Description(lang) ?? seo.Description)</p>
+                <h1 id="home-title" data-hero-heading>@(firstSlide?.Heading(lang, seo.Heading) ?? seo.Heading)</h1>
+                <p class="home-hero-description" data-hero-copy>@(firstSlide?.Description(lang, seo.Description) ?? seo.Description)</p>
                 <div class="hero-actions">
                     <a class="hero-action-primary" href="@SiteLinks.Path(lang, 2)">@t.Nav[2]</a>
                     <WhatsAppContactLink Language="@lang" CssClass="hero-action-secondary" Label="@t.Inquiry" />

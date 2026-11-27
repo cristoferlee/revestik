@@ -69,6 +69,12 @@
                     @L("Entrar con Google", "Sign in with Google", "Mit Google anmelden")
                 </a>
             }
+            else
+            {
+                <a class="public-cart-browse" href="@SiteLinks.Path(language, 2)">
+                    @L("Ver acabados", "Browse finishes", "Oberflächen entdecken")
+                </a>
+            }
         </section>
         <section class="public-cart-auth" data-public-cart-forbidden hidden>
             <h2>@L("Necesitás una cuenta de cliente", "A customer account is required", "Ein Kundenkonto ist erforderlich")</h2>

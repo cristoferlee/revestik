@@ -29,7 +29,16 @@
 }
 else if (items.Count == 0 && !IsFeatured)
 {
-    <p>@L("Todavía no hay proyectos publicados.", "No projects have been published yet.", "Es wurden noch keine Projekte veröffentlicht.")</p>
+    @if (total == 0)
+    {
+        <p>@L("Todavía no hay proyectos publicados.", "No projects have been published yet.", "Es wurden noch keine Projekte veröffentlicht.")</p>
+        <p class="hero-actions"><a class="hero-action-primary" href="@SiteLinks.Path(Language, 5)">@L("Consultar por mi proyecto", "Ask about my project", "Mein Projekt besprechen")</a></p>
+    }
+    else
+    {
+        <p>@L("Esta página no tiene proyectos.", "There are no projects on this page.", "Auf dieser Seite werden keine Projekte angezeigt.")</p>
+        <p class="hero-actions"><a class="hero-action-primary" href="@SiteLinks.Path(Language, 1)">@L("Volver a la primera página", "Back to the first page", "Zurück zur ersten Seite")</a></p>
+    }
 }
 @if (!IsFeatured && !loadFailed && total > pageSize)
 {

@@ -5,8 +5,23 @@
     aspect-ratio: 4 / 3; object-fit: cover;
 }
 .project-detail-photos { align-items: start; }
-.revestik-project-photo-stage { position: relative; min-width: 0; width: 100%; border-radius: 8px; overflow: hidden; background: #172331; }
-.project-detail-photos > .revestik-project-photo-stage.is-cover { grid-column: 1 / -1; }
+.revestik-project-photo-stage {
+    --project-photo-ratio: calc(4 / 3);
+    position: relative;
+    min-width: 0;
+    width: 100%;
+    aspect-ratio: var(--project-photo-ratio);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #172331;
+}
+.project-detail-photos > .revestik-project-photo-stage.is-cover {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: min(100%, 900px, var(--project-photo-width, 100%),
+        calc(480px * var(--project-photo-ratio)));
+}
+.revestik-project-photo-stage.is-cover > .project-detail-photo { border: 0; }
 .revestik-project-photo-stage > .project-detail-photo {
     position: absolute; inset: 0; width: 100%; height: 100%; padding: 0;
     display: block; border-radius: 8px; overflow: hidden; aspect-ratio: auto;

@@ -14,17 +14,6 @@
   const close = dialog.querySelector('[data-viewer-close]');
   if (!stage || !title || !count || !previous || !next || !close) return;
 
-  const language = (document.documentElement.lang || 'es').slice(0, 2);
-  const translations = {
-    es: { viewer: 'Visor de fotografías', close: 'Cerrar fotografía', previous: 'Fotografía anterior', next: 'Fotografía siguiente' },
-    en: { viewer: 'Photo viewer', close: 'Close photograph', previous: 'Previous photograph', next: 'Next photograph' },
-    de: { viewer: 'Fotobetrachter', close: 'Foto schließen', previous: 'Vorheriges Foto', next: 'Nächstes Foto' }
-  }[language] || { viewer: 'Visor de fotografías', close: 'Cerrar fotografía', previous: 'Fotografía anterior', next: 'Fotografía siguiente' };
-  dialog.setAttribute('aria-label', translations.viewer);
-  close.setAttribute('aria-label', translations.close);
-  previous.setAttribute('aria-label', translations.previous);
-  next.setAttribute('aria-label', translations.next);
-
   let images = [];
   let current = 0;
   let opener = null;

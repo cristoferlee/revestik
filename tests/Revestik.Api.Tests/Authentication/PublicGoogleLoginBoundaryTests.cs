@@ -2,12 +2,14 @@ using System.Net;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Revestik.Api.Authorization;
 using Revestik.Api.Services.Authentication;
 using Revestik.Api.Tests.Hosting;
+using Revestik.Shared.Authentication;
 
 namespace Revestik.Api.Tests.Authentication;
 
@@ -61,6 +63,54 @@ public sealed class PublicGoogleLoginBoundaryTests
         using var callback = await client.GetAsync("/api/auth/public/external-callback");
         Assert.Equal(HttpStatusCode.NotFound, login.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, callback.StatusCode);
+    }
+
+    [Fact]
+    public void RegistrationAcceptance_RequiresCurrentNoticeAndFreshTimestamp()
+    {
+        var properties = new AuthenticationProperties();
+        var acceptedAt = DateTimeOffset.UtcNow;
+        Assert.Null(GoogleLoginFlow.GetPublicRegistrationAcceptance(properties, acceptedAt));
+
+        GoogleLoginFlow.SetPublicRegistrationAcceptance(properties, acceptedAt);
+        var valid = GoogleLoginFlow.GetPublicRegistrationAcceptance(properties, acceptedAt.AddMinutes(1));
+        Assert.NotNull(valid);
+        Assert.Equal(PublicAuthenticationRules.RegistrationNoticeVersion, valid.PrivacyNoticeVersion);
+        Assert.Equal("es", valid.PrivacyNoticeLanguage);
+        Assert.Equal(acceptedAt, valid.AcceptedAtUtc);
+        Assert.Null(GoogleLoginFlow.GetPublicRegistrationAcceptance(properties, acceptedAt.AddMinutes(15)));
+        Assert.Null(GoogleLoginFlow.GetPublicRegistrationAcceptance(properties, acceptedAt.AddSeconds(-1)));
+
+        var versionField = properties.Items.Single(item => item.Value == valid.PrivacyNoticeVersion).Key;
+        properties.Items[versionField] = "stale-version";
+        Assert.Null(GoogleLoginFlow.GetPublicRegistrationAcceptance(properties, acceptedAt.AddMinutes(1)));
+    }
+
+    [Fact]
+    public async Task RegistrationStart_RejectsPostWithoutAntiforgeryToken()
+    {
+        using var baseFactory = new RevestikWebApplicationFactory("Development");
+        using var factory = baseFactory.WithWebHostBuilder(builder =>
+            builder.ConfigureAppConfiguration((_, configuration) =>
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [PublicAuthenticationRules.LoginEnabledKey] = "true",
+                    [PublicAuthenticationRules.RegistrationEnabledKey] = "true"
+                })));
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost"),
+            AllowAutoRedirect = false
+        });
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["accepted"] = "yes",
+            ["noticeVersion"] = PublicAuthenticationRules.RegistrationNoticeVersion
+        });
+
+        using var response = await client.PostAsync(PublicAuthenticationRules.RegistrationPostPath, form);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
